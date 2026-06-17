@@ -167,19 +167,11 @@
     <div class="crop-section">
       <button
         class="crop-toggle-btn"
-        :class="{ active: cropEnabled }"
-        @click="toggleCrop"
+        :class="{ active: cropEnabled || textEditEnabled }"
+        @click="toggleCropAndEdit"
         :disabled="isConverting"
       >
-        ✂️ {{ cropEnabled ? 'Wyłącz przycinanie' : 'Przytnij kadr' }}
-      </button>
-
-      <button
-        class="text-toggle-btn"
-        @click="toggleTextEdit"
-        :disabled="isConverting"
-      >
-        ✏️ {{ textOverlayEnabled ? 'Wyłącz edycję tekstu' : 'Dodaj tekst' }}
+        ✂️✏️ {{ (cropEnabled || textEditEnabled) ? 'Wyłącz przycinanie i edycję' : 'Przytnij i edytuj' }}
       </button>
 
       <div v-if="cropEnabled" class="crop-controls">
@@ -247,58 +239,6 @@
           </span>
         </div>
 
-        <!-- Panel edycji tekstu (pojawia się gdy textOverlayEnabled) -->
-        <div v-if="textOverlayEnabled" class="text-editor">
-          <div class="text-row">
-            <label>Tekst:</label>
-            <input v-model="textContent" placeholder="Wpisz tekst…" :disabled="isConverting" />
-          </div>
-          <div class="text-params">
-            <div>
-              <label>X (px):</label>
-              <input type="number" v-model.number="textX" step="5" min="0" :disabled="isConverting" />
-            </div>
-            <div>
-              <label>Y (px):</label>
-              <input type="number" v-model.number="textY" step="5" min="0" :disabled="isConverting" />
-            </div>
-            <div>
-              <label>Obrót (°):</label>
-              <input type="number" v-model.number="textRotation" step="1" min="0" max="360" :disabled="isConverting" />
-            </div>
-          </div>
-          <div class="text-params">
-            <div>
-              <label>Czcionka:</label>
-              <select v-model="textFont" :disabled="isConverting">
-                <option>Arial</option>
-                <option>Helvetica</option>
-                <option>Times New Roman</option>
-                <option>Courier New</option>
-                <option>Verdana</option>
-                <option>Georgia</option>
-                <option>Impact</option>
-              </select>
-            </div>
-            <div>
-              <label>Rozmiar:</label>
-              <input type="number" v-model.number="textSize" min="8" max="200" :disabled="isConverting" />
-            </div>
-            <div>
-              <label>Kolor:</label>
-              <input type="color" v-model="textColor" :disabled="isConverting" />
-            </div>
-            <div class="checkboxes">
-              <label>
-                <input type="checkbox" v-model="textBold" :disabled="isConverting" /> Bold
-              </label>
-              <label>
-                <input type="checkbox" v-model="textItalic" :disabled="isConverting" /> Kursywa
-              </label>
-            </div>
-          </div>
-        </div>
-
         <div v-if="previewFrame" class="crop-preview">
           <p class="preview-label">
             Podgląd kadrowania
@@ -317,6 +257,127 @@
           </div>
         </div>
         <p v-else-if="isLoadingPreview" class="preview-loading">⏳ Ładowanie podglądu…</p>
+      </div>
+    </div>
+
+    <!-- ===== EDYTOR TEKSTU ===== -->
+    <div v-if="textEditEnabled" class="text-editor-section">
+      <h3 class="text-editor-title">✏️ Edytor tekstu na obrazie</h3>
+
+      <!-- Wybór aktywnego text boxa -->
+      <div class="textbox-tabs">
+        <button
+          v-for="(tb, idx) in textBoxes"
+          :key="idx"
+          class="tb-tab"
+          :class="{ active: activeTextBoxIdx === idx }"
+          @click="activeTextBoxIdx = idx"
+        >Tekst {{ idx + 1 }}{{ tb.text ? ': ' + tb.text.slice(0, 12) + (tb.text.length > 12 ? '…' : '') : '' }}</button>
+        <button class="tb-tab tb-add" @click="addTextBox" :disabled="textBoxes.length >= 2">+ Dodaj tekst</button>
+        <button class="tb-tab tb-remove" @click="removeTextBox" :disabled="textBoxes.length <= 1">🗑</button>
+      </div>
+
+      <!-- Kontrolki aktywnego text boxa -->
+      <div v-if="activeTextBox" class="textbox-controls">
+        <div class="tc-row">
+          <label>Tekst:</label>
+          <input type="text" v-model="activeTextBox.text" placeholder="Wpisz tekst…" class="text-input" />
+        </div>
+
+        <div class="tc-row tc-row-wrap">
+          <div class="tc-group">
+            <label>Czcionka:</label>
+            <select v-model="activeTextBox.fontFamily">
+              <option value="Arial">Arial</option>
+              <option value="Arial Black">Arial Black</option>
+              <option value="Impact">Impact</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Times New Roman">Times New Roman</option>
+              <option value="Courier New">Courier New</option>
+              <option value="Verdana">Verdana</option>
+              <option value="Trebuchet MS">Trebuchet MS</option>
+              <option value="Comic Sans MS">Comic Sans MS</option>
+            </select>
+          </div>
+          <div class="tc-group">
+            <label>Rozmiar (px):</label>
+            <div class="size-row">
+              <button class="num-btn" @click="activeTextBox.fontSize = Math.max(8, activeTextBox.fontSize - 2)">−</button>
+              <input type="number" v-model.number="activeTextBox.fontSize" min="8" max="300" style="width:60px" />
+              <button class="num-btn" @click="activeTextBox.fontSize = Math.min(300, activeTextBox.fontSize + 2)">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tc-row tc-row-wrap">
+          <div class="tc-group">
+            <label>Kolor tekstu:</label>
+            <input type="color" v-model="activeTextBox.color" class="color-pick" />
+          </div>
+          <div class="tc-group">
+            <label>Kolor cienia / obrysu:</label>
+            <input type="color" v-model="activeTextBox.shadowColor" class="color-pick" />
+          </div>
+          <div class="tc-group">
+            <label>Grubość obrysu:</label>
+            <div class="size-row">
+              <button class="num-btn" @click="activeTextBox.strokeWidth = Math.max(0, activeTextBox.strokeWidth - 1)">−</button>
+              <input type="number" v-model.number="activeTextBox.strokeWidth" min="0" max="20" style="width:50px" />
+              <button class="num-btn" @click="activeTextBox.strokeWidth = Math.min(20, activeTextBox.strokeWidth + 1)">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tc-row tc-row-wrap">
+          <label class="checkbox-label"><input type="checkbox" v-model="activeTextBox.bold" /> <strong>Bold</strong></label>
+          <label class="checkbox-label"><input type="checkbox" v-model="activeTextBox.italic" /> <em>Kursywa</em></label>
+          <label class="checkbox-label"><input type="checkbox" v-model="activeTextBox.underline" /> <u>Podkreślenie</u></label>
+          <label class="checkbox-label"><input type="checkbox" v-model="activeTextBox.shadow" /> Cień</label>
+        </div>
+
+        <div class="tc-row">
+          <label>Obrót: {{ activeTextBox.rotation }}°</label>
+          <input type="range" v-model.number="activeTextBox.rotation" min="-180" max="180" />
+          <button class="num-btn" @click="activeTextBox.rotation = 0">Reset</button>
+        </div>
+
+        <div class="tc-row">
+          <label>Przezroczystość: {{ Math.round(activeTextBox.opacity * 100) }}%</label>
+          <input type="range" v-model.number="activeTextBox.opacity" min="0.1" max="1" step="0.05" />
+        </div>
+
+        <p class="drag-hint">👆 Przeciągnij tekst na podglądzie poniżej, aby ustawić pozycję</p>
+      </div>
+
+      <!-- Podgląd z możliwością przeciągania tekstu -->
+      <div class="text-preview-area" v-if="previewFrame">
+        <p class="preview-label">Podgląd pozycji tekstu (przeciągnij etykiety)</p>
+        <div
+          class="text-preview-wrapper"
+          ref="textPreviewWrapper"
+          @mousemove="onTextDragMove"
+          @mouseup="onTextDragEnd"
+          @mouseleave="onTextDragEnd"
+          @touchmove.prevent="onTextTouchMove"
+          @touchend="onTextDragEnd"
+        >
+          <img :src="previewFrame" ref="textPreviewImg" @load="onTextPreviewLoaded" style="display:block;max-width:100%;user-select:none;" />
+          <div
+            v-for="(tb, idx) in textBoxes"
+            :key="'tb'+idx"
+            class="text-overlay-label"
+            :class="{ 'active-tb': activeTextBoxIdx === idx }"
+            :style="getTextLabelStyle(tb)"
+            @mousedown.prevent="startTextDrag($event, idx)"
+            @touchstart.prevent="startTextTouchDrag($event, idx)"
+            @click="activeTextBoxIdx = idx"
+          >
+            <span :style="getTextSpanStyle(tb)">{{ tb.text || '(pusty)' }}</span>
+          </div>
+        </div>
+      </div>
+      <div v-else class="text-no-preview">
+        <p>⚠️ Aby zobaczyć podgląd pozycji tekstu, najpierw włącz tryb przycinania (pojawi się podgląd klatki) lub poczekaj na załadowanie wideo.</p>
       </div>
     </div>
 
@@ -348,7 +409,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
@@ -408,23 +469,197 @@ const previewNaturalWidth  = ref(0);
 const previewNaturalHeight = ref(0);
 const isLoadingPreview     = ref(false);
 
-// --- Tekst nałożony ---
-const textOverlayEnabled = ref(false);
-const textContent = ref('');
-const textX = ref(10);
-const textY = ref(10);
-const textRotation = ref(0);
-const textFont = ref('Arial');
-const textSize = ref(16);
-const textColor = ref('#ffffff');
-const textBold = ref(false);
-const textItalic = ref(false);
-
 // Template refs
 const previewImg     = ref(null);
 const cropCanvas     = ref(null);
 const previewWrapper = ref(null);
 const fileInput      = ref(null);
+const textPreviewWrapper = ref(null);
+const textPreviewImg     = ref(null);
+
+// ---- Text editor state ----
+const textEditEnabled = ref(false);
+const activeTextBoxIdx = ref(0);
+
+function createTextBox() {
+  return {
+    text: '',
+    fontFamily: 'Impact',
+    fontSize: 36,
+    color: '#ffffff',
+    shadowColor: '#000000',
+    strokeWidth: 2,
+    bold: false,
+    italic: false,
+    underline: false,
+    shadow: true,
+    rotation: 0,
+    opacity: 1,
+    // position as percentage of image (0–1)
+    xPct: 0.5,
+    yPct: 0.5,
+  };
+}
+
+const textBoxes = ref([createTextBox()]);
+const activeTextBox = computed(() => textBoxes.value[activeTextBoxIdx.value] || null);
+
+function addTextBox() {
+  if (textBoxes.value.length < 2) {
+    const tb = createTextBox();
+    tb.yPct = 0.8;
+    textBoxes.value.push(tb);
+    activeTextBoxIdx.value = textBoxes.value.length - 1;
+  }
+}
+
+function removeTextBox() {
+  if (textBoxes.value.length > 1) {
+    textBoxes.value.splice(activeTextBoxIdx.value, 1);
+    activeTextBoxIdx.value = Math.min(activeTextBoxIdx.value, textBoxes.value.length - 1);
+  }
+}
+
+// ---- Text drag state ----
+let textDragIdx = null;
+let textDragStartX = 0;
+let textDragStartY = 0;
+let textDragStartXPct = 0;
+let textDragStartYPct = 0;
+
+function getPreviewDimensions() {
+  const img = textPreviewImg.value;
+  if (!img) return { w: 1, h: 1 };
+  return { w: img.clientWidth, h: img.clientHeight };
+}
+
+function startTextDrag(e, idx) {
+  activeTextBoxIdx.value = idx;
+  textDragIdx = idx;
+  textDragStartX = e.clientX;
+  textDragStartY = e.clientY;
+  textDragStartXPct = textBoxes.value[idx].xPct;
+  textDragStartYPct = textBoxes.value[idx].yPct;
+}
+
+function startTextTouchDrag(e, idx) {
+  activeTextBoxIdx.value = idx;
+  textDragIdx = idx;
+  const touch = e.touches[0];
+  textDragStartX = touch.clientX;
+  textDragStartY = touch.clientY;
+  textDragStartXPct = textBoxes.value[idx].xPct;
+  textDragStartYPct = textBoxes.value[idx].yPct;
+}
+
+function onTextDragMove(e) {
+  if (textDragIdx === null) return;
+  const { w, h } = getPreviewDimensions();
+  const dx = (e.clientX - textDragStartX) / w;
+  const dy = (e.clientY - textDragStartY) / h;
+  textBoxes.value[textDragIdx].xPct = Math.max(0, Math.min(1, textDragStartXPct + dx));
+  textBoxes.value[textDragIdx].yPct = Math.max(0, Math.min(1, textDragStartYPct + dy));
+}
+
+function onTextTouchMove(e) {
+  if (textDragIdx === null) return;
+  const touch = e.touches[0];
+  const { w, h } = getPreviewDimensions();
+  const dx = (touch.clientX - textDragStartX) / w;
+  const dy = (touch.clientY - textDragStartY) / h;
+  textBoxes.value[textDragIdx].xPct = Math.max(0, Math.min(1, textDragStartXPct + dx));
+  textBoxes.value[textDragIdx].yPct = Math.max(0, Math.min(1, textDragStartYPct + dy));
+}
+
+function onTextDragEnd() {
+  textDragIdx = null;
+}
+
+function onTextPreviewLoaded() {}
+
+function getTextLabelStyle(tb) {
+  return {
+    position: 'absolute',
+    left: (tb.xPct * 100) + '%',
+    top: (tb.yPct * 100) + '%',
+    transform: `translate(-50%, -50%) rotate(${tb.rotation}deg)`,
+    cursor: 'grab',
+    userSelect: 'none',
+    opacity: tb.opacity,
+    pointerEvents: 'all',
+  };
+}
+
+function getTextSpanStyle(tb) {
+  return {
+    fontFamily: tb.fontFamily,
+    fontSize: tb.fontSize + 'px',
+    fontWeight: tb.bold ? 'bold' : 'normal',
+    fontStyle: tb.italic ? 'italic' : 'normal',
+    textDecoration: tb.underline ? 'underline' : 'none',
+    color: tb.color,
+    textShadow: tb.shadow ? `2px 2px 4px ${tb.shadowColor}, -1px -1px 2px ${tb.shadowColor}` : 'none',
+    WebkitTextStroke: tb.strokeWidth > 0 ? `${tb.strokeWidth}px ${tb.shadowColor}` : 'none',
+    display: 'block',
+    whiteSpace: 'nowrap',
+    lineHeight: 1.1,
+  };
+}
+
+// ---- Render text onto canvas frame ----
+function drawTextOnCanvas(ctx, canvasWidth, canvasHeight) {
+  for (const tb of textBoxes.value) {
+    if (!tb.text.trim()) continue;
+    const x = tb.xPct * canvasWidth;
+    const y = tb.yPct * canvasHeight;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((tb.rotation * Math.PI) / 180);
+    ctx.globalAlpha = tb.opacity;
+
+    let fontStr = '';
+    if (tb.italic) fontStr += 'italic ';
+    if (tb.bold) fontStr += 'bold ';
+    fontStr += `${tb.fontSize}px "${tb.fontFamily}"`;
+    ctx.font = fontStr;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (tb.shadow) {
+      ctx.shadowColor = tb.shadowColor;
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+    }
+
+    if (tb.strokeWidth > 0) {
+      ctx.strokeStyle = tb.shadowColor;
+      ctx.lineWidth = tb.strokeWidth * 2;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(tb.text, 0, 0);
+    }
+
+    ctx.fillStyle = tb.color;
+    ctx.fillText(tb.text, 0, 0);
+
+    if (tb.underline) {
+      const metrics = ctx.measureText(tb.text);
+      const tw = metrics.width;
+      const uy = tb.fontSize * 0.1;
+      ctx.strokeStyle = tb.color;
+      ctx.lineWidth = Math.max(1, tb.fontSize * 0.05);
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.moveTo(-tw / 2, uy);
+      ctx.lineTo(tw / 2, uy);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+}
 
 let ffmpeg = null;
 
@@ -488,16 +723,9 @@ function resetConversionState() {
   syncVertical.value = true;
   syncHorizontal.value = true;
 
-  textOverlayEnabled.value = false;
-  textContent.value = '';
-  textX.value = 10;
-  textY.value = 10;
-  textRotation.value = 0;
-  textFont.value = 'Arial';
-  textSize.value = 16;
-  textColor.value = '#ffffff';
-  textBold.value = false;
-  textItalic.value = false;
+  textEditEnabled.value = false;
+  textBoxes.value = [createTextBox()];
+  activeTextBoxIdx.value = 0;
 
   if (resultUrl.value) {
     URL.revokeObjectURL(resultUrl.value);
@@ -609,7 +837,16 @@ function resetCrop() {
   cropRight.value = 0;
 }
 
-function buildVfFilter() {
+function escapeFFmpegText(str) {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/:/g, '\\:')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]');
+}
+
+function buildVfFilter(imgW = null, imgH = null) {
   const parts = [];
   const cl = cropLeft.value   || 0;
   const cr = cropRight.value  || 0;
@@ -620,23 +857,64 @@ function buildVfFilter() {
     parts.push(`crop=iw-${cl + cr}:ih-${ct + cb}:${cl}:${ct}`);
   }
   parts.push(`fps=${fps.value}`);
-  parts.push(`scale=${width.value}:trunc(ow/a/2)*2`); 
+  parts.push(`scale=${width.value}:trunc(ow/a/2)*2`);
+
+  // Text overlays
+  if (textEditEnabled.value) {
+    for (const tb of textBoxes.value) {
+      if (!tb.text.trim()) continue;
+      // We use expressions referencing output w/h after scale
+      const xExpr = `(w*${tb.xPct.toFixed(4)}-tw/2)`;
+      const yExpr = `(h*${tb.yPct.toFixed(4)}-th/2)`;
+      let fontStyle = '';
+      if (tb.bold && tb.italic) fontStyle = ':Bold:Italic';
+      else if (tb.bold) fontStyle = ':Bold';
+      else if (tb.italic) fontStyle = ':Italic';
+      const txt = escapeFFmpegText(tb.text);
+      const hexColor = tb.color.replace('#', '') + Math.round(tb.opacity * 255).toString(16).padStart(2, '0');
+      const hexStroke = tb.shadowColor.replace('#', '') + 'ff';
+      const angle = (tb.rotation * Math.PI / 180).toFixed(4);
+
+      let drawtextFilter = `drawtext=text='${txt}'`
+        + `:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans${tb.bold ? '-Bold' : ''}.ttf`
+        + `:fontsize=${tb.fontSize}`
+        + `:fontcolor=0x${hexColor}`
+        + `:x=${xExpr}:y=${yExpr}`
+        + `:angle=${angle}`;
+
+      if (tb.strokeWidth > 0) {
+        drawtextFilter += `:borderw=${tb.strokeWidth}:bordercolor=0x${hexStroke}`;
+      }
+      if (tb.shadow) {
+        drawtextFilter += `:shadowx=2:shadowy=2:shadowcolor=0x${hexStroke}`;
+      }
+
+      parts.push(drawtextFilter);
+    }
+  }
+
   return parts.join(',');
+}
+
+function toggleCropAndEdit() {
+  const wasActive = cropEnabled.value || textEditEnabled.value;
+  if (wasActive) {
+    cropEnabled.value = false;
+    textEditEnabled.value = false;
+    clearPreview();
+  } else {
+    cropEnabled.value = true;
+    textEditEnabled.value = true;
+    // load preview if not loaded
+    if (!previewFrame.value && videoUrl.value.trim() && !isLoadingPreview.value) {
+      loadPreviewFrame();
+    }
+  }
 }
 
 function toggleCrop() {
   cropEnabled.value = !cropEnabled.value;
-  if (!cropEnabled.value) {
-    clearPreview();
-    textOverlayEnabled.value = false; // wyłączenie tekstu, gdy kadrowanie wyłączone
-  }
-}
-
-function toggleTextEdit() {
-  textOverlayEnabled.value = !textOverlayEnabled.value;
-  if (textOverlayEnabled.value && !cropEnabled.value) {
-    cropEnabled.value = true; // włącz kadrowanie, aby wygodniej ustawić tekst
-  }
+  if (!cropEnabled.value) clearPreview();
 }
 
 function clearPreview() {
@@ -897,34 +1175,6 @@ function drawCropOverlay() {
     ctx.lineTo(bx, by);
     ctx.stroke();
   }
-
-  // Rysowanie tekstu (jeśli włączony)
-  if (textOverlayEnabled.value && textContent.value.trim()) {
-    const cropW = img.naturalWidth - cropLeft.value - cropRight.value;
-    const cropH = img.naturalHeight - cropTop.value - cropBottom.value;
-    const outW = width.value;
-    const outH = Math.round(outW * cropH / cropW);
-
-    // Mapowanie współrzędnych z obrazka wyjściowego na oryginalny (skala + przesunięcie kadrowania)
-    const tx = cropLeft.value + (textX.value * (cropW / outW));
-    const ty = cropTop.value + (textY.value * (cropH / outH));
-
-    const canvasX = tx * scaleX;
-    const canvasY = ty * scaleY;
-
-    ctx.save();
-    ctx.translate(canvasX, canvasY);
-    ctx.rotate((textRotation.value * Math.PI) / 180);
-
-    const bold = textBold.value ? 'bold' : 'normal';
-    const italic = textItalic.value ? 'italic' : 'normal';
-    // skala rozmiaru czcionki: proporcjonalnie do pomniejszenia na canvas
-    ctx.font = `${bold} ${italic} ${textSize.value * Math.min(scaleX, scaleY)}px ${textFont.value}`;
-    ctx.fillStyle = textColor.value;
-    ctx.textBaseline = 'top';
-    ctx.fillText(textContent.value, 0, 0);
-    ctx.restore();
-  }
 }
 
 // ---- Analiza rozmiaru ----
@@ -962,21 +1212,29 @@ async function analyzeAndEstimate() {
       await ffmpeg.deleteFile('sample.gif');
       await ffmpeg.deleteFile('analyze.mp4');
 
+      // GIF ma nieliniowy wzrost rozmiaru ze względu na:
+      // 1. Narzut palety (globalnej + lokalnych)
+      // 2. Tablice kolorów (color lookup tables)
+      // 3. Kompresja LZW która jest mniej efektywna przy większej liczbie klatek
+      
       const testFrames = Math.floor(testDuration * fps.value);
       const totalFrames = Math.floor(duration * fps.value);
       
       if (testFrames > 0) {
+        // Współczynnik nieliniowości: więcej klatek = większy narzut na klatkę
         const nonLinearFactor = 1 + (Math.log(totalFrames / testFrames) * 0.15);
+        // Współczynnik zależny od rozmiaru ramki (większa ramka = większy narzut palety)
         const sizeFactor = Math.sqrt((width.value * width.value) / (640 * 480)) || 1;
         
         estimatedSize.value = Math.round((sampleSize / testFrames) * totalFrames * nonLinearFactor * sizeFactor * 1.05);
-        sizeConfidence.value = 0.88;
+        sizeConfidence.value = 0.88; // Nieco niższa pewność niż dla WebP
       } else {
         estimatedSize.value = sampleSize;
         sizeConfidence.value = 0.5;
       }
 
     } else {
+      // === ANALIZA DLA WEBP (jak wcześniej) ===
       await ffmpeg.exec([
         '-i',  'analyze.mp4',
         '-ss', testStart.toFixed(2),
@@ -1002,6 +1260,7 @@ async function analyzeAndEstimate() {
       const targetBytes = targetSizeMB.value * 1024 * 1024;
       if (estimatedSize.value > targetBytes) {
         if (outputFormat.value === 'gif') {
+          // Dla GIF zmniejszamy szerokość (bardziej wpływa na rozmiar niż jakość)
           const scaleFactor = Math.sqrt(targetBytes / estimatedSize.value);
           width.value = Math.max(100, Math.floor(width.value * scaleFactor / 10) * 10);
         } else {
@@ -1016,149 +1275,6 @@ async function analyzeAndEstimate() {
   }
 }
 
-// ---- Konwersja z tekstem (uniwersalna dla MP4 i WebP) ----
-async function convertWithTextOverlay(fileData) {
-  // Ustalamy wymiary wyjściowe
-  const cl = cropLeft.value || 0;
-  const cr = cropRight.value || 0;
-  const ct = cropTop.value || 0;
-  const cb = cropBottom.value || 0;
-  const outW = width.value;
-  let cropW, cropH;
-  
-  if (inputExt.value === 'webp') {
-    const meta = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength));
-    cropW = meta.width - cl - cr;
-    cropH = meta.height - ct - cb;
-  } else {
-    cropW = originalWidth.value - cl - cr;
-    cropH = originalHeight.value - ct - cb;
-  }
-  const outH = Math.round(outW * cropH / cropW);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = outW;
-  canvas.height = outH;
-  const ctx = canvas.getContext('2d');
-  
-  const totalFrames = Math.floor((endTime.value - startTime.value) * fps.value);
-  const frameStep = 1 / fps.value;
-
-  if (inputExt.value === 'webp') {
-    // WebP z tekstem
-    if (typeof ImageDecoder === 'undefined') throw new Error('Przeglądarka nie obsługuje ImageDecoder.');
-    const decoder = new ImageDecoder({ data: fileData, type: 'image/webp' });
-    await decoder.tracks.ready;
-    const track = decoder.tracks.selectedTrack;
-    const totalDuration = (await decoder.tracks.ready, track.frameCount > 0 ? (track.frameCount / originalFps.value) : 0);
-    
-    for (let i = 0; i < totalFrames; i++) {
-      const t = startTime.value + i * frameStep;
-      const srcFrameIndex = Math.min(track.frameCount - 1, Math.max(0, Math.floor(t * originalFps.value)));
-      const result = await decoder.decode({ frameIndex: srcFrameIndex });
-      const frame = result.image;
-
-      ctx.drawImage(frame, cl, ct, cropW, cropH, 0, 0, outW, outH);
-      frame.close();
-      
-      // Rysowanie tekstu
-      applyText(ctx, outW, outH);
-      
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      const buf = await blob.arrayBuffer();
-      await ffmpeg.writeFile(`frame_${String(i).padStart(5, '0')}.png`, new Uint8Array(buf));
-    }
-    decoder.close();
-  } else {
-    // MP4 z tekstem: najpierw wyciągamy klatki oryginalne (bez skalowania), potem nakładamy canvas
-    const framePattern = 'frame_%05d.png';
-    await ffmpeg.writeFile('input_text.mp4', new Uint8Array(fileData.slice().buffer));
-    
-    // Wyciągamy klatki w oryginalnej rozdzielczości (z kadrowaniem tylko czasowym i fps)
-    const extractArgs = [
-      '-i', 'input_text.mp4',
-      '-ss', startTime.value.toString(),
-      '-to', endTime.value.toString(),
-      '-vf', `fps=${fps.value}`, // tylko fps, bez skalowania i kadrowania
-      '-f', 'image2',
-      framePattern
-    ];
-    await ffmpeg.exec(extractArgs);
-    
-    // Teraz przetwarzamy każdą wyciągniętą klatkę
-    for (let i = 0; i < totalFrames; i++) {
-      const filename = `frame_${String(i).padStart(5, '0')}.png`;
-      const data = await ffmpeg.readFile(filename);
-      const blob = new Blob([data.buffer], { type: 'image/png' });
-      const img = await createImageBitmap(blob);
-      
-      ctx.drawImage(img, cl, ct, cropW, cropH, 0, 0, outW, outH);
-      img.close();
-      
-      applyText(ctx, outW, outH);
-      
-      const newBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      const newBuf = await newBlob.arrayBuffer();
-      await ffmpeg.writeFile(filename, new Uint8Array(newBuf)); // nadpisujemy
-    }
-    
-    await ffmpeg.deleteFile('input_text.mp4');
-  }
-  
-  // Teraz mamy wszystkie klatki z tekstem jako PNG. Kodujemy do formatu docelowego.
-  if (outputFormat.value === 'gif') {
-    const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
-    await ffmpeg.exec([
-      '-f', 'image2',
-      '-framerate', fps.value.toString(),
-      '-i', 'frame_%05d.png',
-      '-vf', `split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,
-      '-loop', '0',
-      'output_text.' + outputFormat.value,
-    ]);
-  } else {
-    await ffmpeg.exec([
-      '-f', 'image2',
-      '-framerate', fps.value.toString(),
-      '-i', 'frame_%05d.png',
-      '-c:v', 'libwebp',
-      '-q:v', quality.value.toString(),
-      '-loop', '0',
-      '-preset', 'default',
-      '-an',
-      'output_text.' + outputFormat.value,
-    ]);
-  }
-  
-  // Czyszczenie klatek
-  for (let i = 0; i < totalFrames; i++) {
-    await ffmpeg.deleteFile(`frame_${String(i).padStart(5, '0')}.png`);
-  }
-  
-  const outExt = outputFormat.value;
-  const data = await ffmpeg.readFile('output_text.' + outExt);
-  resultBlob.value = new Blob([data.buffer], { type: outExt === 'gif' ? 'image/gif' : 'image/webp' });
-  resultUrl.value = URL.createObjectURL(resultBlob.value);
-  await ffmpeg.deleteFile('output_text.' + outExt);
-}
-
-// Pomocnicza funkcja rysująca tekst na canvas (używana w pętli klatek)
-function applyText(ctx, outW, outH) {
-  if (!textContent.value.trim()) return;
-  
-  ctx.save();
-  ctx.translate(textX.value, textY.value);
-  ctx.rotate((textRotation.value * Math.PI) / 180);
-  
-  const bold = textBold.value ? 'bold' : 'normal';
-  const italic = textItalic.value ? 'italic' : 'normal';
-  ctx.font = `${bold} ${italic} ${textSize.value}px ${textFont.value}`;
-  ctx.fillStyle = textColor.value;
-  ctx.textBaseline = 'top';
-  ctx.fillText(textContent.value, 0, 0);
-  ctx.restore();
-}
-
 // ---- Główna konwersja ----
 async function convert() {
   if (!videoUrl.value.trim()) { error.value = 'Wprowadź link do wideo lub wgraj plik.'; return; }
@@ -1170,12 +1286,6 @@ async function convert() {
 
   try {
     const fileData = await fetchVideo(videoUrl.value);
-
-    // Jeśli włączona nakładka tekstowa, użyj dedykowanej ścieżki
-    if (textOverlayEnabled.value && textContent.value.trim()) {
-      await convertWithTextOverlay(fileData);
-      return;
-    }
 
     if (inputExt.value === 'webp') {
       // ---- ŚCIEŻKA WEBP (przez ImageDecoder + Canvas + PNG) ----
@@ -1227,6 +1337,7 @@ async function convert() {
         const frame = result.image;
 
         ctx.drawImage(frame, cl, ct, cropW, cropH, 0, 0, outW, outH);
+        if (textEditEnabled.value) drawTextOnCanvas(ctx, outW, outH);
         frame.close();
 
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -1353,20 +1464,14 @@ watch(cropEnabled, async (enabled) => {
   }
 });
 
-watch([cropTop, cropBottom, cropLeft, cropRight], () => {
-  drawCropOverlay();
-});
-
-// Obserwacja wszystkich właściwości tekstu – odśwież podgląd
-watch([textOverlayEnabled, textContent, textX, textY, textRotation, textFont, textSize, textColor, textBold, textItalic], () => {
-  if (previewFrame.value) drawCropOverlay();
-});
-
-// Przy włączeniu edycji tekstu załaduj podgląd, jeśli go nie ma
-watch(textOverlayEnabled, async (enabled) => {
+watch(textEditEnabled, async (enabled) => {
   if (enabled && !previewFrame.value && videoUrl.value.trim() && !isLoadingPreview.value) {
     await loadPreviewFrame();
   }
+});
+
+watch([cropTop, cropBottom, cropLeft, cropRight], () => {
+  drawCropOverlay();
 });
 
 watch(useOriginalWidth, async (enabled) => {
@@ -1385,221 +1490,202 @@ watch(useOriginalWidth, async (enabled) => {
 </script>
 
 <style scoped>
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  color: #333;
+/* ===== TEXT EDITOR ===== */
+.text-editor-section {
+  margin-bottom: 1.25rem;
+  background: #f0f4ff;
+  border: 1px solid #c5d0f5;
+  border-radius: 12px;
+  padding: 1rem;
 }
 
-.subtitle {
-  color: #666;
-  margin-top: -10px;
-  margin-bottom: 20px;
+.text-editor-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: #2d3a8c;
 }
 
-.input-group {
-  margin-bottom: 1.5rem;
+.textbox-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
 }
 
-.input-group label {
+.tb-tab {
+  padding: 0.35rem 0.75rem;
+  border: 2px solid #aab5f0;
+  border-radius: 20px;
+  background: white;
+  color: #3a4ab0;
+  font-size: 0.82rem;
   font-weight: 600;
-  display: block;
-  margin-bottom: 0.3rem;
-}
-
-.input-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.input-row input {
-  flex: 1;
-  padding: 0.5rem;
-  border: 1px solid #ced4da;
-  border-radius: 6px;
-}
-
-.clear-btn {
-  background: #e9ecef;
-  border: 1px solid #ced4da;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
   cursor: pointer;
-}
-.clear-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  transition: all 0.15s;
 }
 
-.fetch-row {
-  display: flex;
-  gap: 0.5rem;
+.tb-tab:hover:not(:disabled) {
+  background: #e8eeff;
 }
 
-.fetch-btn,
-.upload-btn {
-  background: #1da1f2;
+.tb-tab.active {
+  background: #3a4ab0;
   color: white;
-  border: none;
-  padding: 0.5rem 1rem;
+  border-color: #3a4ab0;
+}
+
+.tb-tab.tb-add {
+  border-style: dashed;
+  color: #4caf50;
+  border-color: #4caf50;
+}
+
+.tb-tab.tb-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tb-tab.tb-remove {
+  color: #e53935;
+  border-color: #e53935;
+}
+
+.tb-tab.tb-remove:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.textbox-controls {
+  background: white;
+  border-radius: 10px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid #dde3ff;
+}
+
+.tc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tc-row label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+.tc-row-wrap {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.tc-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tc-group label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.text-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #c8cff5;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.color-pick {
+  width: 42px;
+  height: 30px;
+  border: 1px solid #c8cff5;
   border-radius: 6px;
   cursor: pointer;
-  font-weight: 600;
-}
-.fetch-btn:disabled,
-.upload-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  padding: 2px;
 }
 
-.params-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.param-field {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 0.75rem;
-  border: 1px solid #e9ecef;
-}
-
-.param-field label {
-  font-weight: 600;
-  font-size: 0.85rem;
-  display: block;
-  margin-bottom: 0.25rem;
-  color: #495057;
-}
-
-.param-field input[type="number"] {
-  width: 100%;
-  padding: 0.4rem;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  margin-bottom: 0.3rem;
-}
-
-.btn-row {
-  display: flex;
-  gap: 0.3rem;
-}
-
-.num-btn {
-  background: #e9ecef;
-  border: 1px solid #ced4da;
-  padding: 0.25rem 0.6rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-}
-.num-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.label-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.25rem;
-}
-
-.checkbox-label {
-  font-weight: normal;
-  font-size: 0.8rem;
+.size-row {
   display: flex;
   align-items: center;
   gap: 0.25rem;
 }
 
-.quality-field {
-  grid-column: span 2;
-}
-
-.quality-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.3rem;
-}
-
-.quality-value {
-  font-weight: bold;
-  color: #1da1f2;
-}
-
-.quality-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.quality-controls input[type="range"] {
-  flex: 1;
-}
-
-.size-estimate {
-  grid-column: span 2;
-}
-
-.estimate-display {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-
-.estimate-value {
-  font-size: 1.1rem;
-  font-weight: bold;
-  color: #2b8a3e;
-}
-
-.estimate-note {
-  font-size: 0.8rem;
-  color: #868e96;
-}
-
-.estimate-confidence {
-  font-size: 0.75rem;
-  color: #495057;
-  margin: 0.2rem 0 0;
-}
-
-.size-limit {
-  grid-column: span 2;
-}
-
-.limit-control {
+.checkbox-label {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  margin-top: 0.3rem;
-}
-.limit-control input[type="number"] {
-  width: 80px;
-}
-
-.analyze-btn {
-  margin-top: 0.5rem;
-  background: #f08c00;
-  color: white;
-  border: none;
-  padding: 0.4rem 1rem;
-  border-radius: 6px;
+  font-size: 0.85rem;
   cursor: pointer;
-  font-weight: 600;
-}
-.analyze-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  user-select: none;
 }
 
-/* Format selector */
+.drag-hint {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 0.35rem 0 0;
+  font-style: italic;
+}
+
+.text-preview-area {
+  margin-top: 0.5rem;
+}
+
+.text-preview-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  line-height: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #7b8ef0;
+  cursor: crosshair;
+}
+
+.text-preview-wrapper img {
+  max-width: 100%;
+  display: block;
+}
+
+.text-overlay-label {
+  position: absolute;
+  cursor: grab;
+  z-index: 10;
+  line-height: 1;
+}
+
+.text-overlay-label:active {
+  cursor: grabbing;
+}
+
+.text-overlay-label.active-tb::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px dashed rgba(255,255,255,0.8);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.text-no-preview {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  color: #92400e;
+}
+
 .format-selector {
   margin-bottom: 1.25rem;
   background: #f8f9fa;
@@ -1607,6 +1693,7 @@ watch(useOriginalWidth, async (enabled) => {
   padding: 0.75rem 1rem;
   border: 1px solid #e9ecef;
 }
+
 .format-label {
   display: block;
   font-weight: 600;
@@ -1614,10 +1701,12 @@ watch(useOriginalWidth, async (enabled) => {
   margin-bottom: 0.5rem;
   color: #495057;
 }
+
 .format-options {
   display: flex;
   gap: 0.5rem;
 }
+
 .format-btn {
   flex: 1;
   display: flex;
@@ -1634,24 +1723,27 @@ watch(useOriginalWidth, async (enabled) => {
   cursor: pointer;
   transition: all 0.2s;
 }
+
 .format-btn:hover:not(:disabled) {
   border-color: #adb5bd;
   background: #f8f9fa;
 }
+
 .format-btn.active {
   border-color: #1da1f2;
   background: #e7f5ff;
   color: #0c63e4;
 }
+
 .format-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
 .format-icon {
   font-size: 1.1rem;
 }
 
-/* Oryginalne metadane */
 .original-meta {
   margin-bottom: 1.25rem;
   background: #f0f4f8;
@@ -1659,11 +1751,13 @@ watch(useOriginalWidth, async (enabled) => {
   padding: 0.75rem 1rem;
   border: 1px solid #dde3ea;
 }
+
 .original-meta h4 {
   margin: 0 0 0.5rem;
   font-size: 0.9rem;
   color: #334155;
 }
+
 .meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1671,291 +1765,19 @@ watch(useOriginalWidth, async (enabled) => {
   font-size: 0.85rem;
   color: #475569;
 }
+
 .meta-grid div span {
   font-weight: 600;
   color: #1e293b;
 }
 
-/* Crop section */
-.crop-section {
-  margin-bottom: 1.5rem;
-}
-.crop-toggle-btn,
-.text-toggle-btn {
-  padding: 0.6rem 1.2rem;
-  border: 2px solid #dee2e6;
-  border-radius: 8px;
-  background: white;
-  color: #495057;
-  font-weight: 600;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-right: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-.crop-toggle-btn.active {
-  border-color: #1da1f2;
-  background: #e7f5ff;
-  color: #0c63e4;
-}
-.crop-toggle-btn:hover:not(:disabled),
-.text-toggle-btn:hover:not(:disabled) {
-  border-color: #adb5bd;
-  background: #f8f9fa;
-}
-.crop-toggle-btn:disabled,
-.text-toggle-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.crop-controls {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 10px;
-  padding: 1rem;
-  margin-top: 0.5rem;
-}
-.sync-row {
-  margin-bottom: 0.3rem;
-  font-size: 0.85rem;
-}
-.crop-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-.crop-field label {
-  font-weight: 600;
-  font-size: 0.8rem;
-  display: block;
-  margin-bottom: 0.2rem;
-}
-.crop-field input[type="number"] {
-  width: 100%;
-  padding: 0.4rem;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  margin-bottom: 0.3rem;
-}
-.reset-crop-btn {
-  margin-top: 0.5rem;
-  background: #adb5bd;
-  color: white;
-  border: none;
-  padding: 0.4rem 0.8rem;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.crop-summary {
-  margin-top: 0.5rem;
-  font-size: 0.85rem;
-  color: #495057;
-}
-
-/* Panel edycji tekstu */
-.text-editor {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 10px;
-  padding: 1rem;
-  margin-top: 1rem;
-}
-.text-row {
-  margin-bottom: 0.75rem;
-}
-.text-row input {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #ced4da;
-  border-radius: 6px;
-}
-.text-params {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-.text-params > div {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.text-params label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #495057;
-}
-.text-params input[type="number"],
-.text-params select {
-  width: 100px;
-  padding: 0.4rem;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-}
-.text-params input[type="color"] {
-  height: 34px;
-  width: 60px;
-  padding: 2px;
-}
-.checkboxes {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  margin-left: auto;
-}
-.checkboxes label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.85rem;
-}
-
-/* Crop preview */
-.crop-preview {
-  margin-top: 1rem;
-}
-.preview-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 0.3rem;
-}
-.preview-dims {
-  font-weight: normal;
-  color: #868e96;
-}
-.preview-wrapper {
-  position: relative;
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-}
-.preview-wrapper img {
-  display: block;
-  max-width: 100%;
-  height: auto;
-}
-.preview-wrapper canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
-.preview-loading {
-  color: #868e96;
-  font-style: italic;
-  margin-top: 0.5rem;
-}
-
-/* Convert button */
-.convert-btn {
-  width: 100%;
-  padding: 0.8rem;
-  font-size: 1.1rem;
-  font-weight: bold;
-  background: #1da1f2;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  margin-bottom: 1rem;
-}
-.convert-btn:disabled {
-  background: #adb5bd;
-  cursor: not-allowed;
-}
-
-.loader-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 1rem 0;
-}
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #e9ecef;
-  border-top: 4px solid #1da1f2;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-.loader-text {
-  margin-top: 0.5rem;
-  color: #495057;
-}
-
-.error {
-  color: #e03131;
-  background: #ffe3e3;
-  padding: 0.75rem;
-  border-radius: 6px;
-  margin-bottom: 1rem;
-}
-
-.result-area {
-  margin-top: 1.5rem;
-}
-.result-area h3 {
-  margin-bottom: 0.5rem;
-}
-.result-area img {
-  max-width: 100%;
-  border-radius: 6px;
-  border: 1px solid #dee2e6;
-}
-.result-info {
-  font-size: 0.9rem;
-  color: #495057;
-  margin: 0.5rem 0;
-}
-.download-btn {
-  background: #2b8a3e;
-  color: white;
-  border: none;
-  padding: 0.6rem 1.2rem;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.note {
-  font-size: 0.8rem;
-  color: #868e96;
-  margin-top: 2rem;
-}
-
 @media (max-width: 600px) {
-  .params-grid {
-    grid-template-columns: 1fr;
-  }
-  .quality-field,
-  .size-estimate,
-  .size-limit {
-    grid-column: span 1;
-  }
   .meta-grid {
     grid-template-columns: 1fr;
   }
+  
   .format-options {
     flex-direction: column;
-  }
-  .crop-grid {
-    grid-template-columns: 1fr;
-  }
-  .text-params {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  .checkboxes {
-    margin-left: 0;
   }
 }
 </style>
