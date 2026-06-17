@@ -200,7 +200,17 @@
             <div class="tc-row">
               <label>Tekst:</label>
               <input type="text" v-model="activeTextBox.text" placeholder="Wpisz tekst…" class="text-input" @input="redrawPreviewOverlay" />
-              <button class="emoji-btn" @click="insertEmoji" title="Wstaw emotikon">😊</button>
+              <div style="position: relative; display: inline-block;">
+                <button class="emoji-btn" @click="toggleEmojiPicker" title="Wybierz emotikon">😊</button>
+                <div v-if="showEmojiPicker" class="emoji-picker">
+                  <div
+                    v-for="emoji in emojiList"
+                    :key="emoji"
+                    class="emoji-item"
+                    @click="insertEmoji(emoji)"
+                  >{{ emoji }}</div>
+                </div>
+              </div>
             </div>
             <div class="tc-row tc-row-wrap">
               <div class="tc-group">
@@ -441,8 +451,11 @@ function insertEmoji(emoji) {
   redrawPreviewOverlay();
 }
 
-function toggleEmojiPicker() {
-  showEmojiPicker.value = !showEmojiPicker.value;
+function toggleEmojiPicker() { showEmojiPicker.value = !showEmojiPicker.value; }
+function insertEmoji(emoji) {
+  if (emoji) activeTextBox.value.text += emoji;
+  showEmojiPicker.value = false;
+  redrawPreviewOverlay();
 }
 
 // ---- DRAG STATE ----
@@ -1206,12 +1219,6 @@ async function convert() {
   finally { isConverting.value = false; }
 }
 
-function insertEmoji() {
-  const emojis = ['😀','😂','🤣','😍','🥰','😎','🤔','👍','👎','🔥','💯','❤️','💔','✨','🎉','🚀','💀','🤡','🤯','🥶','🤠','😈','👻','🤖','💩','👀','🙏','💪','🧠','🫡','🥳','😤','🤬','😱','🤮','🤧','😴','😵‍💫','🫠','🤓','🥸','🤥','🫢','🫣','🤭','🤫','🤪','🤑','🤠','😷','🤒','🤕','🤢','🤮','🤧','😇','🥳','🥺','🤠','🤡','🤥','🤫','🤭','🧐','🤓','😈','👿','👹','👺','💀','☠️','👻','👽','👾','🤖','💩','😺','😸','😹','😻','😼','😽','🙀','😿','😾','🙈','🙉','🙊','💋','💌','💘','💝','💖','💗','💓','💞','💕','💟','❣️','💔','❤️‍🔥','❤️‍🩹','❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍','💯','💢','💥','💫','💦','💨','🕳️','💣','💬','👁️‍🗨️','🗨️','🗯️','💭','💤'];
-  const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-  activeTextBox.value.text += emoji;
-  redrawPreviewOverlay();
-}
 
 function downloadResult() {
   if (!resultBlob.value) return;
