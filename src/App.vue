@@ -192,7 +192,7 @@
             <button v-for="(tb, idx) in textBoxes" :key="idx" class="tb-tab" :class="{ active: activeTextBoxIdx === idx }" @click="activeTextBoxIdx = idx">
               Tekst {{ idx + 1 }}{{ tb.text ? ': ' + tb.text.slice(0, 10) + (tb.text.length > 10 ? '…' : '') : '' }}
             </button>
-            <button class="tb-tab tb-add" @click="addTextBox" :disabled="textBoxes.length >= 2">+ Dodaj</button>
+            <button class="tb-tab tb-add" @click="addTextBox" :disabled="textBoxes.length >= 10">+ Dodaj</button>
             <button class="tb-tab tb-remove" @click="removeTextBox" :disabled="textBoxes.length <= 1">🗑</button>
           </div>
 
@@ -200,6 +200,7 @@
             <div class="tc-row">
               <label>Tekst:</label>
               <input type="text" v-model="activeTextBox.text" placeholder="Wpisz tekst…" class="text-input" @input="redrawPreviewOverlay" />
+              <button class="emoji-btn" @click="insertEmoji" title="Wstaw emotikon">😊</button>
             </div>
             <div class="tc-row tc-row-wrap">
               <div class="tc-group">
@@ -392,7 +393,7 @@ function createTextBox(yPct = 0.5) {
   return {
     text: '',
     fontFamily: 'Impact',
-    fontSize: 36,
+    fontSize: 100,
     color: '#ffffff',
     shadowColor: '#000000',
     strokeWidth: 2,
@@ -1187,6 +1188,13 @@ async function convert() {
   finally { isConverting.value = false; }
 }
 
+function insertEmoji() {
+  const emojis = ['😀','😂','🤣','😍','🥰','😎','🤔','👍','👎','🔥','💯','❤️','💔','✨','🎉','🚀','💀','🤡','🤯','🥶','🤠','😈','👻','🤖','💩','👀','🙏','💪','🧠','🫡','🥳','😤','🤬','😱','🤮','🤧','😴','😵‍💫','🫠','🤓','🥸','🤥','🫢','🫣','🤭','🤫','🤪','🤑','🤠','😷','🤒','🤕','🤢','🤮','🤧','😇','🥳','🥺','🤠','🤡','🤥','🤫','🤭','🧐','🤓','😈','👿','👹','👺','💀','☠️','👻','👽','👾','🤖','💩','😺','😸','😹','😻','😼','😽','🙀','😿','😾','🙈','🙉','🙊','💋','💌','💘','💝','💖','💗','💓','💞','💕','💟','❣️','💔','❤️‍🔥','❤️‍🩹','❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍','💯','💢','💥','💫','💦','💨','🕳️','💣','💬','👁️‍🗨️','🗨️','🗯️','💭','💤'];
+  const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+  activeTextBox.value.text += emoji;
+  redrawPreviewOverlay();
+}
+
 function downloadResult() {
   if (!resultBlob.value) return;
   const link = document.createElement('a');
@@ -1258,8 +1266,8 @@ watch(useOriginalWidth, async (enabled) => {
 }
 
 .text-controls {
-  background: #f0f4ff;
-  border: 1px solid #c5d0f5;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 0.75rem;
 }
@@ -1272,28 +1280,30 @@ watch(useOriginalWidth, async (enabled) => {
 }
 
 .tb-tab {
-  padding: 0.3rem 0.65rem;
-  border: 2px solid #aab5f0;
-  border-radius: 20px;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   background: white;
-  color: #3a4ab0;
+  color: #4b5563;
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
 }
-.tb-tab:hover:not(:disabled) { background: #e8eeff; }
-.tb-tab.active { background: #3a4ab0; color: white; border-color: #3a4ab0; }
-.tb-tab.tb-add { border-style: dashed; color: #4caf50; border-color: #4caf50; }
+.tb-tab:hover:not(:disabled) { background: #f3f4f6; border-color: #9ca3af; }
+.tb-tab.active { background: #1da1f2; color: white; border-color: #1da1f2; }
+.tb-tab.tb-add { border-style: dashed; color: #4caf50; border-color: #4caf50; background: #f0fdf4; }
+.tb-tab.tb-add:hover:not(:disabled) { background: #dcfce7; }
 .tb-tab.tb-add:disabled { opacity: 0.45; cursor: not-allowed; }
-.tb-tab.tb-remove { color: #e53935; border-color: #e53935; }
+.tb-tab.tb-remove { color: #e53935; border-color: #e53935; background: #fef2f2; }
+.tb-tab.tb-remove:hover:not(:disabled) { background: #fee2e2; }
 .tb-tab.tb-remove:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .textbox-controls {
   background: white;
   border-radius: 8px;
   padding: 0.65rem;
-  border: 1px solid #dde3ff;
+  border: 1px solid #e5e7eb;
 }
 
 .tc-row {
@@ -1304,7 +1314,7 @@ watch(useOriginalWidth, async (enabled) => {
   flex-wrap: wrap;
 }
 .tc-row label {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #374151;
   white-space: nowrap;
@@ -1313,9 +1323,23 @@ watch(useOriginalWidth, async (enabled) => {
 .tc-row-wrap { flex-wrap: wrap; gap: 0.6rem; }
 .tc-group { display: flex; align-items: center; gap: 0.35rem; }
 .tc-group label { font-size: 0.8rem; font-weight: 600; color: #374151; white-space: nowrap; }
-.text-input { flex: 1; min-width: 110px; padding: 0.3rem 0.45rem; border: 1px solid #c8cff5; border-radius: 6px; font-size: 0.88rem; }
-.color-pick { width: 40px; height: 28px; border: 1px solid #c8cff5; border-radius: 6px; cursor: pointer; padding: 2px; }
+.text-input { flex: 1; min-width: 110px; padding: 0.4rem 0.55rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; transition: border-color 0.15s; }
+.text-input:focus { outline: none; border-color: #1da1f2; }
+.color-pick { width: 40px; height: 32px; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer; padding: 2px; background: white; }
 .size-row { display: flex; align-items: center; gap: 0.2rem; }
+
+.emoji-btn {
+  background: #fef9c3;
+  border: 1px solid #fde047;
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1;
+}
+.emoji-btn:hover:not(:disabled) { background: #fef08a; transform: scale(1.05); }
+.emoji-btn:active:not(:disabled) { transform: scale(0.95); }
 
 .checkbox-label {
   display: flex; align-items: center; gap: 0.3rem;
