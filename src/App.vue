@@ -393,7 +393,7 @@ function createTextBox(yPct = 0.5) {
   return {
     text: '',
     fontFamily: 'Impact',
-    fontSize: 100,
+    fontSize: 100,          // domyślnie 100
     color: '#ffffff',
     shadowColor: '#000000',
     strokeWidth: 2,
@@ -412,9 +412,9 @@ const textBoxes = ref([createTextBox(0.5)]);
 const activeTextBox = computed(() => textBoxes.value[activeTextBoxIdx.value] || null);
 
 function addTextBox() {
-  if (textBoxes.value.length < 2) {
+  if (textBoxes.value.length < 10) {   // maks. 10 pól
     textBoxes.value.push(createTextBox(0.75));
-    activeTextBoxIdx.value = 1;
+    activeTextBoxIdx.value = textBoxes.value.length - 1;
     nextTick(redrawPreviewOverlay);
   }
 }
@@ -425,6 +425,24 @@ function removeTextBox() {
     activeTextBoxIdx.value = Math.min(activeTextBoxIdx.value, textBoxes.value.length - 1);
     nextTick(redrawPreviewOverlay);
   }
+}
+
+// ---- Emoji picker ----
+const showEmojiPicker = ref(false);
+const emojiList = [
+  '😀','😂','🤣','😍','🥰','😎','🤔','👍','👎','🔥','💯','❤️','💔','✨','🎉','🚀','💀','🤡','🤯','🥶','🤠','😈','👻','🤖','💩','👀','🙏','💪','🧠','🫡','🥳','😤','🤬','😱','🤮','🤧','😴','😵‍💫','🫠','🤓','🥸','🤥','🫢','🫣','🤭','🤫','🤪','🤑','🤠','😷','🤒','🤕','🤢','🤮','🤧','😇','🥳','🥺','🤠','🤡','🤥','🤫','🤭','🧐','🤓','😈','👿','👹','👺','💀','☠️','👻','👽','👾','🤖','💩','😺','😸','😹','😻','😼','😽','🙀','😿','😾','🙈','🙉','🙊','💋','💌','💘','💝','💖','💗','💓','💞','💕','💟','❣️','💔','❤️‍🔥','❤️‍🩹','❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍','💯','💢','💥','💫','💦','💨','🕳️','💣','💬','👁️‍🗨️','🗨️','🗯️','💭','💤'
+];
+
+function insertEmoji(emoji) {
+  if (emoji) {
+    activeTextBox.value.text += emoji;
+  }
+  showEmojiPicker.value = false;
+  redrawPreviewOverlay();
+}
+
+function toggleEmojiPicker() {
+  showEmojiPicker.value = !showEmojiPicker.value;
 }
 
 // ---- DRAG STATE ----
@@ -1265,52 +1283,81 @@ watch(useOriginalWidth, async (enabled) => {
   margin-top: 0.5rem;
 }
 
+/* ===== TEXT EDITOR – UJEDNOLICONY WYGLĄD ===== */
 .text-controls {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #f0f4f8;       /* jak pozostałe panele */
+  border: 1px solid #dde3ea;
   border-radius: 10px;
-  padding: 0.75rem;
+  padding: 0.85rem 1rem;
 }
 
+/* Zakładki */
 .textbox-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.9rem;
 }
 
 .tb-tab {
-  padding: 0.35rem 0.75rem;
+  padding: 0.35rem 0.85rem;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border-radius: 8px;
   background: white;
   color: #4b5563;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s;
 }
-.tb-tab:hover:not(:disabled) { background: #f3f4f6; border-color: #9ca3af; }
-.tb-tab.active { background: #1da1f2; color: white; border-color: #1da1f2; }
-.tb-tab.tb-add { border-style: dashed; color: #4caf50; border-color: #4caf50; background: #f0fdf4; }
-.tb-tab.tb-add:hover:not(:disabled) { background: #dcfce7; }
-.tb-tab.tb-add:disabled { opacity: 0.45; cursor: not-allowed; }
-.tb-tab.tb-remove { color: #e53935; border-color: #e53935; background: #fef2f2; }
-.tb-tab.tb-remove:hover:not(:disabled) { background: #fee2e2; }
-.tb-tab.tb-remove:disabled { opacity: 0.45; cursor: not-allowed; }
+.tb-tab:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+.tb-tab.active {
+  background: #e7f5ff;       /* jasnoniebieski, spójny z .format-btn.active */
+  color: #0c63e4;
+  border-color: #1da1f2;
+}
+.tb-tab.tb-add {
+  border-style: dashed;
+  color: #4caf50;
+  border-color: #4caf50;
+  background: #f0fdf4;
+}
+.tb-tab.tb-add:hover:not(:disabled) {
+  background: #dcfce7;
+}
+.tb-tab.tb-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.tb-tab.tb-remove {
+  color: #e53935;
+  border-color: #e53935;
+  background: #fef2f2;
+}
+.tb-tab.tb-remove:hover:not(:disabled) {
+  background: #fee2e2;
+}
+.tb-tab.tb-remove:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
+/* Kontrolki wybranego tekstu */
 .textbox-controls {
   background: white;
   border-radius: 8px;
-  padding: 0.65rem;
-  border: 1px solid #e5e7eb;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
 }
 
 .tc-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.45rem;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
   flex-wrap: wrap;
 }
 .tc-row label {
@@ -1318,32 +1365,138 @@ watch(useOriginalWidth, async (enabled) => {
   font-weight: 600;
   color: #374151;
   white-space: nowrap;
-  min-width: 75px;
+  min-width: 80px;
 }
-.tc-row-wrap { flex-wrap: wrap; gap: 0.6rem; }
-.tc-group { display: flex; align-items: center; gap: 0.35rem; }
-.tc-group label { font-size: 0.8rem; font-weight: 600; color: #374151; white-space: nowrap; }
-.text-input { flex: 1; min-width: 110px; padding: 0.4rem 0.55rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; transition: border-color 0.15s; }
-.text-input:focus { outline: none; border-color: #1da1f2; }
-.color-pick { width: 40px; height: 32px; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer; padding: 2px; background: white; }
-.size-row { display: flex; align-items: center; gap: 0.2rem; }
+.tc-row-wrap {
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+.tc-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.tc-group label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
 
+.text-input {
+  flex: 1;
+  min-width: 110px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #fff;
+  transition: border-color 0.15s;
+}
+.text-input:focus {
+  outline: none;
+  border-color: #1da1f2;
+  box-shadow: 0 0 0 2px rgba(29,161,242,0.2);
+}
+
+.color-pick {
+  width: 40px;
+  height: 32px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px;
+  background: white;
+}
+
+.size-row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+/* Przyciski +/- (takie same jak .num-btn w reszcie apki) */
+.num-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #4b5563;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.num-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+.num-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Przycisk emotikon */
 .emoji-btn {
   background: #fef9c3;
   border: 1px solid #fde047;
   border-radius: 6px;
-  padding: 0.35rem 0.55rem;
+  padding: 0.4rem 0.6rem;
   font-size: 1.1rem;
   cursor: pointer;
   transition: all 0.15s;
   line-height: 1;
+  position: relative;
 }
-.emoji-btn:hover:not(:disabled) { background: #fef08a; transform: scale(1.05); }
-.emoji-btn:active:not(:disabled) { transform: scale(0.95); }
+.emoji-btn:hover:not(:disabled) {
+  background: #fef08a;
+  transform: scale(1.05);
+}
+.emoji-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* Siatka emotikon */
+.emoji-picker {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  padding: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 0.3rem;
+  z-index: 20;
+  width: 260px;
+}
+.emoji-item {
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0.2rem;
+  text-align: center;
+  border-radius: 6px;
+  transition: background 0.15s;
+  user-select: none;
+}
+.emoji-item:hover {
+  background: #f3f4f6;
+}
 
 .checkbox-label {
-  display: flex; align-items: center; gap: 0.3rem;
-  font-size: 0.82rem; cursor: pointer; user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  user-select: none;
 }
 
 /* ===== UNIFIED PREVIEW ===== */
