@@ -174,6 +174,14 @@
         ✂️ {{ cropEnabled ? 'Wyłącz przycinanie' : 'Przytnij kadr' }}
       </button>
 
+      <button
+        class="text-toggle-btn"
+        @click="toggleTextEdit"
+        :disabled="isConverting"
+      >
+        ✏️ {{ textOverlayEnabled ? 'Wyłącz edycję tekstu' : 'Dodaj tekst' }}
+      </button>
+
       <div v-if="cropEnabled" class="crop-controls">
         <div class="sync-row">
           <label>
@@ -237,6 +245,58 @@
           <span v-else>
             (oryg. − {{ cropLeft + cropRight }}px szer., − {{ cropTop + cropBottom }}px wys.)
           </span>
+        </div>
+
+        <!-- Panel edycji tekstu (pojawia się gdy textOverlayEnabled) -->
+        <div v-if="textOverlayEnabled" class="text-editor">
+          <div class="text-row">
+            <label>Tekst:</label>
+            <input v-model="textContent" placeholder="Wpisz tekst…" :disabled="isConverting" />
+          </div>
+          <div class="text-params">
+            <div>
+              <label>X (px):</label>
+              <input type="number" v-model.number="textX" step="5" min="0" :disabled="isConverting" />
+            </div>
+            <div>
+              <label>Y (px):</label>
+              <input type="number" v-model.number="textY" step="5" min="0" :disabled="isConverting" />
+            </div>
+            <div>
+              <label>Obrót (°):</label>
+              <input type="number" v-model.number="textRotation" step="1" min="0" max="360" :disabled="isConverting" />
+            </div>
+          </div>
+          <div class="text-params">
+            <div>
+              <label>Czcionka:</label>
+              <select v-model="textFont" :disabled="isConverting">
+                <option>Arial</option>
+                <option>Helvetica</option>
+                <option>Times New Roman</option>
+                <option>Courier New</option>
+                <option>Verdana</option>
+                <option>Georgia</option>
+                <option>Impact</option>
+              </select>
+            </div>
+            <div>
+              <label>Rozmiar:</label>
+              <input type="number" v-model.number="textSize" min="8" max="200" :disabled="isConverting" />
+            </div>
+            <div>
+              <label>Kolor:</label>
+              <input type="color" v-model="textColor" :disabled="isConverting" />
+            </div>
+            <div class="checkboxes">
+              <label>
+                <input type="checkbox" v-model="textBold" :disabled="isConverting" /> Bold
+              </label>
+              <label>
+                <input type="checkbox" v-model="textItalic" :disabled="isConverting" /> Kursywa
+              </label>
+            </div>
+          </div>
         </div>
 
         <div v-if="previewFrame" class="crop-preview">
@@ -348,6 +408,18 @@ const previewNaturalWidth  = ref(0);
 const previewNaturalHeight = ref(0);
 const isLoadingPreview     = ref(false);
 
+// --- Tekst nałożony ---
+const textOverlayEnabled = ref(false);
+const textContent = ref('');
+const textX = ref(10);
+const textY = ref(10);
+const textRotation = ref(0);
+const textFont = ref('Arial');
+const textSize = ref(16);
+const textColor = ref('#ffffff');
+const textBold = ref(false);
+const textItalic = ref(false);
+
 // Template refs
 const previewImg     = ref(null);
 const cropCanvas     = ref(null);
@@ -415,6 +487,17 @@ function resetConversionState() {
   cropRight.value = 0;
   syncVertical.value = true;
   syncHorizontal.value = true;
+
+  textOverlayEnabled.value = false;
+  textContent.value = '';
+  textX.value = 10;
+  textY.value = 10;
+  textRotation.value = 0;
+  textFont.value = 'Arial';
+  textSize.value = 16;
+  textColor.value = '#ffffff';
+  textBold.value = false;
+  textItalic.value = false;
 
   if (resultUrl.value) {
     URL.revokeObjectURL(resultUrl.value);
@@ -543,7 +626,17 @@ function buildVfFilter() {
 
 function toggleCrop() {
   cropEnabled.value = !cropEnabled.value;
-  if (!cropEnabled.value) clearPreview();
+  if (!cropEnabled.value) {
+    clearPreview();
+    textOverlayEnabled.value = false; // wyłączenie tekstu, gdy kadrowanie wyłączone
+  }
+}
+
+function toggleTextEdit() {
+  textOverlayEnabled.value = !textOverlayEnabled.value;
+  if (textOverlayEnabled.value && !cropEnabled.value) {
+    cropEnabled.value = true; // włącz kadrowanie, aby wygodniej ustawić tekst
+  }
 }
 
 function clearPreview() {
@@ -804,6 +897,34 @@ function drawCropOverlay() {
     ctx.lineTo(bx, by);
     ctx.stroke();
   }
+
+  // Rysowanie tekstu (jeśli włączony)
+  if (textOverlayEnabled.value && textContent.value.trim()) {
+    const cropW = img.naturalWidth - cropLeft.value - cropRight.value;
+    const cropH = img.naturalHeight - cropTop.value - cropBottom.value;
+    const outW = width.value;
+    const outH = Math.round(outW * cropH / cropW);
+
+    // Mapowanie współrzędnych z obrazka wyjściowego na oryginalny (skala + przesunięcie kadrowania)
+    const tx = cropLeft.value + (textX.value * (cropW / outW));
+    const ty = cropTop.value + (textY.value * (cropH / outH));
+
+    const canvasX = tx * scaleX;
+    const canvasY = ty * scaleY;
+
+    ctx.save();
+    ctx.translate(canvasX, canvasY);
+    ctx.rotate((textRotation.value * Math.PI) / 180);
+
+    const bold = textBold.value ? 'bold' : 'normal';
+    const italic = textItalic.value ? 'italic' : 'normal';
+    // skala rozmiaru czcionki: proporcjonalnie do pomniejszenia na canvas
+    ctx.font = `${bold} ${italic} ${textSize.value * Math.min(scaleX, scaleY)}px ${textFont.value}`;
+    ctx.fillStyle = textColor.value;
+    ctx.textBaseline = 'top';
+    ctx.fillText(textContent.value, 0, 0);
+    ctx.restore();
+  }
 }
 
 // ---- Analiza rozmiaru ----
@@ -841,29 +962,21 @@ async function analyzeAndEstimate() {
       await ffmpeg.deleteFile('sample.gif');
       await ffmpeg.deleteFile('analyze.mp4');
 
-      // GIF ma nieliniowy wzrost rozmiaru ze względu na:
-      // 1. Narzut palety (globalnej + lokalnych)
-      // 2. Tablice kolorów (color lookup tables)
-      // 3. Kompresja LZW która jest mniej efektywna przy większej liczbie klatek
-      
       const testFrames = Math.floor(testDuration * fps.value);
       const totalFrames = Math.floor(duration * fps.value);
       
       if (testFrames > 0) {
-        // Współczynnik nieliniowości: więcej klatek = większy narzut na klatkę
         const nonLinearFactor = 1 + (Math.log(totalFrames / testFrames) * 0.15);
-        // Współczynnik zależny od rozmiaru ramki (większa ramka = większy narzut palety)
         const sizeFactor = Math.sqrt((width.value * width.value) / (640 * 480)) || 1;
         
         estimatedSize.value = Math.round((sampleSize / testFrames) * totalFrames * nonLinearFactor * sizeFactor * 1.05);
-        sizeConfidence.value = 0.88; // Nieco niższa pewność niż dla WebP
+        sizeConfidence.value = 0.88;
       } else {
         estimatedSize.value = sampleSize;
         sizeConfidence.value = 0.5;
       }
 
     } else {
-      // === ANALIZA DLA WEBP (jak wcześniej) ===
       await ffmpeg.exec([
         '-i',  'analyze.mp4',
         '-ss', testStart.toFixed(2),
@@ -889,7 +1002,6 @@ async function analyzeAndEstimate() {
       const targetBytes = targetSizeMB.value * 1024 * 1024;
       if (estimatedSize.value > targetBytes) {
         if (outputFormat.value === 'gif') {
-          // Dla GIF zmniejszamy szerokość (bardziej wpływa na rozmiar niż jakość)
           const scaleFactor = Math.sqrt(targetBytes / estimatedSize.value);
           width.value = Math.max(100, Math.floor(width.value * scaleFactor / 10) * 10);
         } else {
@@ -904,6 +1016,149 @@ async function analyzeAndEstimate() {
   }
 }
 
+// ---- Konwersja z tekstem (uniwersalna dla MP4 i WebP) ----
+async function convertWithTextOverlay(fileData) {
+  // Ustalamy wymiary wyjściowe
+  const cl = cropLeft.value || 0;
+  const cr = cropRight.value || 0;
+  const ct = cropTop.value || 0;
+  const cb = cropBottom.value || 0;
+  const outW = width.value;
+  let cropW, cropH;
+  
+  if (inputExt.value === 'webp') {
+    const meta = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength));
+    cropW = meta.width - cl - cr;
+    cropH = meta.height - ct - cb;
+  } else {
+    cropW = originalWidth.value - cl - cr;
+    cropH = originalHeight.value - ct - cb;
+  }
+  const outH = Math.round(outW * cropH / cropW);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext('2d');
+  
+  const totalFrames = Math.floor((endTime.value - startTime.value) * fps.value);
+  const frameStep = 1 / fps.value;
+
+  if (inputExt.value === 'webp') {
+    // WebP z tekstem
+    if (typeof ImageDecoder === 'undefined') throw new Error('Przeglądarka nie obsługuje ImageDecoder.');
+    const decoder = new ImageDecoder({ data: fileData, type: 'image/webp' });
+    await decoder.tracks.ready;
+    const track = decoder.tracks.selectedTrack;
+    const totalDuration = (await decoder.tracks.ready, track.frameCount > 0 ? (track.frameCount / originalFps.value) : 0);
+    
+    for (let i = 0; i < totalFrames; i++) {
+      const t = startTime.value + i * frameStep;
+      const srcFrameIndex = Math.min(track.frameCount - 1, Math.max(0, Math.floor(t * originalFps.value)));
+      const result = await decoder.decode({ frameIndex: srcFrameIndex });
+      const frame = result.image;
+
+      ctx.drawImage(frame, cl, ct, cropW, cropH, 0, 0, outW, outH);
+      frame.close();
+      
+      // Rysowanie tekstu
+      applyText(ctx, outW, outH);
+      
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      const buf = await blob.arrayBuffer();
+      await ffmpeg.writeFile(`frame_${String(i).padStart(5, '0')}.png`, new Uint8Array(buf));
+    }
+    decoder.close();
+  } else {
+    // MP4 z tekstem: najpierw wyciągamy klatki oryginalne (bez skalowania), potem nakładamy canvas
+    const framePattern = 'frame_%05d.png';
+    await ffmpeg.writeFile('input_text.mp4', new Uint8Array(fileData.slice().buffer));
+    
+    // Wyciągamy klatki w oryginalnej rozdzielczości (z kadrowaniem tylko czasowym i fps)
+    const extractArgs = [
+      '-i', 'input_text.mp4',
+      '-ss', startTime.value.toString(),
+      '-to', endTime.value.toString(),
+      '-vf', `fps=${fps.value}`, // tylko fps, bez skalowania i kadrowania
+      '-f', 'image2',
+      framePattern
+    ];
+    await ffmpeg.exec(extractArgs);
+    
+    // Teraz przetwarzamy każdą wyciągniętą klatkę
+    for (let i = 0; i < totalFrames; i++) {
+      const filename = `frame_${String(i).padStart(5, '0')}.png`;
+      const data = await ffmpeg.readFile(filename);
+      const blob = new Blob([data.buffer], { type: 'image/png' });
+      const img = await createImageBitmap(blob);
+      
+      ctx.drawImage(img, cl, ct, cropW, cropH, 0, 0, outW, outH);
+      img.close();
+      
+      applyText(ctx, outW, outH);
+      
+      const newBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      const newBuf = await newBlob.arrayBuffer();
+      await ffmpeg.writeFile(filename, new Uint8Array(newBuf)); // nadpisujemy
+    }
+    
+    await ffmpeg.deleteFile('input_text.mp4');
+  }
+  
+  // Teraz mamy wszystkie klatki z tekstem jako PNG. Kodujemy do formatu docelowego.
+  if (outputFormat.value === 'gif') {
+    const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
+    await ffmpeg.exec([
+      '-f', 'image2',
+      '-framerate', fps.value.toString(),
+      '-i', 'frame_%05d.png',
+      '-vf', `split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,
+      '-loop', '0',
+      'output_text.' + outputFormat.value,
+    ]);
+  } else {
+    await ffmpeg.exec([
+      '-f', 'image2',
+      '-framerate', fps.value.toString(),
+      '-i', 'frame_%05d.png',
+      '-c:v', 'libwebp',
+      '-q:v', quality.value.toString(),
+      '-loop', '0',
+      '-preset', 'default',
+      '-an',
+      'output_text.' + outputFormat.value,
+    ]);
+  }
+  
+  // Czyszczenie klatek
+  for (let i = 0; i < totalFrames; i++) {
+    await ffmpeg.deleteFile(`frame_${String(i).padStart(5, '0')}.png`);
+  }
+  
+  const outExt = outputFormat.value;
+  const data = await ffmpeg.readFile('output_text.' + outExt);
+  resultBlob.value = new Blob([data.buffer], { type: outExt === 'gif' ? 'image/gif' : 'image/webp' });
+  resultUrl.value = URL.createObjectURL(resultBlob.value);
+  await ffmpeg.deleteFile('output_text.' + outExt);
+}
+
+// Pomocnicza funkcja rysująca tekst na canvas (używana w pętli klatek)
+function applyText(ctx, outW, outH) {
+  if (!textContent.value.trim()) return;
+  
+  ctx.save();
+  ctx.translate(textX.value, textY.value);
+  ctx.rotate((textRotation.value * Math.PI) / 180);
+  
+  const bold = textBold.value ? 'bold' : 'normal';
+  const italic = textItalic.value ? 'italic' : 'normal';
+  ctx.font = `${bold} ${italic} ${textSize.value}px ${textFont.value}`;
+  ctx.fillStyle = textColor.value;
+  ctx.textBaseline = 'top';
+  ctx.fillText(textContent.value, 0, 0);
+  ctx.restore();
+}
+
 // ---- Główna konwersja ----
 async function convert() {
   if (!videoUrl.value.trim()) { error.value = 'Wprowadź link do wideo lub wgraj plik.'; return; }
@@ -915,6 +1170,12 @@ async function convert() {
 
   try {
     const fileData = await fetchVideo(videoUrl.value);
+
+    // Jeśli włączona nakładka tekstowa, użyj dedykowanej ścieżki
+    if (textOverlayEnabled.value && textContent.value.trim()) {
+      await convertWithTextOverlay(fileData);
+      return;
+    }
 
     if (inputExt.value === 'webp') {
       // ---- ŚCIEŻKA WEBP (przez ImageDecoder + Canvas + PNG) ----
@@ -1096,6 +1357,18 @@ watch([cropTop, cropBottom, cropLeft, cropRight], () => {
   drawCropOverlay();
 });
 
+// Obserwacja wszystkich właściwości tekstu – odśwież podgląd
+watch([textOverlayEnabled, textContent, textX, textY, textRotation, textFont, textSize, textColor, textBold, textItalic], () => {
+  if (previewFrame.value) drawCropOverlay();
+});
+
+// Przy włączeniu edycji tekstu załaduj podgląd, jeśli go nie ma
+watch(textOverlayEnabled, async (enabled) => {
+  if (enabled && !previewFrame.value && videoUrl.value.trim() && !isLoadingPreview.value) {
+    await loadPreviewFrame();
+  }
+});
+
 watch(useOriginalWidth, async (enabled) => {
   if (enabled && cachedFileData.value && cachedUrl.value === videoUrl.value.trim()) {
     try {
@@ -1112,6 +1385,221 @@ watch(useOriginalWidth, async (enabled) => {
 </script>
 
 <style scoped>
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+}
+
+.subtitle {
+  color: #666;
+  margin-top: -10px;
+  margin-bottom: 20px;
+}
+
+.input-group {
+  margin-bottom: 1.5rem;
+}
+
+.input-group label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.input-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.input-row input {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+}
+
+.clear-btn {
+  background: #e9ecef;
+  border: 1px solid #ced4da;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.clear-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fetch-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.fetch-btn,
+.upload-btn {
+  background: #1da1f2;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.fetch-btn:disabled,
+.upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.param-field {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 0.75rem;
+  border: 1px solid #e9ecef;
+}
+
+.param-field label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #495057;
+}
+
+.param-field input[type="number"] {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  margin-bottom: 0.3rem;
+}
+
+.btn-row {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.num-btn {
+  background: #e9ecef;
+  border: 1px solid #ced4da;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.num-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.checkbox-label {
+  font-weight: normal;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.quality-field {
+  grid-column: span 2;
+}
+
+.quality-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.3rem;
+}
+
+.quality-value {
+  font-weight: bold;
+  color: #1da1f2;
+}
+
+.quality-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.quality-controls input[type="range"] {
+  flex: 1;
+}
+
+.size-estimate {
+  grid-column: span 2;
+}
+
+.estimate-display {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.estimate-value {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #2b8a3e;
+}
+
+.estimate-note {
+  font-size: 0.8rem;
+  color: #868e96;
+}
+
+.estimate-confidence {
+  font-size: 0.75rem;
+  color: #495057;
+  margin: 0.2rem 0 0;
+}
+
+.size-limit {
+  grid-column: span 2;
+}
+
+.limit-control {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+.limit-control input[type="number"] {
+  width: 80px;
+}
+
+.analyze-btn {
+  margin-top: 0.5rem;
+  background: #f08c00;
+  color: white;
+  border: none;
+  padding: 0.4rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.analyze-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Format selector */
 .format-selector {
   margin-bottom: 1.25rem;
   background: #f8f9fa;
@@ -1119,7 +1607,6 @@ watch(useOriginalWidth, async (enabled) => {
   padding: 0.75rem 1rem;
   border: 1px solid #e9ecef;
 }
-
 .format-label {
   display: block;
   font-weight: 600;
@@ -1127,12 +1614,10 @@ watch(useOriginalWidth, async (enabled) => {
   margin-bottom: 0.5rem;
   color: #495057;
 }
-
 .format-options {
   display: flex;
   gap: 0.5rem;
 }
-
 .format-btn {
   flex: 1;
   display: flex;
@@ -1149,27 +1634,24 @@ watch(useOriginalWidth, async (enabled) => {
   cursor: pointer;
   transition: all 0.2s;
 }
-
 .format-btn:hover:not(:disabled) {
   border-color: #adb5bd;
   background: #f8f9fa;
 }
-
 .format-btn.active {
   border-color: #1da1f2;
   background: #e7f5ff;
   color: #0c63e4;
 }
-
 .format-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-
 .format-icon {
   font-size: 1.1rem;
 }
 
+/* Oryginalne metadane */
 .original-meta {
   margin-bottom: 1.25rem;
   background: #f0f4f8;
@@ -1177,13 +1659,11 @@ watch(useOriginalWidth, async (enabled) => {
   padding: 0.75rem 1rem;
   border: 1px solid #dde3ea;
 }
-
 .original-meta h4 {
   margin: 0 0 0.5rem;
   font-size: 0.9rem;
   color: #334155;
 }
-
 .meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1191,19 +1671,291 @@ watch(useOriginalWidth, async (enabled) => {
   font-size: 0.85rem;
   color: #475569;
 }
-
 .meta-grid div span {
   font-weight: 600;
   color: #1e293b;
 }
 
+/* Crop section */
+.crop-section {
+  margin-bottom: 1.5rem;
+}
+.crop-toggle-btn,
+.text-toggle-btn {
+  padding: 0.6rem 1.2rem;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  background: white;
+  color: #495057;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.crop-toggle-btn.active {
+  border-color: #1da1f2;
+  background: #e7f5ff;
+  color: #0c63e4;
+}
+.crop-toggle-btn:hover:not(:disabled),
+.text-toggle-btn:hover:not(:disabled) {
+  border-color: #adb5bd;
+  background: #f8f9fa;
+}
+.crop-toggle-btn:disabled,
+.text-toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.crop-controls {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-top: 0.5rem;
+}
+.sync-row {
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+}
+.crop-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.crop-field label {
+  font-weight: 600;
+  font-size: 0.8rem;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+.crop-field input[type="number"] {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  margin-bottom: 0.3rem;
+}
+.reset-crop-btn {
+  margin-top: 0.5rem;
+  background: #adb5bd;
+  color: white;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.crop-summary {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #495057;
+}
+
+/* Panel edycji tekstu */
+.text-editor {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+.text-row {
+  margin-bottom: 0.75rem;
+}
+.text-row input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+}
+.text-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.text-params > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.text-params label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #495057;
+}
+.text-params input[type="number"],
+.text-params select {
+  width: 100px;
+  padding: 0.4rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+}
+.text-params input[type="color"] {
+  height: 34px;
+  width: 60px;
+  padding: 2px;
+}
+.checkboxes {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-left: auto;
+}
+.checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+/* Crop preview */
+.crop-preview {
+  margin-top: 1rem;
+}
+.preview-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+.preview-dims {
+  font-weight: normal;
+  color: #868e96;
+}
+.preview-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+}
+.preview-wrapper img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.preview-wrapper canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.preview-loading {
+  color: #868e96;
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
+/* Convert button */
+.convert-btn {
+  width: 100%;
+  padding: 0.8rem;
+  font-size: 1.1rem;
+  font-weight: bold;
+  background: #1da1f2;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 1rem;
+}
+.convert-btn:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+}
+
+.loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 1rem 0;
+}
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e9ecef;
+  border-top: 4px solid #1da1f2;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.loader-text {
+  margin-top: 0.5rem;
+  color: #495057;
+}
+
+.error {
+  color: #e03131;
+  background: #ffe3e3;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.result-area {
+  margin-top: 1.5rem;
+}
+.result-area h3 {
+  margin-bottom: 0.5rem;
+}
+.result-area img {
+  max-width: 100%;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+.result-info {
+  font-size: 0.9rem;
+  color: #495057;
+  margin: 0.5rem 0;
+}
+.download-btn {
+  background: #2b8a3e;
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.note {
+  font-size: 0.8rem;
+  color: #868e96;
+  margin-top: 2rem;
+}
+
 @media (max-width: 600px) {
+  .params-grid {
+    grid-template-columns: 1fr;
+  }
+  .quality-field,
+  .size-estimate,
+  .size-limit {
+    grid-column: span 1;
+  }
   .meta-grid {
     grid-template-columns: 1fr;
   }
-  
   .format-options {
     flex-direction: column;
+  }
+  .crop-grid {
+    grid-template-columns: 1fr;
+  }
+  .text-params {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .checkboxes {
+    margin-left: 0;
   }
 }
 </style>
