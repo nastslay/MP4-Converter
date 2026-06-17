@@ -371,7 +371,7 @@ const originalFps      = ref(null);
 const originalDuration = ref(null);
 
 // Crop
-const cropEnabled = ref(false);  // kept for VF filter logic
+const cropEnabled = ref(false);
 const cropTop     = ref(0);
 const cropBottom  = ref(0);
 const cropLeft    = ref(0);
@@ -379,7 +379,7 @@ const cropRight   = ref(0);
 const syncVertical   = ref(true);
 const syncHorizontal = ref(true);
 
-// Panel open state (replaces separate cropEnabled + textEditEnabled)
+// Panel open state
 const editPanelOpen = ref(false);
 
 // Podgląd klatki
@@ -403,7 +403,7 @@ function createTextBox(yPct = 0.5) {
   return {
     text: '',
     fontFamily: 'Impact',
-    fontSize: 100,          // domyślnie 100
+    fontSize: 100,
     color: '#ffffff',
     shadowColor: '#000000',
     strokeWidth: 2,
@@ -422,7 +422,7 @@ const textBoxes = ref([createTextBox(0.5)]);
 const activeTextBox = computed(() => textBoxes.value[activeTextBoxIdx.value] || null);
 
 function addTextBox() {
-  if (textBoxes.value.length < 10) {   // maks. 10 pól
+  if (textBoxes.value.length < 10) {
     textBoxes.value.push(createTextBox(0.75));
     activeTextBoxIdx.value = textBoxes.value.length - 1;
     nextTick(redrawPreviewOverlay);
@@ -442,14 +442,6 @@ const showEmojiPicker = ref(false);
 const emojiList = [
   '😀','😂','🤣','😍','🥰','😎','🤔','👍','👎','🔥','💯','❤️','💔','✨','🎉','🚀','💀','🤡','🤯','🥶','🤠','😈','👻','🤖','💩','👀','🙏','💪','🧠','🫡','🥳','😤','🤬','😱','🤮','🤧','😴','😵‍💫','🫠','🤓','🥸','🤥','🫢','🫣','🤭','🤫','🤪','🤑','🤠','😷','🤒','🤕','🤢','🤮','🤧','😇','🥳','🥺','🤠','🤡','🤥','🤫','🤭','🧐','🤓','😈','👿','👹','👺','💀','☠️','👻','👽','👾','🤖','💩','😺','😸','😹','😻','😼','😽','🙀','😿','😾','🙈','🙉','🙊','💋','💌','💘','💝','💖','💗','💓','💞','💕','💟','❣️','💔','❤️‍🔥','❤️‍🩹','❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍','💯','💢','💥','💫','💦','💨','🕳️','💣','💬','👁️‍🗨️','🗨️','🗯️','💭','💤'
 ];
-
-function insertEmoji(emoji) {
-  if (emoji) {
-    activeTextBox.value.text += emoji;
-  }
-  showEmojiPicker.value = false;
-  redrawPreviewOverlay();
-}
 
 function toggleEmojiPicker() { showEmojiPicker.value = !showEmojiPicker.value; }
 function insertEmoji(emoji) {
@@ -480,7 +472,6 @@ function clientToCanvasPct(clientX, clientY) {
   };
 }
 
-// Hit-test: check if (clientX, clientY) hits any text label
 function hitTestText(clientX, clientY) {
   const c = unifiedCanvas.value;
   if (!c) return -1;
@@ -490,13 +481,11 @@ function hitTestText(clientX, clientY) {
   const cw = c.width;
   const ch = c.height;
 
-  // Check in reverse order (last = top)
   for (let i = textBoxes.value.length - 1; i >= 0; i--) {
     const tb = textBoxes.value[i];
     if (!tb.text.trim()) continue;
     const tx = tb.xPct * cw;
     const ty = tb.yPct * ch;
-    // Estimate text bounding box
     const estW = tb.fontSize * tb.text.length * 0.6 + 20;
     const estH = tb.fontSize + 10;
     const dx = (px * cw) - tx;
@@ -565,7 +554,6 @@ function onCanvasTouchEnd() {
 }
 
 // ---- UNIFIED CANVAS DRAW ----
-// Draws: background image + crop overlay + text labels (all on one canvas)
 function redrawPreviewOverlay() {
   const canvas = unifiedCanvas.value;
   const img = previewImg.value;
@@ -580,11 +568,8 @@ function redrawPreviewOverlay() {
 
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, dw, dh);
-
-  // Draw image
   ctx.drawImage(img, 0, 0, dw, dh);
 
-  // Draw crop overlay
   const hasCrop = (cropTop.value || cropBottom.value || cropLeft.value || cropRight.value);
   if (hasCrop) {
     const scaleX = dw / img.naturalWidth;
@@ -604,7 +589,6 @@ function redrawPreviewOverlay() {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x, y, w, h);
 
-    // Corner brackets
     const cs = 14;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 3;
@@ -620,7 +604,6 @@ function redrawPreviewOverlay() {
     }
   }
 
-  // Draw text labels
   for (let i = 0; i < textBoxes.value.length; i++) {
     const tb = textBoxes.value[i];
     if (!tb.text.trim()) continue;
@@ -672,7 +655,6 @@ function redrawPreviewOverlay() {
 
     ctx.restore();
 
-    // Active text indicator (dashed selection box)
     if (i === activeTextBoxIdx.value) {
       ctx.save();
       ctx.translate(tx, ty);
@@ -693,7 +675,6 @@ function redrawPreviewOverlay() {
   }
 }
 
-// Draws text onto an output canvas frame (used during conversion)
 function drawTextOnCanvas(ctx, canvasWidth, canvasHeight) {
   for (const tb of textBoxes.value) {
     if (!tb.text.trim()) continue;
@@ -866,7 +847,6 @@ const cropRefs = { cropTop, cropBottom, cropLeft, cropRight };
 function adjustCrop(field, delta) { cropRefs[field].value = Math.max(0, cropRefs[field].value + delta); }
 function resetCrop() { cropTop.value=0; cropBottom.value=0; cropLeft.value=0; cropRight.value=0; }
 
-// buildVfFilter — only crop + fps + scale, NO drawtext (text via canvas)
 function buildVfFilter() {
   const parts = [];
   const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
@@ -1041,8 +1021,6 @@ async function analyzeAndEstimate() {
 }
 
 // ---- KONWERSJA ----
-// Wspólna ścieżka canvas dla MP4 i WebP gdy aktywny jest crop lub tekst.
-// FFmpeg wyciąga klatki → canvas nakłada crop/tekst → FFmpeg składa animację.
 async function convertViaCanvas(fileData, srcExt) {
   const userStart  = startTime.value;
   const userEnd    = endTime.value;
@@ -1064,7 +1042,6 @@ async function convertViaCanvas(fileData, srcExt) {
     totalFrames = meta.frameCount;
     srcFps = totalFrames / totalDuration;
   } else {
-    // MP4: extract individual frames via ffmpeg
     const meta = await getVideoMetadata(fileData, 'mp4');
     srcW = meta.width || width.value; srcH = meta.height || Math.round(width.value * 9 / 16);
     srcFps = meta.fps || 25;
@@ -1105,16 +1082,8 @@ async function convertViaCanvas(fileData, srcExt) {
     }
     decoder.close();
   } else {
-    // MP4: use ffmpeg to extract frames one by one
     await ffmpeg.writeFile('conv_input.mp4', new Uint8Array(fileData.slice().buffer));
 
-    // Extract all needed frames as PNGs
-    const rawFilter = [];
-    if (hasCrop) rawFilter.push(`crop=${srcW-cl-cr}:${srcH-ct-cb}:${cl}:${ct}`);
-    // We'll draw at original size first, then scale on canvas
-    const extractFilter = rawFilter.join(',') || 'null';
-
-    // Extract frames in the time range at desired fps
     await ffmpeg.exec([
       '-i', 'conv_input.mp4',
       '-ss', userStart.toString(),
@@ -1124,17 +1093,14 @@ async function convertViaCanvas(fileData, srcExt) {
       'rawframe_%05d.png',
     ]);
 
-    // Count extracted frames
     let frameIdx = 0;
     for (let i = 0; i < outputFrameCount; i++) {
       const fname = `rawframe_${String(i+1).padStart(5,'0')}.png`;
       let rawData;
       try { rawData = await ffmpeg.readFile(fname); } catch(e) {
-        // If less frames extracted than expected, stop
         outputFrameCount_actual = i;
         break;
       }
-      // Draw on canvas with text
       const imgBlob = new Blob([rawData.buffer], { type: 'image/png' });
       const imgBitmap = await createImageBitmap(imgBlob);
       ctx.clearRect(0, 0, outW, outH);
@@ -1152,7 +1118,6 @@ async function convertViaCanvas(fileData, srcExt) {
     outputFrameCount_actual = frameIdx;
   }
 
-  // Assemble animation from frames
   const actualFrameCount = srcExt === 'webp' ? outputFrameCount : (outputFrameCount_actual ?? outputFrameCount);
 
   if (outputFormat.value === 'gif') {
@@ -1169,7 +1134,6 @@ async function convertViaCanvas(fileData, srcExt) {
     ]);
   }
 
-  // Cleanup frames
   for (let i = 0; i < actualFrameCount; i++) {
     try { await ffmpeg.deleteFile(`frame_${String(i).padStart(5,'0')}.png`); } catch(e) {}
   }
@@ -1181,7 +1145,6 @@ async function convertViaCanvas(fileData, srcExt) {
   await ffmpeg.deleteFile('output.' + outExt);
 }
 
-// Variable to track actual frame count in MP4 path
 let outputFrameCount_actual = 0;
 
 async function convert() {
@@ -1194,13 +1157,10 @@ async function convert() {
     const hasText = textBoxes.value.some(tb => tb.text.trim() !== '');
 
     if (inputExt.value === 'webp') {
-      // WebP always goes through canvas path
       await convertViaCanvas(fileData, 'webp');
     } else if (hasCrop || hasText) {
-      // MP4 with crop or text — canvas path
       await convertViaCanvas(fileData, 'mp4');
     } else {
-      // MP4 clean — direct FFmpeg path (fastest)
       await ffmpeg.writeFile('input.mp4', new Uint8Array(fileData.slice().buffer));
       if (outputFormat.value === 'gif') {
         const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
@@ -1218,7 +1178,6 @@ async function convert() {
   } catch(e) { error.value = `Błąd konwersji: ${e.message}`; console.error(e); }
   finally { isConverting.value = false; }
 }
-
 
 function downloadResult() {
   if (!resultBlob.value) return;
