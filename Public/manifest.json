@@ -1,0 +1,27 @@
+{
+  "name": "MP4 / WebP → GIF / WebP Converter",
+  "short_name": "AnimConverter",
+  "description": "Konwertuj MP4 i WebP na animowane GIF lub WebP. Przycinaj kadry, dodawaj tekst.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#4b6cb7",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["utilities", "productivity"],
+  "lang": "pl"
+}
