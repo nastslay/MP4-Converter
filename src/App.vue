@@ -206,9 +206,15 @@
               </button>
             </div>
             <div class="textbox-tab-actions">
-              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">＋</button>
-              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Dodaj obrazek">🖼️</button>
-              <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
+              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">
+                ＋ <span class="btn-lbl">Tekst</span>
+              </button>
+              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Dodaj obrazek">
+                🖼️ <span class="btn-lbl">Obraz</span>
+              </button>
+              <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">
+                🗑
+              </button>
             </div>
           </div>
 
@@ -650,56 +656,53 @@ function computeAutoOverlayScale(naturalWidth, naturalHeight) {
 
 function addImageOverlay(file) {
   if (overlays.value.length >= 10) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const img = new Image();
-    img.onload = () => {
-      const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
-      const imageSrc = URL.createObjectURL(new Blob([reader.result], { type: file.type }));
-      imageElCache.set(imageSrc, img); // already loaded — cache immediately
-      overlays.value.push({
-        type: 'image',
-        imageSrc,
-        imageNaturalWidth: img.naturalWidth,
-        imageNaturalHeight: img.naturalHeight,
-        scale: computeAutoOverlayScale(img.naturalWidth, img.naturalHeight),
-        rotation: 0,
-        opacity: 1,
-        xPct: 0.5,
-        yPct: newYPct,
-      });
-      activeOverlayIdx.value = overlays.value.length - 1;
-      nextTick(redrawPreviewOverlay);
-    };
-    img.src = reader.result;
+  const imageSrc = URL.createObjectURL(file); // Tworzy poprawny odnośnik od razu z pliku
+  
+  const img = new Image();
+  img.onload = () => {
+    const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
+    imageElCache.set(imageSrc, img);
+    
+    overlays.value.push({
+      type: 'image',
+      imageSrc,
+      imageNaturalWidth: img.naturalWidth,
+      imageNaturalHeight: img.naturalHeight,
+      scale: computeAutoOverlayScale(img.naturalWidth, img.naturalHeight),
+      rotation: 0,
+      opacity: 1,
+      xPct: 0.5,
+      yPct: newYPct,
+    });
+    activeOverlayIdx.value = overlays.value.length - 1;
+    nextTick(redrawPreviewOverlay);
   };
-  reader.readAsDataURL(file);
+  img.src = imageSrc;
 }
 
-// Replaces the image of the currently active overlay (used by "Zmień obraz").
-// Previously this also called addImageOverlay(), so "Zmień obraz" silently
-// created a brand new overlay instead of changing the existing one.
 function replaceActiveOverlayImage(file) {
   if (!activeOverlay.value || activeOverlay.value.type !== 'image') return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const img = new Image();
-    img.onload = () => {
-      const target = activeOverlay.value;
-      if (!target) return;
-      const oldSrc = target.imageSrc;
-      const imageSrc = URL.createObjectURL(new Blob([reader.result], { type: file.type }));
-      imageElCache.set(imageSrc, img);
-      target.imageSrc = imageSrc;
-      target.imageNaturalWidth = img.naturalWidth;
-      target.imageNaturalHeight = img.naturalHeight;
-      target.scale = computeAutoOverlayScale(img.naturalWidth, img.naturalHeight);
-      if (oldSrc) { URL.revokeObjectURL(oldSrc); imageElCache.delete(oldSrc); }
-      nextTick(redrawPreviewOverlay);
-    };
-    img.src = reader.result;
+  const imageSrc = URL.createObjectURL(file);
+  
+  const img = new Image();
+  img.onload = () => {
+    const target = activeOverlay.value;
+    if (!target) return;
+    
+    const oldSrc = target.imageSrc;
+    imageElCache.set(imageSrc, img);
+    target.imageSrc = imageSrc;
+    target.imageNaturalWidth = img.naturalWidth;
+    target.imageNaturalHeight = img.naturalHeight;
+    target.scale = computeAutoOverlayScale(img.naturalWidth, img.naturalHeight);
+    
+    if (oldSrc) { 
+      URL.revokeObjectURL(oldSrc); 
+      imageElCache.delete(oldSrc); 
+    }
+    nextTick(redrawPreviewOverlay);
   };
-  reader.readAsDataURL(file);
+  img.src = imageSrc;
 }
 
 function removeOverlay() {
@@ -1681,7 +1684,8 @@ watch(useOriginalWidth, async (enabled) => {
 }
 
 .tab-action-btn {
-  width: 2.2rem;
+  min-width: 2.2rem; /* Zamienione ze sztywnego width: 2.2rem; */
+  padding: 0 0.5rem; /* Dodany padding, by tekst miał marginesy wewnętrzne */
   height: 2.2rem;
   border-radius: 6px;
   border: none;
@@ -1691,8 +1695,22 @@ watch(useOriginalWidth, async (enabled) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.3rem; /* Mały odstęp między emotikonką a tekstem */
   touch-action: manipulation;
   transition: background-color 0.15s;
+}
+
+/* Styl dla etykiet tekstowych w przyciskach */
+.btn-lbl {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+/* Na bardzo małych ekranach telefonów możemy chcieć schować same napisy, żeby zachować miejsce - dodaj to na końcu sekcji @media (max-width: 600px) */
+@media (max-width: 600px) {
+  .btn-lbl {
+    display: none;
+  }
 }
 .tab-add {
   background-color: #e8f5e9;
