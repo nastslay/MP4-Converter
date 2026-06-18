@@ -207,7 +207,9 @@
             </div>
             <div class="textbox-tab-actions">
               <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">＋</button>
-              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Dodaj obrazek">🖼️</button>
+              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Dodaj obrazek">
+                🖼️ <span class="tab-btn-label">Dodaj zdjęcie</span>
+              </button>
               <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
             </div>
           </div>
@@ -648,32 +650,33 @@ function computeAutoOverlayScale(naturalWidth, naturalHeight) {
   return Math.min(3, Math.max(0.02, scale));
 }
 
+// zastąp zawartość funkcji addImageOverlay(file)
 function addImageOverlay(file) {
   if (overlays.value.length >= 10) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const img = new Image();
-    img.onload = () => {
-      const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
-      const imageSrc = URL.createObjectURL(new Blob([reader.result], { type: file.type }));
-      imageElCache.set(imageSrc, img); // already loaded — cache immediately
-      overlays.value.push({
-        type: 'image',
-        imageSrc,
-        imageNaturalWidth: img.naturalWidth,
-        imageNaturalHeight: img.naturalHeight,
-        scale: computeAutoOverlayScale(img.naturalWidth, img.naturalHeight),
-        rotation: 0,
-        opacity: 1,
-        xPct: 0.5,
-        yPct: newYPct,
-      });
-      activeOverlayIdx.value = overlays.value.length - 1;
-      nextTick(redrawPreviewOverlay);
-    };
-    img.src = reader.result;
+  const imageSrc = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
+    imageElCache.set(imageSrc, img);
+    overlays.value.push({
+      type: 'image',
+      imageSrc,
+      imageNaturalWidth: img.naturalWidth,
+      imageNaturalHeight: img.naturalHeight,
+      scale: computeAutoOverlayScale(img.naturalWidth, img.naturalHeight),
+      rotation: 0,
+      opacity: 1,
+      xPct: 0.5,
+      yPct: newYPct,
+    });
+    activeOverlayIdx.value = overlays.value.length - 1;
+    nextTick(redrawPreviewOverlay);
   };
-  reader.readAsDataURL(file);
+  img.onerror = () => {
+    URL.revokeObjectURL(imageSrc);
+    console.error('Nie udało się wczytać obrazu');
+  };
+  img.src = imageSrc;
 }
 
 // Replaces the image of the currently active overlay (used by "Zmień obraz").
@@ -681,25 +684,24 @@ function addImageOverlay(file) {
 // created a brand new overlay instead of changing the existing one.
 function replaceActiveOverlayImage(file) {
   if (!activeOverlay.value || activeOverlay.value.type !== 'image') return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const img = new Image();
-    img.onload = () => {
-      const target = activeOverlay.value;
-      if (!target) return;
-      const oldSrc = target.imageSrc;
-      const imageSrc = URL.createObjectURL(new Blob([reader.result], { type: file.type }));
-      imageElCache.set(imageSrc, img);
-      target.imageSrc = imageSrc;
-      target.imageNaturalWidth = img.naturalWidth;
-      target.imageNaturalHeight = img.naturalHeight;
-      target.scale = computeAutoOverlayScale(img.naturalWidth, img.naturalHeight);
-      if (oldSrc) { URL.revokeObjectURL(oldSrc); imageElCache.delete(oldSrc); }
-      nextTick(redrawPreviewOverlay);
-    };
-    img.src = reader.result;
+  const target = activeOverlay.value;
+  const oldSrc = target.imageSrc;
+  const imageSrc = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    imageElCache.set(imageSrc, img);
+    target.imageSrc = imageSrc;
+    target.imageNaturalWidth = img.naturalWidth;
+    target.imageNaturalHeight = img.naturalHeight;
+    target.scale = computeAutoOverlayScale(img.naturalWidth, img.naturalHeight);
+    if (oldSrc) { URL.revokeObjectURL(oldSrc); imageElCache.delete(oldSrc); }
+    nextTick(redrawPreviewOverlay);
   };
-  reader.readAsDataURL(file);
+  img.onerror = () => {
+    URL.revokeObjectURL(imageSrc);
+    console.error('Nie udało się zastąpić obrazu');
+  };
+  img.src = imageSrc;
 }
 
 function removeOverlay() {
@@ -2172,6 +2174,13 @@ watch(useOriginalWidth, async (enabled) => {
 }
 .change-img-btn:hover { background: #f0f0f0; }
 
+.tab-btn-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin-left: 0.2rem;
+  color: #1565c0;
+  white-space: nowrap;
+}
 
 
 </style>
