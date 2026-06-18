@@ -14,6 +14,7 @@
           {{ isFetching ? 'Pobieranie…' : '⬇ Pobierz z linku' }}
         </button>
         <input type="file" ref="fileInput" accept="video/mp4,video/x-m4v,video/*,image/webp" style="display:none" @change="handleFileUpload" />
+        <input type="file" ref="imageFileInput" accept="image/*" style="display:none" @change="handleImageFileUpload" />
         <button class="upload-btn" @click="$refs.fileInput.click()" :disabled="isConverting || isFetching">📁 Wgraj z dysku</button>
       </div>
     </div>
@@ -193,59 +194,183 @@
           <div class="textbox-tabs-row">
             <div class="textbox-tabs">
               <button
-                v-for="(tb, idx) in textBoxes"
+                v-for="(item, idx) in overlays"
                 :key="idx"
                 class="tb-tab"
-                :class="{ active: activeTextBoxIdx === idx }"
-                @click="activeTextBoxIdx = idx"
+                :class="{ active: activeOverlayIdx === idx }"
+                @click="activeOverlayIdx = idx"
               >
                 <span class="tb-tab-num">{{ idx + 1 }}</span>
-                <span class="tb-tab-preview">{{ tb.text ? tb.text.slice(0, 8) + (tb.text.length > 8 ? '…' : '') : '(pusty)' }}</span>
+                <span v-if="item.type === 'text'" class="tb-tab-preview">{{ item.text ? item.text.slice(0, 8) + (item.text.length > 8 ? '…' : '') : '(pusty)' }}</span>
+                <span v-else class="tb-tab-preview">🖼️ obrazek</span>
               </button>
             </div>
             <div class="textbox-tab-actions">
-              <button class="tab-action-btn tab-add" @click="addTextBox" :disabled="textBoxes.length >= 10" title="Dodaj tekst">＋</button>
-              <button class="tab-action-btn tab-remove" @click="removeTextBox" :disabled="textBoxes.length <= 1" title="Usuń aktywny tekst">🗑</button>
+              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">＋</button>
+              <button class="tab-action-btn tab-add-img" @click="$refs.imageFileInput.click()" :disabled="overlays.length >= 10" title="Dodaj obrazek">🖼️</button>
+              <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
             </div>
           </div>
 
-          <div v-if="activeTextBox" class="textbox-controls">
-
-            <!-- Wiersz: pole tekstowe + emoji picker -->
-            <div class="tc-field-group">
-              <label class="tc-label">Tekst</label>
-              <div class="text-input-row">
-                <input
-                  type="text"
-                  v-model="activeTextBox.text"
-                  placeholder="Wpisz tekst lub emoji…"
-                  class="text-input"
-                  ref="textInputRef"
-                  @input="redrawPreviewOverlay"
-                />
-                <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
+              <div v-if="activeOverlay" class="textbox-controls">
+              
+                <!-- ======= KONTROLKI DLA TEKSTU ======= -->
+                <template v-if="activeOverlay.type === 'text'">
+              
+                  <div class="tc-field-group">
+                    <label class="tc-label">Tekst</label>
+                    <div class="text-input-row">
+                      <input
+                        type="text"
+                        v-model="activeOverlay.text"
+                        placeholder="Wpisz tekst lub emoji…"
+                        class="text-input"
+                        ref="textInputRef"
+                        @input="redrawPreviewOverlay"
+                      />
+                      <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
+                    </div>
+                    <!-- Emoji picker panel (dokładnie taki sam jak poprzednio) -->
+                    <div v-if="showEmojiPicker" class="emoji-picker">
+                      <div class="emoji-cats">
+                        <button
+                          v-for="cat in emojiCategories"
+                          :key="cat.name"
+                          class="emoji-cat-btn"
+                          :class="{ active: activeCat === cat.name }"
+                          @click="activeCat = cat.name"
+                        >{{ cat.icon }}</button>
+                      </div>
+                      <div class="emoji-grid">
+                        <button
+                          v-for="em in currentEmojis"
+                          :key="em"
+                          class="emoji-btn"
+                          @click="insertEmoji(em)"
+                        >{{ em }}</button>
+                      </div>
+                    </div>
+                  </div>
+              
+                  <div class="tc-field-row">
+                    <div class="tc-field-group tc-field-grow">
+                      <label class="tc-label">Czcionka</label>
+                      <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
+                        <option value="Impact">Impact</option>
+                        <option value="Arial">Arial</option>
+                        <option value="Arial Black">Arial Black</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Times New Roman">Times New Roman</option>
+                        <option value="Courier New">Courier New</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="Trebuchet MS">Trebuchet MS</option>
+                        <option value="Comic Sans MS">Comic Sans MS</option>
+                      </select>
+                    </div>
+                    <div class="tc-field-group">
+                      <label class="tc-label">Rozmiar (px)</label>
+                      <div class="btn-row">
+                        <button class="num-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 5); redrawPreviewOverlay()">−</button>
+                        <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
+                        <button class="num-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 5); redrawPreviewOverlay()">+</button>
+                      </div>
+                    </div>
+                  </div>
+              
+                  <div class="tc-field-row">
+                    <div class="tc-field-group">
+                      <label class="tc-label">Kolor tekstu</label>
+                      <div class="color-row">
+                        <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
+                        <span class="color-hex">{{ activeOverlay.color }}</span>
+                      </div>
+                    </div>
+                    <div class="tc-field-group">
+                      <label class="tc-label">Obrys / cień</label>
+                      <div class="color-row">
+                        <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
+                        <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
+                      </div>
+                    </div>
+                    <div class="tc-field-group">
+                      <label class="tc-label">Grub. obrysu</label>
+                      <div class="btn-row">
+                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
+                        <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
+                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
+                      </div>
+                    </div>
+                  </div>
+              
+                  <div class="tc-field-group">
+                    <label class="tc-label">Styl</label>
+                    <div class="style-toggles">
+                      <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
+                      <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
+                      <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
+                      <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
+                    </div>
+                  </div>
+              
+                  <div class="tc-field-group">
+                    <div class="tc-label-row">
+                      <label class="tc-label">Obrót</label>
+                      <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                      <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
+                    </div>
+                    <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-range" @input="redrawPreviewOverlay" />
+                  </div>
+              
+                  <div class="tc-field-group">
+                    <div class="tc-label-row">
+                      <label class="tc-label">Przezroczystość</label>
+                      <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                    </div>
+                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  </div>
+              
+                </template>
+              
+                <!-- ======= KONTROLKI DLA OBRAZU ======= -->
+                <template v-else-if="activeOverlay.type === 'image'">
+                  
+                  <div class="tc-field-group">
+                    <label class="tc-label">Obraz</label>
+                    <div class="image-preview-box">
+                      <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
+                    </div>
+                    <button class="change-img-btn" @click="$refs.imageFileInput.click()">Zmień obraz</button>
+                  </div>
+              
+                  <div class="tc-field-row">
+                    <div class="tc-field-group">
+                      <label class="tc-label">Skala</label>
+                      <div class="btn-row">
+                        <button class="num-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.05).toFixed(2)); redrawPreviewOverlay()">−</button>
+                        <input type="number" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.05" class="tc-num-input" @change="redrawPreviewOverlay" />
+                        <button class="num-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.05).toFixed(2)); redrawPreviewOverlay()">+</button>
+                      </div>
+                    </div>
+                    <div class="tc-field-group">
+                      <label class="tc-label">Obrót</label>
+                      <div class="btn-row">
+                        <button class="num-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 5); redrawPreviewOverlay()">−5°</button>
+                        <input type="number" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-num-input" @change="redrawPreviewOverlay" />
+                        <button class="num-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 5); redrawPreviewOverlay()">+5°</button>
+                      </div>
+                    </div>
+                  </div>
+              
+                  <div class="tc-field-group">
+                    <div class="tc-label-row">
+                      <label class="tc-label">Przezroczystość</label>
+                      <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                    </div>
+                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  </div>
+              
+                </template>
               </div>
-              <!-- Emoji picker panel -->
-              <div v-if="showEmojiPicker" class="emoji-picker">
-                <div class="emoji-cats">
-                  <button
-                    v-for="cat in emojiCategories"
-                    :key="cat.name"
-                    class="emoji-cat-btn"
-                    :class="{ active: activeCat === cat.name }"
-                    @click="activeCat = cat.name"
-                  >{{ cat.icon }}</button>
-                </div>
-                <div class="emoji-grid">
-                  <button
-                    v-for="em in currentEmojis"
-                    :key="em"
-                    class="emoji-btn"
-                    @click="insertEmoji(em)"
-                  >{{ em }}</button>
-                </div>
-              </div>
-            </div>
 
             <!-- Czcionka + rozmiar -->
             <div class="tc-field-row">
@@ -473,7 +598,7 @@ const fileInput      = ref(null);
 let ffmpeg = null;
 
 // ---- TEXT EDITOR STATE ----
-const activeTextBoxIdx = ref(0);
+
 const textInputRef = ref(null);
 
 // Emoji picker state
@@ -526,26 +651,96 @@ function createTextBox(yPct = 0.5) {
   };
 }
 
-const textBoxes = ref([createTextBox(0.5)]);
-const activeTextBox = computed(() => textBoxes.value[activeTextBoxIdx.value] || null);
 
-function addTextBox() {
-  if (textBoxes.value.length < 10) {
-    // Spread new boxes vertically so they don't overlap
-    const newYPct = Math.min(0.95, 0.2 + (textBoxes.value.length * 0.08));
-    textBoxes.value.push(createTextBox(newYPct));
-    activeTextBoxIdx.value = textBoxes.value.length - 1;
+// ---- UNIWERSALNE NAKŁADKI ----
+const overlays = ref([createTextOverlay(0.5)]);
+const activeOverlayIdx = ref(0);
+const activeOverlay = computed(() => overlays.value[activeOverlayIdx.value] || null);
+
+function createTextOverlay(yPct = 0.5) {
+  return {
+    type: 'text',
+    text: '',
+    fontFamily: 'Impact',
+    fontSize: 100,
+    color: '#ffffff',
+    shadowColor: '#000000',
+    strokeWidth: 2,
+    bold: false,
+    italic: false,
+    underline: false,
+    shadow: true,
+    rotation: 0,
+    opacity: 1,
+    xPct: 0.5,
+    yPct,
+  };
+}
+
+function createImageOverlay(yPct = 0.5) {
+  return {
+    type: 'image',
+    imageSrc: null,
+    imageNaturalWidth: 0,
+    imageNaturalHeight: 0,
+    scale: 0.5,
+    rotation: 0,
+    opacity: 1,
+    xPct: 0.5,
+    yPct,
+  };
+}
+
+function addTextOverlay() {
+  if (overlays.value.length >= 10) return;
+  const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
+  overlays.value.push(createTextOverlay(newYPct));
+  activeOverlayIdx.value = overlays.value.length - 1;
+  nextTick(redrawPreviewOverlay);
+}
+
+function addImageOverlay(file) {
+  if (overlays.value.length >= 10) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
+      overlays.value.push({
+        type: 'image',
+        imageSrc: URL.createObjectURL(new Blob([reader.result], { type: file.type })),
+        imageNaturalWidth: img.naturalWidth,
+        imageNaturalHeight: img.naturalHeight,
+        scale: 0.5,
+        rotation: 0,
+        opacity: 1,
+        xPct: 0.5,
+        yPct: newYPct,
+      });
+      activeOverlayIdx.value = overlays.value.length - 1;
+      nextTick(redrawPreviewOverlay);
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeOverlay() {
+  if (overlays.value.length > 1) {
+    const removed = overlays.value.splice(activeOverlayIdx.value, 1)[0];
+    if (removed.type === 'image' && removed.imageSrc) URL.revokeObjectURL(removed.imageSrc);
+    activeOverlayIdx.value = Math.min(activeOverlayIdx.value, overlays.value.length - 1);
     nextTick(redrawPreviewOverlay);
   }
 }
 
-function removeTextBox() {
-  if (textBoxes.value.length > 1) {
-    textBoxes.value.splice(activeTextBoxIdx.value, 1);
-    activeTextBoxIdx.value = Math.min(activeTextBoxIdx.value, textBoxes.value.length - 1);
-    nextTick(redrawPreviewOverlay);
-  }
+function handleImageFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  addImageOverlay(file);
+  event.target.value = '';
 }
+
 
 // ---- DRAG STATE ----
 let dragTextIdx = null;
@@ -570,7 +765,7 @@ function clientToCanvasPct(clientX, clientY) {
 }
 
 // Hit-test: check if (clientX, clientY) hits any text label
-function hitTestText(clientX, clientY) {
+function hitTestOverlay(clientX, clientY) {
   const c = unifiedCanvas.value;
   if (!c) return -1;
   const bounds = c.getBoundingClientRect();
@@ -579,24 +774,31 @@ function hitTestText(clientX, clientY) {
   const cw = c.width;
   const ch = c.height;
 
-  // Check in reverse order (last = top)
-  for (let i = textBoxes.value.length - 1; i >= 0; i--) {
-    const tb = textBoxes.value[i];
-    if (!tb.text.trim()) continue;
-    const tx = tb.xPct * cw;
-    const ty = tb.yPct * ch;
-    // Estimate text bounding box
-    const estW = tb.fontSize * tb.text.length * 0.6 + 20;
-    const estH = tb.fontSize + 10;
-    const dx = (px * cw) - tx;
-    const dy = (py * ch) - ty;
-    if (Math.abs(dx) < estW / 2 && Math.abs(dy) < estH / 2) return i;
+  for (let i = overlays.value.length - 1; i >= 0; i--) {
+    const item = overlays.value[i];
+    if (item.type === 'text' && !item.text.trim()) continue;
+    if (item.type === 'image' && !item.imageSrc) continue;
+
+    const cx = item.xPct * cw;
+    const cy = item.yPct * ch;
+    const dx = (px * cw) - cx;
+    const dy = (py * ch) - cy;
+
+    if (item.type === 'text') {
+      const estW = item.fontSize * item.text.length * 0.6 + 20;
+      const estH = item.fontSize + 10;
+      if (Math.abs(dx) < estW / 2 && Math.abs(dy) < estH / 2) return i;
+    } else {
+      const scaledW = item.imageNaturalWidth * item.scale;
+      const scaledH = item.imageNaturalHeight * item.scale;
+      if (Math.abs(dx) < scaledW / 2 && Math.abs(dy) < scaledH / 2) return i;
+    }
   }
   return -1;
 }
 
 function onCanvasMouseDown(e) {
-  const idx = hitTestText(e.clientX, e.clientY);
+  const idx = hitTestOverlay(e.clientX, e.clientY);
   if (idx >= 0) {
     dragTextIdx = idx;
     activeTextBoxIdx.value = idx;
@@ -614,8 +816,8 @@ function onCanvasMouseMove(e) {
   const bounds = c.getBoundingClientRect();
   const dx = (e.clientX - dragStartClientX) / bounds.width;
   const dy = (e.clientY - dragStartClientY) / bounds.height;
-  textBoxes.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
-  textBoxes.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
+  overlays.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
+  overlays.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
   redrawPreviewOverlay();
 }
 
@@ -644,8 +846,8 @@ function onCanvasTouchMove(e) {
   const bounds = c.getBoundingClientRect();
   const dx = (touch.clientX - dragStartClientX) / bounds.width;
   const dy = (touch.clientY - dragStartClientY) / bounds.height;
-  textBoxes.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
-  textBoxes.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
+  overlays.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
+  overlays.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
   redrawPreviewOverlay();
 }
 
@@ -709,57 +911,88 @@ function redrawPreviewOverlay() {
     }
   }
 
-  // Draw text labels
-  for (let i = 0; i < textBoxes.value.length; i++) {
-    const tb = textBoxes.value[i];
-    if (!tb.text.trim()) continue;
-    const tx = tb.xPct * dw;
-    const ty = tb.yPct * dh;
-
-    ctx.save();
-    ctx.translate(tx, ty);
-    ctx.rotate((tb.rotation * Math.PI) / 180);
-    ctx.globalAlpha = tb.opacity;
-
-    let fontStr = '';
-    if (tb.italic) fontStr += 'italic ';
-    if (tb.bold) fontStr += 'bold ';
-    fontStr += `${tb.fontSize}px "${tb.fontFamily}"`;
-    ctx.font = fontStr;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    if (tb.shadow) {
-      ctx.shadowColor = tb.shadowColor;
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 2;
-      ctx.shadowOffsetY = 2;
-    } else {
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
+    // Draw overlays
+    for (let i = 0; i < overlays.value.length; i++) {
+      const item = overlays.value[i];
+      if (item.type === 'text' && !item.text.trim()) continue;
+      if (item.type === 'image' && !item.imageSrc) continue;
+  
+      const tx = item.xPct * dw;
+      const ty = item.yPct * dh;
+  
+      ctx.save();
+      ctx.translate(tx, ty);
+      ctx.rotate((item.rotation * Math.PI) / 180);
+      ctx.globalAlpha = item.opacity;
+  
+      if (item.type === 'text') {
+        let fontStr = '';
+        if (item.italic) fontStr += 'italic ';
+        if (item.bold) fontStr += 'bold ';
+        fontStr += `${item.fontSize}px "${item.fontFamily}"`;
+        ctx.font = fontStr;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+  
+        if (item.shadow) {
+          ctx.shadowColor = item.shadowColor;
+          ctx.shadowBlur = 4;
+          ctx.shadowOffsetX = 2;
+          ctx.shadowOffsetY = 2;
+        } else {
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+        }
+  
+        if (item.strokeWidth > 0) {
+          ctx.strokeStyle = item.shadowColor;
+          ctx.lineWidth = item.strokeWidth * 2;
+          ctx.lineJoin = 'round';
+          ctx.strokeText(item.text, 0, 0);
+        }
+  
+        ctx.fillStyle = item.color;
+        ctx.fillText(item.text, 0, 0);
+  
+        if (item.underline) {
+          const metrics = ctx.measureText(item.text);
+          const tw = metrics.width;
+          const uy = item.fontSize * 0.1;
+          ctx.strokeStyle = item.color;
+          ctx.lineWidth = Math.max(1, item.fontSize * 0.05);
+          ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+          ctx.beginPath(); ctx.moveTo(-tw/2, uy); ctx.lineTo(tw/2, uy); ctx.stroke();
+        }
+  
+        if (i === activeOverlayIdx.value) {
+          ctx.font = fontStr;
+          const metrics2 = ctx.measureText(item.text);
+          const selW = metrics2.width + 12;
+          const selH = item.fontSize + 8;
+          ctx.strokeStyle = 'rgba(255,255,100,0.9)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([5, 3]);
+          ctx.strokeRect(-selW/2, -selH/2, selW, selH);
+          ctx.setLineDash([]);
+        }
+      } else if (item.type === 'image') {
+        const img = new Image();
+        img.src = item.imageSrc;
+        if (img.complete && img.naturalWidth > 0) {
+          const scaledW = item.imageNaturalWidth * item.scale;
+          const scaledH = item.imageNaturalHeight * item.scale;
+          ctx.drawImage(img, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
+          if (i === activeOverlayIdx.value) {
+            ctx.strokeStyle = 'rgba(255,255,100,0.9)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 3]);
+            ctx.strokeRect(-scaledW/2, -scaledH/2, scaledW, scaledH);
+            ctx.setLineDash([]);
+          }
+        }
+      }
+      ctx.restore();
     }
-
-    if (tb.strokeWidth > 0) {
-      ctx.strokeStyle = tb.shadowColor;
-      ctx.lineWidth = tb.strokeWidth * 2;
-      ctx.lineJoin = 'round';
-      ctx.strokeText(tb.text, 0, 0);
-    }
-
-    ctx.fillStyle = tb.color;
-    ctx.fillText(tb.text, 0, 0);
-
-    if (tb.underline) {
-      const metrics = ctx.measureText(tb.text);
-      const tw = metrics.width;
-      const uy = tb.fontSize * 0.1;
-      ctx.strokeStyle = tb.color;
-      ctx.lineWidth = Math.max(1, tb.fontSize * 0.05);
-      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
-      ctx.beginPath(); ctx.moveTo(-tw/2, uy); ctx.lineTo(tw/2, uy); ctx.stroke();
-    }
-
-    ctx.restore();
 
     // Active text indicator (dashed selection box)
     if (i === activeTextBoxIdx.value) {
@@ -783,55 +1016,66 @@ function redrawPreviewOverlay() {
 }
 
 // Draws text onto an output canvas frame (used during conversion)
-function drawTextOnCanvas(ctx, canvasWidth, canvasHeight) {
-  for (const tb of textBoxes.value) {
-    if (!tb.text.trim()) continue;
-    const x = tb.xPct * canvasWidth;
-    const y = tb.yPct * canvasHeight;
+function drawOverlaysOnCanvas(ctx, canvasWidth, canvasHeight) {
+  for (const item of overlays.value) {
+    if (item.type === 'text' && !item.text.trim()) continue;
+    if (item.type === 'image' && !item.imageSrc) continue;
+
+    const x = item.xPct * canvasWidth;
+    const y = item.yPct * canvasHeight;
 
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate((tb.rotation * Math.PI) / 180);
-    ctx.globalAlpha = tb.opacity;
+    ctx.rotate((item.rotation * Math.PI) / 180);
+    ctx.globalAlpha = item.opacity;
 
-    let fontStr = '';
-    if (tb.italic) fontStr += 'italic ';
-    if (tb.bold) fontStr += 'bold ';
-    fontStr += `${tb.fontSize}px "${tb.fontFamily}"`;
-    ctx.font = fontStr;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    if (item.type === 'text') {
+      let fontStr = '';
+      if (item.italic) fontStr += 'italic ';
+      if (item.bold) fontStr += 'bold ';
+      fontStr += `${item.fontSize}px "${item.fontFamily}"`;
+      ctx.font = fontStr;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
 
-    if (tb.shadow) {
-      ctx.shadowColor = tb.shadowColor;
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 2;
-      ctx.shadowOffsetY = 2;
-    } else {
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
+      if (item.shadow) {
+        ctx.shadowColor = item.shadowColor;
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+      } else {
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+      }
+
+      if (item.strokeWidth > 0) {
+        ctx.strokeStyle = item.shadowColor;
+        ctx.lineWidth = item.strokeWidth * 2;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(item.text, 0, 0);
+      }
+
+      ctx.fillStyle = item.color;
+      ctx.fillText(item.text, 0, 0);
+
+      if (item.underline) {
+        const metrics = ctx.measureText(item.text);
+        const tw = metrics.width;
+        const uy = item.fontSize * 0.1;
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = Math.max(1, item.fontSize * 0.05);
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        ctx.beginPath(); ctx.moveTo(-tw/2, uy); ctx.lineTo(tw/2, uy); ctx.stroke();
+      }
+    } else if (item.type === 'image') {
+      const img = new Image();
+      img.src = item.imageSrc;
+      if (img.complete && img.naturalWidth > 0) {
+        const scaledW = item.imageNaturalWidth * item.scale;
+        const scaledH = item.imageNaturalHeight * item.scale;
+        ctx.drawImage(img, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
+      }
     }
-
-    if (tb.strokeWidth > 0) {
-      ctx.strokeStyle = tb.shadowColor;
-      ctx.lineWidth = tb.strokeWidth * 2;
-      ctx.lineJoin = 'round';
-      ctx.strokeText(tb.text, 0, 0);
-    }
-
-    ctx.fillStyle = tb.color;
-    ctx.fillText(tb.text, 0, 0);
-
-    if (tb.underline) {
-      const metrics = ctx.measureText(tb.text);
-      const tw = metrics.width;
-      const uy = tb.fontSize * 0.1;
-      ctx.strokeStyle = tb.color;
-      ctx.lineWidth = Math.max(1, tb.fontSize * 0.05);
-      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
-      ctx.beginPath(); ctx.moveTo(-tw/2, uy); ctx.lineTo(tw/2, uy); ctx.stroke();
-    }
-
     ctx.restore();
   }
 }
@@ -890,8 +1134,8 @@ function resetConversionState() {
   cropTop.value = 0; cropBottom.value = 0; cropLeft.value = 0; cropRight.value = 0;
   syncVertical.value = true; syncHorizontal.value = true;
   editPanelOpen.value = false;
-  textBoxes.value = [createTextBox(0.5)];
-  activeTextBoxIdx.value = 0;
+  overlays.value = [createTextOverlay(0.5)];
+  activeOverlayIdx.value = 0;
   showEmojiPicker.value = false;
   if (resultUrl.value) { URL.revokeObjectURL(resultUrl.value); resultUrl.value = null; resultBlob.value = null; }
   clearPreview();
@@ -1333,7 +1577,7 @@ watch(cropBottom, (val) => { if (syncVertical.value)   cropTop.value    = val; n
 watch(cropLeft,   (val) => { if (syncHorizontal.value) cropRight.value  = val; nextTick(redrawPreviewOverlay); });
 watch(cropRight,  (val) => { if (syncHorizontal.value) cropLeft.value   = val; nextTick(redrawPreviewOverlay); });
 
-watch(activeTextBoxIdx, () => nextTick(redrawPreviewOverlay));
+watch(activeOverlayIdx, () => nextTick(redrawPreviewOverlay));
 
 watch(useOriginalWidth, async (enabled) => {
   if (enabled && cachedFileData.value && cachedUrl.value === videoUrl.value.trim()) {
@@ -1900,6 +2144,48 @@ watch(useOriginalWidth, async (enabled) => {
   }
   .reset-small-btn {
     margin-left: 0;
+  }
+}
+  /* ===== PRZYCISK DODAWANIA OBRAZU ===== */
+.tab-add-img {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  font-size: 1.2rem;
+}
+.tab-add-img:hover:not(:disabled) { background-color: #bbdefb; }
+
+/* ===== PODGLĄD OBRAZU W KONTROLKACH ===== */
+.image-preview-box {
+  background: #eee;
+  border-radius: 6px;
+  padding: 0.4rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60px;
+  margin-bottom: 0.3rem;
+}
+.change-img-btn {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.change-img-btn:hover { background: #f0f0f0; }
+
+/* ===== MOBILNE DOSTOSOWANIA (rozszerzenie istniejącej kwerendy) ===== */
+@media (max-width: 600px) {
+  /* ... (istniejące reguły) ... */
+  /* Dodaj na końcu: */
+  .tab-add-img {
+    font-size: 1rem;
+  }
+  .image-preview-box {
+    min-height: 50px;
   }
 }
 </style>
