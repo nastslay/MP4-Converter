@@ -372,106 +372,7 @@
                 </template>
               </div>
 
-            <!-- Czcionka + rozmiar -->
-            <div class="tc-field-row">
-              <div class="tc-field-group tc-field-grow">
-                <label class="tc-label">Czcionka</label>
-                <select class="tc-select" v-model="activeTextBox.fontFamily" @change="redrawPreviewOverlay">
-                  <option value="Impact">Impact</option>
-                  <option value="Arial">Arial</option>
-                  <option value="Arial Black">Arial Black</option>
-                  <option value="Georgia">Georgia</option>
-                  <option value="Times New Roman">Times New Roman</option>
-                  <option value="Courier New">Courier New</option>
-                  <option value="Verdana">Verdana</option>
-                  <option value="Trebuchet MS">Trebuchet MS</option>
-                  <option value="Comic Sans MS">Comic Sans MS</option>
-                </select>
-              </div>
-              <div class="tc-field-group">
-                <label class="tc-label">Rozmiar (px)</label>
-                <div class="btn-row">
-                  <button class="num-btn" @click="activeTextBox.fontSize = Math.max(8, activeTextBox.fontSize - 5); redrawPreviewOverlay()">−</button>
-                  <input type="number" v-model.number="activeTextBox.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
-                  <button class="num-btn" @click="activeTextBox.fontSize = Math.min(500, activeTextBox.fontSize + 5); redrawPreviewOverlay()">+</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Kolory -->
-            <div class="tc-field-row">
-              <div class="tc-field-group">
-                <label class="tc-label">Kolor tekstu</label>
-                <div class="color-row">
-                  <input type="color" v-model="activeTextBox.color" class="color-pick" @input="redrawPreviewOverlay" />
-                  <span class="color-hex">{{ activeTextBox.color }}</span>
-                </div>
-              </div>
-              <div class="tc-field-group">
-                <label class="tc-label">Obrys / cień</label>
-                <div class="color-row">
-                  <input type="color" v-model="activeTextBox.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
-                  <span class="color-hex">{{ activeTextBox.shadowColor }}</span>
-                </div>
-              </div>
-              <div class="tc-field-group">
-                <label class="tc-label">Grub. obrysu</label>
-                <div class="btn-row">
-                  <button class="num-btn" @click="activeTextBox.strokeWidth = Math.max(0, activeTextBox.strokeWidth - 1); redrawPreviewOverlay()">−</button>
-                  <input type="number" v-model.number="activeTextBox.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
-                  <button class="num-btn" @click="activeTextBox.strokeWidth = Math.min(20, activeTextBox.strokeWidth + 1); redrawPreviewOverlay()">+</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Styl tekstu — przyciski toggle -->
-            <div class="tc-field-group">
-              <label class="tc-label">Styl</label>
-              <div class="style-toggles">
-                <button
-                  class="style-btn"
-                  :class="{ active: activeTextBox.bold }"
-                  @click="activeTextBox.bold = !activeTextBox.bold; redrawPreviewOverlay()"
-                ><strong>B</strong></button>
-                <button
-                  class="style-btn"
-                  :class="{ active: activeTextBox.italic }"
-                  @click="activeTextBox.italic = !activeTextBox.italic; redrawPreviewOverlay()"
-                ><em>I</em></button>
-                <button
-                  class="style-btn"
-                  :class="{ active: activeTextBox.underline }"
-                  @click="activeTextBox.underline = !activeTextBox.underline; redrawPreviewOverlay()"
-                ><u>U</u></button>
-                <button
-                  class="style-btn"
-                  :class="{ active: activeTextBox.shadow }"
-                  @click="activeTextBox.shadow = !activeTextBox.shadow; redrawPreviewOverlay()"
-                >Cień</button>
-              </div>
-            </div>
-
-            <!-- Obrót -->
-            <div class="tc-field-group">
-              <div class="tc-label-row">
-                <label class="tc-label">Obrót</label>
-                <span class="tc-value">{{ activeTextBox.rotation }}°</span>
-                <button class="reset-small-btn" @click="activeTextBox.rotation = 0; redrawPreviewOverlay()">Reset</button>
-              </div>
-              <input type="range" v-model.number="activeTextBox.rotation" min="-180" max="180" class="tc-range" @input="redrawPreviewOverlay" />
-            </div>
-
-            <!-- Przezroczystość -->
-            <div class="tc-field-group">
-              <div class="tc-label-row">
-                <label class="tc-label">Przezroczystość</label>
-                <span class="tc-value">{{ Math.round(activeTextBox.opacity * 100) }}%</span>
-              </div>
-              <input type="range" v-model.number="activeTextBox.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-            </div>
-
-          </div>
-        </div>
+           
 
         <!-- UNIFIED PREVIEW CANVAS -->
         <div class="preview-section">
@@ -626,10 +527,9 @@ function toggleEmojiPicker() {
 }
 
 function insertEmoji(emoji) {
-  if (!activeTextBox.value) return;
-  activeTextBox.value.text += emoji;
+  if (!activeOverlay.value || activeOverlay.value.type !== 'text') return;
+  activeOverlay.value.text += emoji;
   redrawPreviewOverlay();
-  // Keep picker open for multiple insertions
 }
 
 function createTextBox(yPct = 0.5) {
@@ -801,11 +701,11 @@ function onCanvasMouseDown(e) {
   const idx = hitTestOverlay(e.clientX, e.clientY);
   if (idx >= 0) {
     dragTextIdx = idx;
-    activeTextBoxIdx.value = idx;
+    activeOverlayIdx.value = idx;
     dragStartClientX = e.clientX;
     dragStartClientY = e.clientY;
-    dragStartXPct = textBoxes.value[idx].xPct;
-    dragStartYPct = textBoxes.value[idx].yPct;
+    dragStartXPct = overlays.value[idx].xPct;
+    dragStartYPct = overlays.value[idx].yPct;
   }
 }
 
@@ -830,11 +730,11 @@ function onCanvasTouchStart(e) {
   const idx = hitTestText(touch.clientX, touch.clientY);
   if (idx >= 0) {
     dragTextIdx = idx;
-    activeTextBoxIdx.value = idx;
+    activeOverlayIdx.value = idx;
     dragStartClientX = touch.clientX;
     dragStartClientY = touch.clientY;
-    dragStartXPct = textBoxes.value[idx].xPct;
-    dragStartYPct = textBoxes.value[idx].yPct;
+    dragStartXPct = overlays.value[idx].xPct;
+    dragStartYPct = overlays.value[idx].yPct;
   }
 }
 
@@ -994,25 +894,8 @@ function redrawPreviewOverlay() {
       ctx.restore();
     }
 
-    // Active text indicator (dashed selection box)
-    if (i === activeTextBoxIdx.value) {
-      ctx.save();
-      ctx.translate(tx, ty);
-      ctx.rotate((tb.rotation * Math.PI) / 180);
-      const metrics2 = (() => {
-        ctx.font = fontStr;
-        return ctx.measureText(tb.text);
-      })();
-      const selW = metrics2.width + 12;
-      const selH = tb.fontSize + 8;
-      ctx.strokeStyle = 'rgba(255,255,100,0.9)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([5, 3]);
-      ctx.strokeRect(-selW/2, -selH/2, selW, selH);
-      ctx.setLineDash([]);
-      ctx.restore();
-    }
-  }
+
+  
 }
 
 // Draws text onto an output canvas frame (used during conversion)
@@ -1386,7 +1269,7 @@ async function convertViaCanvas(fileData, srcExt) {
 
   const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
   const hasCrop = cropEnabled.value && (cl+cr+ct+cb > 0);
-  const hasText = textBoxes.value.some(tb => tb.text.trim() !== '');
+  const hasText = overlays.value.some(item => item.type === 'text' && item.text.trim() !== '');
 
   let srcW, srcH, srcFps, totalFrames;
 
@@ -1431,7 +1314,7 @@ async function convertViaCanvas(fileData, srcExt) {
       } else {
         ctx.drawImage(frame, 0, 0, outW, outH);
       }
-      if (hasText) drawTextOnCanvas(ctx, outW, outH);
+      if (hasText) drawOverlaysOnCanvas(ctx, outW, outH);
       frame.close();
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
       const buf = await blob.arrayBuffer();
@@ -1474,7 +1357,7 @@ async function convertViaCanvas(fileData, srcExt) {
       ctx.clearRect(0, 0, outW, outH);
       ctx.drawImage(imgBitmap, 0, 0, outW, outH);
       imgBitmap.close();
-      if (hasText) drawTextOnCanvas(ctx, outW, outH);
+      if (hasText) drawOverlaysOnCanvas(ctx, outW, outH);
       const outBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
       const outBuf = await outBlob.arrayBuffer();
       await ffmpeg.writeFile(`frame_${String(i).padStart(5,'0')}.png`, new Uint8Array(outBuf));
@@ -1525,7 +1408,7 @@ async function convert() {
   try {
     const fileData = await fetchVideo(videoUrl.value);
     const hasCrop = cropEnabled.value && (cropLeft.value+cropRight.value+cropTop.value+cropBottom.value > 0);
-    const hasText = textBoxes.value.some(tb => tb.text.trim() !== '');
+    const hasText = overlays.value.some(item => item.type === 'text' && item.text.trim() !== '');
 
     if (inputExt.value === 'webp') {
       // WebP always goes through canvas path
@@ -2145,6 +2028,12 @@ watch(useOriginalWidth, async (enabled) => {
   .reset-small-btn {
     margin-left: 0;
   }
+    .tab-add-img {
+    font-size: 1rem;
+  }
+  .image-preview-box {
+    min-height: 50px;
+  }
 }
   /* ===== PRZYCISK DODAWANIA OBRAZU ===== */
 .tab-add-img {
@@ -2177,15 +2066,6 @@ watch(useOriginalWidth, async (enabled) => {
 }
 .change-img-btn:hover { background: #f0f0f0; }
 
-/* ===== MOBILNE DOSTOSOWANIA (rozszerzenie istniejącej kwerendy) ===== */
-@media (max-width: 600px) {
-  /* ... (istniejące reguły) ... */
-  /* Dodaj na końcu: */
-  .tab-add-img {
-    font-size: 1rem;
-  }
-  .image-preview-box {
-    min-height: 50px;
-  }
+
 }
 </style>
