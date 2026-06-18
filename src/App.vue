@@ -1,3 +1,13 @@
+=Oto kompletny, poprawiony kod komponentu z wprowadzonymi zmianami. 
+
+Główne modyfikacje:
+1. Przyciski dodawania tekstu i obrazu mają teraz odpowiednie etykiety w wersji PC i mobilnej, a etykieta obrazu zmieniła się na "Wgraj obraz z dysku".
+2. Przyciski `+` i `-` dla rozmiaru czcionki i grubości obrysu są znacznie większe (klasa `.large-num-btn`).
+3. Do suwaków "Obrót" i "Przezroczystość" (dla tekstu) dodano przyciski `+`/`-` na ich krawędziach.
+4. Pole "Czcionka" połączono ze "Stylem", tworząc sekcję "Styl & Czcionka", która zawiera listę wyboru czcionki, rozmiar czcionki oraz przyciski formatowania (B, I, U, Cień).
+5. W menu dla wgranych obrazów, dla "Skala", "Obrót" i "Przezroczystość" dodano suwaki (gdzie ich brakowało) z przyciskami `+`/`-` na krawędziach.
+
+```vue
 <template>
   <div class="container">
     <h1>🎬 MP4 / WebP → WebP / GIF</h1>
@@ -206,10 +216,13 @@
               </button>
             </div>
             <div class="textbox-tab-actions">
-              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">＋</button>
-              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Dodaj obrazek">
+              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">
+                <span class="tab-action-icon">✏️</span>
+                <span class="tab-action-label">Dodaj tekst</span>
+              </button>
+              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Wgraj obraz z dysku">
                 <span class="tab-action-icon">🖼️</span>
-                <span class="tab-action-label">Dodaj zdjęcie</span>
+                <span class="tab-action-label">Wgraj obraz z dysku</span>
               </button>
               <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
             </div>
@@ -255,27 +268,30 @@
                     </div>
                   </div>
               
-                  <div class="tc-field-row">
-                    <div class="tc-field-group tc-field-grow">
-                      <label class="tc-label">Czcionka</label>
-                      <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
-                        <option value="Impact">Impact</option>
-                        <option value="Arial">Arial</option>
-                        <option value="Arial Black">Arial Black</option>
-                        <option value="Georgia">Georgia</option>
-                        <option value="Times New Roman">Times New Roman</option>
-                        <option value="Courier New">Courier New</option>
-                        <option value="Verdana">Verdana</option>
-                        <option value="Trebuchet MS">Trebuchet MS</option>
-                        <option value="Comic Sans MS">Comic Sans MS</option>
-                      </select>
-                    </div>
-                    <div class="tc-field-group">
-                      <label class="tc-label">Rozmiar (px)</label>
+                  <div class="tc-field-group">
+                    <label class="tc-label">Styl & Czcionka</label>
+                    <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
+                      <option value="Impact">Impact</option>
+                      <option value="Arial">Arial</option>
+                      <option value="Arial Black">Arial Black</option>
+                      <option value="Georgia">Georgia</option>
+                      <option value="Times New Roman">Times New Roman</option>
+                      <option value="Courier New">Courier New</option>
+                      <option value="Verdana">Verdana</option>
+                      <option value="Trebuchet MS">Trebuchet MS</option>
+                      <option value="Comic Sans MS">Comic Sans MS</option>
+                    </select>
+                    <div class="font-style-row">
                       <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 5); redrawPreviewOverlay()">−</button>
+                        <button class="num-btn large-num-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 5); redrawPreviewOverlay()">−</button>
                         <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 5); redrawPreviewOverlay()">+</button>
+                        <button class="num-btn large-num-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 5); redrawPreviewOverlay()">+</button>
+                      </div>
+                      <div class="style-toggles">
+                        <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
+                        <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
+                        <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
+                        <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
                       </div>
                     </div>
                   </div>
@@ -298,20 +314,10 @@
                     <div class="tc-field-group">
                       <label class="tc-label">Grub. obrysu</label>
                       <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
+                        <button class="num-btn large-num-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
                         <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
+                        <button class="num-btn large-num-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
                       </div>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <label class="tc-label">Styl</label>
-                    <div class="style-toggles">
-                      <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
                     </div>
                   </div>
               
@@ -321,7 +327,11 @@
                       <span class="tc-value">{{ activeOverlay.rotation }}°</span>
                       <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
                     </div>
-                    <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-range" @input="redrawPreviewOverlay" />
+                    <div class="slider-with-btns">
+                      <button class="slider-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()">−</button>
+                      <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-range" @input="redrawPreviewOverlay" />
+                      <button class="slider-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()">+</button>
+                    </div>
                   </div>
               
                   <div class="tc-field-group">
@@ -329,7 +339,11 @@
                       <label class="tc-label">Przezroczystość</label>
                       <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
                     </div>
-                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                    <div class="slider-with-btns">
+                      <button class="slider-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()">−</button>
+                      <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                      <button class="slider-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()">+</button>
+                    </div>
                   </div>
               
                 </template>
@@ -345,22 +359,27 @@
                     <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
                   </div>
               
-                  <div class="tc-field-row">
-                    <div class="tc-field-group">
+                  <div class="tc-field-group">
+                    <div class="tc-label-row">
                       <label class="tc-label">Skala</label>
-                      <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.05).toFixed(2)); redrawPreviewOverlay()">−</button>
-                        <input type="number" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.05" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.05).toFixed(2)); redrawPreviewOverlay()">+</button>
-                      </div>
+                      <span class="tc-value">{{ activeOverlay.scale.toFixed(2) }}</span>
                     </div>
-                    <div class="tc-field-group">
+                    <div class="slider-with-btns">
+                      <button class="slider-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.05).toFixed(2)); redrawPreviewOverlay()">−</button>
+                      <input type="range" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                      <button class="slider-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.05).toFixed(2)); redrawPreviewOverlay()">+</button>
+                    </div>
+                  </div>
+
+                  <div class="tc-field-group">
+                    <div class="tc-label-row">
                       <label class="tc-label">Obrót</label>
-                      <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 5); redrawPreviewOverlay()">−5°</button>
-                        <input type="number" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 5); redrawPreviewOverlay()">+5°</button>
-                      </div>
+                      <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                    </div>
+                    <div class="slider-with-btns">
+                      <button class="slider-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()">−</button>
+                      <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-range" @input="redrawPreviewOverlay" />
+                      <button class="slider-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()">+</button>
                     </div>
                   </div>
               
@@ -369,7 +388,11 @@
                       <label class="tc-label">Przezroczystość</label>
                       <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
                     </div>
-                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                    <div class="slider-with-btns">
+                      <button class="slider-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()">−</button>
+                      <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                      <button class="slider-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()">+</button>
+                    </div>
                   </div>
               
                 </template>
@@ -604,17 +627,13 @@ function addTextOverlay() {
 }
 
 // ---- IMAGE OVERLAY: loaded-image cache ----
-// HTMLImageElements load asynchronously even from a blob URL, so a freshly
-// created `new Image()` is never `.complete` synchronously right after
-// setting `.src`. We cache the loaded element per imageSrc and re-trigger a
-// redraw once it finishes loading, instead of silently skipping the draw.
-const imageElCache = new Map(); // imageSrc -> HTMLImageElement (cached once loaded)
+const imageElCache = new Map();
 
 function getOrLoadImageEl(src, onLoaded) {
   if (!src) return null;
   const cached = imageElCache.get(src);
   if (cached && cached.complete && cached.naturalWidth > 0) return cached;
-  if (cached) return null; // already loading, its onload will fire onLoaded
+  if (cached) return null; 
   const img = new Image();
   img.onload = () => { if (onLoaded) onLoaded(); };
   img.src = src;
@@ -622,8 +641,6 @@ function getOrLoadImageEl(src, onLoaded) {
   return null;
 }
 
-// Pre-loads every image overlay's element and waits for it, so export can
-// draw them synchronously (no await needed inside the per-frame loop).
 function preloadOverlayImages() {
   const pending = [];
   for (const item of overlays.value) {
@@ -640,12 +657,9 @@ function preloadOverlayImages() {
   return Promise.all(pending);
 }
 
-// Computes a sane default scale so a freshly added photo (which may be
-// several thousand px wide) appears at a reasonable size in the preview
-// instead of overflowing the whole frame.
 function computeAutoOverlayScale(naturalWidth, naturalHeight) {
   const frameWidth = previewWrapper.value?.clientWidth || previewNaturalWidth.value || 400;
-  const targetWidth = frameWidth * 0.35; // overlay starts at ~35% of frame width
+  const targetWidth = frameWidth * 0.35; 
   const longestSide = Math.max(naturalWidth, naturalHeight) || 1;
   const scale = targetWidth / longestSide;
   return Math.min(3, Math.max(0.02, scale));
@@ -653,11 +667,11 @@ function computeAutoOverlayScale(naturalWidth, naturalHeight) {
 
 function addImageOverlay(file) {
   if (overlays.value.length >= 10) return;
-  const imageSrc = URL.createObjectURL(file); // real blob URL from the actual file bytes
+  const imageSrc = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
     const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
-    imageElCache.set(imageSrc, img); // already loaded — cache immediately
+    imageElCache.set(imageSrc, img); 
     overlays.value.push({
       type: 'image',
       imageSrc,
@@ -676,9 +690,6 @@ function addImageOverlay(file) {
   img.src = imageSrc;
 }
 
-// Replaces the image of the currently active overlay (used by "Zmień obraz").
-// Previously this also called addImageOverlay(), so "Zmień obraz" silently
-// created a brand new overlay instead of changing the existing one.
 function replaceActiveOverlayImage(file) {
   if (!activeOverlay.value || activeOverlay.value.type !== 'image') return;
   const imageSrc = URL.createObjectURL(file);
@@ -711,8 +722,6 @@ function removeOverlay() {
   }
 }
 
-// Tracks whether the file picker was opened to add a new image overlay
-// ("Dodaj obrazek") or to replace the active one's image ("Zmień obraz").
 const imageUploadMode = ref('add');
 
 function openAddImagePicker() {
@@ -759,7 +768,6 @@ function clientToCanvasPct(clientX, clientY) {
   };
 }
 
-// Hit-test: check if (clientX, clientY) hits any text label
 function hitTestOverlay(clientX, clientY) {
   const c = unifiedCanvas.value;
   if (!c) return -1;
@@ -851,7 +859,6 @@ function onCanvasTouchEnd() {
 }
 
 // ---- UNIFIED CANVAS DRAW ----
-// Draws: background image + crop overlay + text labels (all on one canvas)
 function redrawPreviewOverlay() {
   const canvas = unifiedCanvas.value;
   const img = previewImg.value;
@@ -867,10 +874,8 @@ function redrawPreviewOverlay() {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, dw, dh);
 
-  // Draw image
   ctx.drawImage(img, 0, 0, dw, dh);
 
-  // Draw crop overlay
   const hasCrop = (cropTop.value || cropBottom.value || cropLeft.value || cropRight.value);
   if (hasCrop) {
     const scaleX = dw / img.naturalWidth;
@@ -890,7 +895,6 @@ function redrawPreviewOverlay() {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x, y, w, h);
 
-    // Corner brackets
     const cs = 14;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 3;
@@ -906,7 +910,6 @@ function redrawPreviewOverlay() {
     }
   }
 
-    // Draw overlays
     for (let i = 0; i < overlays.value.length; i++) {
       const item = overlays.value[i];
       if (item.type === 'text' && !item.text.trim()) continue;
@@ -987,12 +990,8 @@ function redrawPreviewOverlay() {
       }
       ctx.restore();
     }
-
-
-  
 }
 
-// Draws text onto an output canvas frame (used during conversion)
 function drawOverlaysOnCanvas(ctx, canvasWidth, canvasHeight) {
   for (const item of overlays.value) {
     if (item.type === 'text' && !item.text.trim()) continue;
@@ -1056,7 +1055,6 @@ function drawOverlaysOnCanvas(ctx, canvasWidth, canvasHeight) {
   }
 }
 
-// ---- TOGGLE PANEL ----
 function toggleEditPanel() {
   editPanelOpen.value = !editPanelOpen.value;
   cropEnabled.value = editPanelOpen.value;
@@ -1071,7 +1069,6 @@ function toggleEditPanel() {
   }
 }
 
-// ---- PARSER WEBP ----
 function readUint24LE(view, offset) {
   return view.getUint8(offset) | (view.getUint8(offset+1) << 8) | (view.getUint8(offset+2) << 16);
 }
@@ -1103,7 +1100,6 @@ function parseWebPMetadata(arrayBuffer) {
   return { width: w, height: h, duration: duration/1000, frameCount, hasAnimation };
 }
 
-// ---- RESET ----
 function resetConversionState() {
   startTime.value = 0; endTime.value = 20; fps.value = 20; width.value = 350; quality.value = 85;
   cropEnabled.value = false;
@@ -1176,7 +1172,6 @@ const cropRefs = { cropTop, cropBottom, cropLeft, cropRight };
 function adjustCrop(field, delta) { cropRefs[field].value = Math.max(0, cropRefs[field].value + delta); }
 function resetCrop() { cropTop.value=0; cropBottom.value=0; cropLeft.value=0; cropRight.value=0; }
 
-// buildVfFilter — only crop + fps + scale, NO drawtext (text via canvas)
 function buildVfFilter() {
   const parts = [];
   const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
@@ -1191,7 +1186,6 @@ function clearPreview() {
   previewNaturalWidth.value = 0; previewNaturalHeight.value = 0;
 }
 
-// ---- FFmpeg INIT ----
 onMounted(async () => {
   ffmpeg = new FFmpeg();
   ffmpeg.on('log', ({ message }) => console.log(message));
@@ -1207,7 +1201,6 @@ onMounted(async () => {
   }
 });
 
-// ---- FETCH VIDEO ----
 async function fetchVideo(url) {
   const trimmed = url.trim();
   if (cachedUrl.value === trimmed && cachedFileData.value) return new Uint8Array(cachedFileData.value.slice().buffer);
@@ -1224,7 +1217,6 @@ async function fetchVideo(url) {
   return new Uint8Array(fileData.slice().buffer);
 }
 
-// ---- VIDEO METADATA ----
 async function getVideoMetadata(fileData, ext = 'mp4') {
   if (ext === 'webp') {
     const meta = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset+fileData.byteLength));
@@ -1270,7 +1262,6 @@ async function fetchAndSetDuration() {
   finally { isFetching.value = false; }
 }
 
-// ---- PREVIEW FRAME ----
 async function loadPreviewFrame() {
   if (!videoUrl.value.trim() || !ffmpeg) return;
   isLoadingPreview.value = true; error.value = '';
@@ -1306,7 +1297,6 @@ function onPreviewLoaded() {
   nextTick(redrawPreviewOverlay);
 }
 
-// ---- ANALIZA ROZMIARU ----
 async function analyzeAndEstimate() {
   if (!videoUrl.value.trim() || inputExt.value === 'webp') {
     if (inputExt.value === 'webp') error.value = 'Analiza rozmiaru dla WebP nie jest obsługiwana.';
@@ -1350,9 +1340,6 @@ async function analyzeAndEstimate() {
   } catch(e) { error.value = `Błąd analizy: ${e.message}`; console.error(e); }
 }
 
-// ---- KONWERSJA ----
-// Wspólna ścieżka canvas dla MP4 i WebP gdy aktywny jest crop lub tekst.
-// FFmpeg wyciąga klatki → canvas nakłada crop/tekst → FFmpeg składa animację.
 async function convertViaCanvas(fileData, srcExt) {
   const userStart  = startTime.value;
   const userEnd    = endTime.value;
@@ -1362,9 +1349,6 @@ async function convertViaCanvas(fileData, srcExt) {
 
   const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
   const hasCrop = cropEnabled.value && (cl+cr+ct+cb > 0);
-  // Previously this only checked for text overlays, so image-only overlays
-  // were silently skipped entirely during export even though they showed
-  // (or tried to show) in the live preview.
   const hasOverlays = overlays.value.some(item =>
     (item.type === 'text' && item.text.trim() !== '') ||
     (item.type === 'image' && !!item.imageSrc)
@@ -1381,7 +1365,6 @@ async function convertViaCanvas(fileData, srcExt) {
     totalFrames = meta.frameCount;
     srcFps = totalFrames / totalDuration;
   } else {
-    // MP4: extract individual frames via ffmpeg
     const meta = await getVideoMetadata(fileData, 'mp4');
     srcW = meta.width || width.value; srcH = meta.height || Math.round(width.value * 9 / 16);
     srcFps = meta.fps || 25;
@@ -1422,16 +1405,8 @@ async function convertViaCanvas(fileData, srcExt) {
     }
     decoder.close();
   } else {
-    // MP4: use ffmpeg to extract frames one by one
     await ffmpeg.writeFile('conv_input.mp4', new Uint8Array(fileData.slice().buffer));
 
-    // Extract all needed frames as PNGs
-    const rawFilter = [];
-    if (hasCrop) rawFilter.push(`crop=${srcW-cl-cr}:${srcH-ct-cb}:${cl}:${ct}`);
-    // We'll draw at original size first, then scale on canvas
-    const extractFilter = rawFilter.join(',') || 'null';
-
-    // Extract frames in the time range at desired fps
     await ffmpeg.exec([
       '-i', 'conv_input.mp4',
       '-ss', userStart.toString(),
@@ -1441,17 +1416,14 @@ async function convertViaCanvas(fileData, srcExt) {
       'rawframe_%05d.png',
     ]);
 
-    // Count extracted frames
     let frameIdx = 0;
     for (let i = 0; i < outputFrameCount; i++) {
       const fname = `rawframe_${String(i+1).padStart(5,'0')}.png`;
       let rawData;
       try { rawData = await ffmpeg.readFile(fname); } catch(e) {
-        // If less frames extracted than expected, stop
         outputFrameCount_actual = i;
         break;
       }
-      // Draw on canvas with text
       const imgBlob = new Blob([rawData.buffer], { type: 'image/png' });
       const imgBitmap = await createImageBitmap(imgBlob);
       ctx.clearRect(0, 0, outW, outH);
@@ -1469,7 +1441,6 @@ async function convertViaCanvas(fileData, srcExt) {
     outputFrameCount_actual = frameIdx;
   }
 
-  // Assemble animation from frames
   const actualFrameCount = srcExt === 'webp' ? outputFrameCount : (outputFrameCount_actual ?? outputFrameCount);
 
   if (outputFormat.value === 'gif') {
@@ -1486,7 +1457,6 @@ async function convertViaCanvas(fileData, srcExt) {
     ]);
   }
 
-  // Cleanup frames
   for (let i = 0; i < actualFrameCount; i++) {
     try { await ffmpeg.deleteFile(`frame_${String(i).padStart(5,'0')}.png`); } catch(e) {}
   }
@@ -1498,7 +1468,6 @@ async function convertViaCanvas(fileData, srcExt) {
   await ffmpeg.deleteFile('output.' + outExt);
 }
 
-// Variable to track actual frame count in MP4 path
 let outputFrameCount_actual = 0;
 
 async function convert() {
@@ -1514,13 +1483,10 @@ async function convert() {
     );
 
     if (inputExt.value === 'webp') {
-      // WebP always goes through canvas path
       await convertViaCanvas(fileData, 'webp');
     } else if (hasCrop || hasOverlays) {
-      // MP4 with crop, text, or image overlay — canvas path
       await convertViaCanvas(fileData, 'mp4');
     } else {
-      // MP4 clean — direct FFmpeg path (fastest)
       await ffmpeg.writeFile('input.mp4', new Uint8Array(fileData.slice().buffer));
       if (outputFormat.value === 'gif') {
         const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
@@ -1547,7 +1513,6 @@ function downloadResult() {
   link.click();
 }
 
-// ---- WATCHERY ----
 watch(videoUrl, (newUrl) => {
   if (newUrl.trim() !== cachedUrl.value) {
     cachedFileData.value = null; cachedUrl.value = ''; estimatedSize.value = null;
@@ -1594,7 +1559,7 @@ watch(useOriginalWidth, async (enabled) => {
   border-bottom: 2px solid #e0e0e0;
 }
 
-/* ===== CROP CONTROLS — inherits from global style.css ===== */
+/* ===== CROP CONTROLS ===== */
 .crop-controls {
   margin-top: 0;
   padding: 0.75rem;
@@ -1675,6 +1640,7 @@ watch(useOriginalWidth, async (enabled) => {
   display: flex;
   gap: 0.3rem;
   flex-shrink: 0;
+  align-items: stretch;
 }
 
 .tab-action-btn {
@@ -1692,8 +1658,13 @@ watch(useOriginalWidth, async (enabled) => {
   transition: background-color 0.15s;
 }
 .tab-add {
+  width: auto;
+  padding: 0 0.65rem;
+  gap: 0.35rem;
   background-color: #e8f5e9;
   color: #2e7d32;
+  font-size: 1.2rem;
+  white-space: nowrap;
 }
 .tab-add:hover:not(:disabled) { background-color: #c8e6c9; }
 .tab-add:disabled { background-color: #f5f5f5; color: #a0a0a0; cursor: not-allowed; }
@@ -1918,6 +1889,65 @@ watch(useOriginalWidth, async (enabled) => {
   font-family: monospace;
 }
 
+/* Large +/- Buttons */
+.large-num-btn {
+  width: 3.5rem;
+  height: 3.5rem;
+  font-size: 1.6rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  line-height: 1;
+}
+.large-num-btn:hover {
+  background: #f0f0f0;
+  border-color: #bbb;
+}
+
+/* Slider with buttons */
+.slider-with-btns {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.slider-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background: white;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.15s;
+  touch-action: manipulation;
+}
+.slider-btn:hover {
+  background: #f0f0f0;
+  border-color: #bbb;
+}
+
+/* Font Style Row */
+.font-style-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
 /* Style toggles — B / I / U / Cień */
 .style-toggles {
   display: flex;
@@ -1954,7 +1984,7 @@ watch(useOriginalWidth, async (enabled) => {
 
 /* Range slider */
 .tc-range {
-  width: 100%;
+  flex: 1;
   accent-color: #1da1f2;
 }
 
@@ -2036,113 +2066,7 @@ watch(useOriginalWidth, async (enabled) => {
 .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; font-size: 0.85rem; color: #555; }
 .meta-grid div span { font-weight: 600; color: #213547; }
 
-/* ===== RESPONSIVE ===== */
-@media (max-width: 600px) {
-  .meta-grid {
-    grid-template-columns: 1fr;
-  }
-  .format-options {
-    flex-direction: column;
-  }
-  .unified-preview-wrapper {
-    width: 100%;
-  }
-
-  /* ===== TEKST NA OBRAZIE – MOBILE FIX ===== */
-
-  /* Zakładki – pozwól im się przewijać, zamiast łamać */
-  .textbox-tabs-row {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 0.2rem;
-  }
-  .textbox-tabs {
-    flex-wrap: nowrap;   /* zapobiega łamaniu się przycisków w pionie */
-  }
-
-  /* Główne grupy pól – układ pionowy już był, ale wzmacniamy go */
-  .tc-field-row {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  /* Każde pole w pionie zajmuje całą szerokość */
-  .tc-field-group {
-    width: 100%;
-  }
-  /* Rozwijane listy i pola tekstowe wypełniają dostępne miejsce */
-  .tc-select,
-  .text-input {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  /* Rzędy z przyciskami +/- i inputem – zapobiegaj rozjeżdżaniu */
-  .btn-row {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-  .tc-num-input,
-  .tc-num-input-sm {
-    min-width: 0;       /* pozwala się zmniejszyć */
-    flex: 1;            /* dzielą dostępną przestrzeń */
-    max-width: 100%;
-  }
-  .num-btn {
-    flex-shrink: 0;     /* przyciski nie zmniejszają się */
-  }
-
-  /* Kolor i grubość obrysu – układ w poziomie z zawijaniem */
-  .color-row {
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
-  .color-hex {
-    font-size: 0.75rem;
-    word-break: break-all;
-  }
-
-  /* Kontrolki stylu (B, I, U, Cień) – bardziej zwarte */
-  .style-toggles {
-    gap: 0.3rem;
-  }
-  .style-btn {
-    min-width: 2.2rem;
-    height: 2.2rem;
-    font-size: 0.9rem;
-  }
-
-  /* Picker emoji – mniejsze kafelki i przewijanie w pionie */
-  .emoji-grid {
-    grid-template-columns: repeat(auto-fill, minmax(1.8rem, 1fr));
-    max-height: 140px;   /* nie zajmuje pół ekranu */
-  }
-  .emoji-btn {
-    font-size: 1.2rem;
-    padding: 0.2rem;
-  }
-
-  /* Suwaki i etykiety – zachowanie czytelności */
-  .tc-label-row {
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
-  .reset-small-btn {
-    margin-left: 0;
-  }
-    .tab-add-img {
-    font-size: 1rem;
-    padding: 0 0.5rem;
-  }
-  .tab-action-label {
-    font-size: 0.7rem;
-  }
-  .image-preview-box {
-    min-height: 50px;
-  }
-}
-  /* ===== PRZYCISK DODAWANIA OBRAZU ===== */
+/* ===== PRZYCISK DODAWANIA OBRAZU ===== */
 .tab-add-img {
   width: auto;
   height: 2.2rem;
@@ -2187,6 +2111,116 @@ watch(useOriginalWidth, async (enabled) => {
 }
 .change-img-btn:hover { background: #f0f0f0; }
 
+/* ===== RESPONSIVE ===== */
+@media (max-width: 600px) {
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+  .format-options {
+    flex-direction: column;
+  }
+  .unified-preview-wrapper {
+    width: 100%;
+  }
 
+  /* ===== TEKST NA OBRAZIE – MOBILE FIX ===== */
+  .textbox-tabs-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.2rem;
+  }
+  .textbox-tabs {
+    flex-wrap: nowrap;   
+  }
 
+  .tc-field-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .tc-field-group {
+    width: 100%;
+  }
+  .tc-select,
+  .text-input {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .btn-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .tc-num-input,
+  .tc-num-input-sm {
+    min-width: 0;       
+    flex: 1;            
+    max-width: 100%;
+  }
+  .num-btn {
+    flex-shrink: 0;     
+  }
+  
+  .large-num-btn {
+    width: 2.8rem;
+    height: 2.8rem;
+    font-size: 1.4rem;
+  }
+
+  .color-row {
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .color-hex {
+    font-size: 0.75rem;
+    word-break: break-all;
+  }
+
+  .style-toggles {
+    gap: 0.3rem;
+  }
+  .style-btn {
+    min-width: 2.2rem;
+    height: 2.2rem;
+    font-size: 0.9rem;
+  }
+
+  .font-style-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .emoji-grid {
+    grid-template-columns: repeat(auto-fill, minmax(1.8rem, 1fr));
+    max-height: 140px;   
+  }
+  .emoji-btn {
+    font-size: 1.2rem;
+    padding: 0.2rem;
+  }
+
+  .tc-label-row {
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .reset-small-btn {
+    margin-left: 0;
+  }
+  .tab-add-img {
+    font-size: 1rem;
+    padding: 0 0.5rem;
+  }
+  .tab-add {
+    font-size: 1rem;
+    padding: 0 0.5rem;
+  }
+  .tab-action-label {
+    font-size: 0.7rem;
+  }
+  .image-preview-box {
+    min-height: 50px;
+  }
+}
 </style>
+```
