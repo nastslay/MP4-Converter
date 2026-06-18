@@ -727,7 +727,7 @@ function onCanvasMouseUp() {
 
 function onCanvasTouchStart(e) {
   const touch = e.touches[0];
-  const idx = hitTestText(touch.clientX, touch.clientY);
+  const idx = hitTestOverlay(touch.clientX, touch.clientY);
   if (idx >= 0) {
     dragTextIdx = idx;
     activeOverlayIdx.value = idx;
@@ -2067,5 +2067,5 @@ watch(useOriginalWidth, async (enabled) => {
 .change-img-btn:hover { background: #f0f0f0; }
 
 
-}
+
 </style>
