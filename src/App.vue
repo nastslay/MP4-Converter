@@ -352,17 +352,17 @@
                     <div class="tc-field-group">
                       <label class="tc-label">Skala</label>
                       <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.05).toFixed(2)); redrawPreviewOverlay()">−</button>
+                        <button class="num-btn" @click="adjustScale(-0.05)">−</button>
                         <input type="number" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.05" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.05).toFixed(2)); redrawPreviewOverlay()">+</button>
+                        <button class="num-btn" @click="adjustScale(0.05)">+</button>
                       </div>
                     </div>
                     <div class="tc-field-group">
                       <label class="tc-label">Obrót</label>
                       <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 5); redrawPreviewOverlay()">−5°</button>
+                        <button class="num-btn" @click="adjustRotation(-5)">−5°</button>
                         <input type="number" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 5); redrawPreviewOverlay()">+5°</button>
+                        <button class="num-btn" @click="adjustRotation(5)">+5°</button>
                       </div>
                     </div>
                   </div>
@@ -656,67 +656,96 @@ function computeAutoOverlayScale(naturalWidth, naturalHeight) {
 
 function addImageOverlay(file) {
   if (overlays.value.length >= 10) return;
-  const imageSrc = URL.createObjectURL(file); // Tworzy poprawny odnośnik od razu z pliku
   
-  const img = new Image();
-  img.onload = () => {
-    const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
-    imageElCache.set(imageSrc, img);
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const imageSrc = e.target?.result;
+    if (typeof imageSrc !== 'string') return;
     
-    overlays.value.push({
-      type: 'image',
-      imageSrc,
-      imageNaturalWidth: img.naturalWidth,
-      imageNaturalHeight: img.naturalHeight,
-      scale: computeAutoOverlayScale(img.naturalWidth, img.naturalHeight),
-      rotation: 0,
-      opacity: 1,
-      xPct: 0.5,
-      yPct: newYPct,
-    });
-    activeOverlayIdx.value = overlays.value.length - 1;
-    nextTick(redrawPreviewOverlay);
+    const img = new Image();
+    img.onload = () => {
+      const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
+      imageElCache.set(imageSrc, img);
+      
+      overlays.value.push({
+        type: 'image',
+        imageSrc,
+        imageNaturalWidth: img.naturalWidth,
+        imageNaturalHeight: img.naturalHeight,
+        scale: computeAutoOverlayScale(img.naturalWidth, img.naturalHeight),
+        rotation: 0,
+        opacity: 1,
+        xPct: 0.5,
+        yPct: newYPct,
+      });
+      activeOverlayIdx.value = overlays.value.length - 1;
+      nextTick(redrawPreviewOverlay);
+    };
+    img.src = imageSrc;
   };
-  img.src = imageSrc;
+  reader.readAsDataURL(file);
 }
 
 function replaceActiveOverlayImage(file) {
   if (!activeOverlay.value || activeOverlay.value.type !== 'image') return;
-  const imageSrc = URL.createObjectURL(file);
   
-  const img = new Image();
-  img.onload = () => {
-    const target = activeOverlay.value;
-    if (!target) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const imageSrc = e.target?.result;
+    if (typeof imageSrc !== 'string') return;
     
-    const oldSrc = target.imageSrc;
-    imageElCache.set(imageSrc, img);
-    target.imageSrc = imageSrc;
-    target.imageNaturalWidth = img.naturalWidth;
-    target.imageNaturalHeight = img.naturalHeight;
-    target.scale = computeAutoOverlayScale(img.naturalWidth, img.naturalHeight);
-    
-    if (oldSrc) { 
-      URL.revokeObjectURL(oldSrc); 
-      imageElCache.delete(oldSrc); 
-    }
-    nextTick(redrawPreviewOverlay);
+    const img = new Image();
+    img.onload = () => {
+      const target = activeOverlay.value;
+      if (!target) return;
+      
+      const oldSrc = target.imageSrc;
+      imageElCache.set(imageSrc, img);
+      target.imageSrc = imageSrc;
+      target.imageNaturalWidth = img.naturalWidth;
+      target.imageNaturalHeight = img.naturalHeight;
+      target.scale = computeAutoOverlayScale(img.naturalWidth, img.naturalHeight);
+      
+      if (oldSrc) { 
+        imageElCache.delete(oldSrc); 
+      }
+      nextTick(redrawPreviewOverlay);
+    };
+    img.src = imageSrc;
   };
-  img.src = imageSrc;
+  reader.readAsDataURL(file);
 }
 
-function removeOverlay() {
-  if (overlays.value.length > 1) {
-    const removed = overlays.value.splice(activeOverlayIdx.value, 1)[0];
-    if (removed.type === 'image' && removed.imageSrc) {
-      URL.revokeObjectURL(removed.imageSrc);
-      imageElCache.delete(removed.imageSrc);
-    }
-    activeOverlayIdx.value = Math.min(activeOverlayIdx.value, overlays.value.length - 1);
-    nextTick(redrawPreviewOverlay);
-  }
+function adjustScale(amount) {
+  if (!activeOverlay.value) return;
+  // Zmiana zaokrąglona do 2 miejsc po przecinku, aby uniknąć błędów zmiennoprzecinkowych JS
+  activeOverlay.value.scale = Math.max(0.1, Math.min(5, parseFloat((activeOverlay.value.scale + amount).toFixed(2))));
+  nextTick(redrawPreviewOverlay);
 }
 
+function adjustRotation(amount) {
+  if (!activeOverlay.value) return;
+  let newRot = (activeOverlay.value.rotation + amount) % 360;
+  if (newRot < 0) newRot += 360;
+  activeOverlay.value.rotation = newRot;
+  nextTick(redrawPreviewOverlay);
+}
+
+  
+function adjustScale(amount) {
+  if (!activeOverlay.value) return;
+  // Zmiana zaokrąglona do 2 miejsc po przecinku, aby uniknąć błędów zmiennoprzecinkowych JS
+  activeOverlay.value.scale = Math.max(0.1, Math.min(5, parseFloat((activeOverlay.value.scale + amount).toFixed(2))));
+  nextTick(redrawPreviewOverlay);
+}
+
+function adjustRotation(amount) {
+  if (!activeOverlay.value) return;
+  let newRot = (activeOverlay.value.rotation + amount) % 360;
+  if (newRot < 0) newRot += 360;
+  activeOverlay.value.rotation = newRot;
+  nextTick(redrawPreviewOverlay);
+}
 // Tracks whether the file picker was opened to add a new image overlay
 // ("Dodaj obrazek") or to replace the active one's image ("Zmień obraz").
 const imageUploadMode = ref('add');
@@ -2190,6 +2219,79 @@ watch(useOriginalWidth, async (enabled) => {
 }
 .change-img-btn:hover { background: #f0f0f0; }
 
+  /* Style dla nowych wierszy z suwakami */
+.slider-block {
+  flex-direction: column;
+  align-items: flex-start !important;
+  gap: 0.3rem;
+}
+
+.slider-block label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.control-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #e2e8f0;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.control-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary-color, #007aff);
+  cursor: pointer;
+}
+
+.control-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--primary-color, #007aff);
+  cursor: pointer;
+}
+
+.slider-container .step-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  font-size: 1rem;
+  font-weight: bold;
+  border: 1px solid var(--border-color);
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slider-container .step-btn:hover {
+  background: #f1f5f9;
+}
+
+.slider-container .value-display {
+  min-width: 50px;
+  text-align: right;
+  font-weight: 600;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums; /* Zapobiega "skakaniu" tekstu przy zmianie cyfr */
+}
 
 
 </style>
