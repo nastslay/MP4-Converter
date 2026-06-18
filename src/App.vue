@@ -716,8 +716,6 @@ function replaceActiveOverlayImage(file) {
   reader.readAsDataURL(file);
 }
 
-
-
   
 function adjustScale(amount) {
   if (!activeOverlay.value) return;
@@ -732,6 +730,8 @@ function adjustRotation(amount) {
   activeOverlay.value.rotation = newRot;
   nextTick(redrawPreviewOverlay);
 }
+
+  
 // Tracks whether the file picker was opened to add a new image overlay
 // ("Dodaj obrazek") or to replace the active one's image ("Zmień obraz").
 const imageUploadMode = ref('add');
