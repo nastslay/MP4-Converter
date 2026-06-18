@@ -187,7 +187,7 @@
         </div>
 
         <!-- TEXT EDITOR CONTROLS -->
-        <div class="text-controls"></div>
+        <div class="text-controls">
           <div class="section-label">✏️ Tekst na obrazie</div>
 
           <!-- Scrollowalny rząd zakładek -->
@@ -373,7 +373,7 @@
               
                 </template>
               </div>
-
+            </div>
            
 
         <!-- UNIFIED PREVIEW CANVAS -->
