@@ -205,177 +205,208 @@
                 <span v-else class="tb-tab-preview">🖼️ obrazek</span>
               </button>
             </div>
+            <!-- ZMIANA 1: Etykiety widoczne na PC i mobile, zmiana nazwy na 'Wgraj obraz z dysku' -->
             <div class="textbox-tab-actions">
-              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">＋</button>
-              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Dodaj obrazek">
+              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">
+                <span class="tab-action-icon">＋</span>
+                <span class="tab-action-label">Tekst</span>
+              </button>
+              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Wgraj obraz z dysku">
                 <span class="tab-action-icon">🖼️</span>
-                <span class="tab-action-label">Dodaj zdjęcie</span>
+                <span class="tab-action-label">Wgraj obraz z dysku</span>
               </button>
               <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
             </div>
           </div>
 
-              <div v-if="activeOverlay" class="textbox-controls">
-              
-                <!-- ======= KONTROLKI DLA TEKSTU ======= -->
-                <template v-if="activeOverlay.type === 'text'">
-              
-                  <div class="tc-field-group">
-                    <label class="tc-label">Tekst</label>
-                    <div class="text-input-row">
-                      <input
-                        type="text"
-                        v-model="activeOverlay.text"
-                        placeholder="Wpisz tekst lub emoji…"
-                        class="text-input"
-                        ref="textInputRef"
-                        @input="redrawPreviewOverlay"
-                      />
-                      <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
-                    </div>
-                    <!-- Emoji picker panel (dokładnie taki sam jak poprzednio) -->
-                    <div v-if="showEmojiPicker" class="emoji-picker">
-                      <div class="emoji-cats">
-                        <button
-                          v-for="cat in emojiCategories"
-                          :key="cat.name"
-                          class="emoji-cat-btn"
-                          :class="{ active: activeCat === cat.name }"
-                          @click="activeCat = cat.name"
-                        >{{ cat.icon }}</button>
-                      </div>
-                      <div class="emoji-grid">
-                        <button
-                          v-for="em in currentEmojis"
-                          :key="em"
-                          class="emoji-btn"
-                          @click="insertEmoji(em)"
-                        >{{ em }}</button>
-                      </div>
-                    </div>
+          <div v-if="activeOverlay" class="textbox-controls">
+
+            <!-- ======= KONTROLKI DLA TEKSTU ======= -->
+            <template v-if="activeOverlay.type === 'text'">
+
+              <div class="tc-field-group">
+                <label class="tc-label">Tekst</label>
+                <div class="text-input-row">
+                  <input
+                    type="text"
+                    v-model="activeOverlay.text"
+                    placeholder="Wpisz tekst lub emoji…"
+                    class="text-input"
+                    ref="textInputRef"
+                    @input="redrawPreviewOverlay"
+                  />
+                  <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
+                </div>
+                <!-- Emoji picker panel -->
+                <div v-if="showEmojiPicker" class="emoji-picker">
+                  <div class="emoji-cats">
+                    <button
+                      v-for="cat in emojiCategories"
+                      :key="cat.name"
+                      class="emoji-cat-btn"
+                      :class="{ active: activeCat === cat.name }"
+                      @click="activeCat = cat.name"
+                    >{{ cat.icon }}</button>
                   </div>
-              
-                  <div class="tc-field-row">
-                    <div class="tc-field-group tc-field-grow">
-                      <label class="tc-label">Czcionka</label>
-                      <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
-                        <option value="Impact">Impact</option>
-                        <option value="Arial">Arial</option>
-                        <option value="Arial Black">Arial Black</option>
-                        <option value="Georgia">Georgia</option>
-                        <option value="Times New Roman">Times New Roman</option>
-                        <option value="Courier New">Courier New</option>
-                        <option value="Verdana">Verdana</option>
-                        <option value="Trebuchet MS">Trebuchet MS</option>
-                        <option value="Comic Sans MS">Comic Sans MS</option>
-                      </select>
-                    </div>
-                    <div class="tc-field-group">
-                      <label class="tc-label">Rozmiar (px)</label>
-                      <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 5); redrawPreviewOverlay()">−</button>
-                        <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 5); redrawPreviewOverlay()">+</button>
-                      </div>
-                    </div>
+                  <div class="emoji-grid">
+                    <button
+                      v-for="em in currentEmojis"
+                      :key="em"
+                      class="emoji-btn"
+                      @click="insertEmoji(em)"
+                    >{{ em }}</button>
                   </div>
-              
-                  <div class="tc-field-row">
-                    <div class="tc-field-group">
-                      <label class="tc-label">Kolor tekstu</label>
-                      <div class="color-row">
-                        <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
-                        <span class="color-hex">{{ activeOverlay.color }}</span>
-                      </div>
-                    </div>
-                    <div class="tc-field-group">
-                      <label class="tc-label">Obrys / cień</label>
-                      <div class="color-row">
-                        <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
-                        <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
-                      </div>
-                    </div>
-                    <div class="tc-field-group">
-                      <label class="tc-label">Grub. obrysu</label>
-                      <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
-                        <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
-                      </div>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <label class="tc-label">Styl</label>
-                    <div class="style-toggles">
-                      <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Obrót</label>
-                      <span class="tc-value">{{ activeOverlay.rotation }}°</span>
-                      <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
-                    </div>
-                    <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-range" @input="redrawPreviewOverlay" />
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Przezroczystość</label>
-                      <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
-                    </div>
-                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-                  </div>
-              
-                </template>
-              
-                <!-- ======= KONTROLKI DLA OBRAZU ======= -->
-                <template v-else-if="activeOverlay.type === 'image'">
-                  
-                  <div class="tc-field-group">
-                    <label class="tc-label">Obraz</label>
-                    <div class="image-preview-box">
-                      <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
-                    </div>
-                    <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
-                  </div>
-              
-                  <div class="tc-field-row">
-                    <div class="tc-field-group">
-                      <label class="tc-label">Skala</label>
-                      <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.05).toFixed(2)); redrawPreviewOverlay()">−</button>
-                        <input type="number" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.05" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.05).toFixed(2)); redrawPreviewOverlay()">+</button>
-                      </div>
-                    </div>
-                    <div class="tc-field-group">
-                      <label class="tc-label">Obrót</label>
-                      <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 5); redrawPreviewOverlay()">−5°</button>
-                        <input type="number" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 5); redrawPreviewOverlay()">+5°</button>
-                      </div>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Przezroczystość</label>
-                      <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
-                    </div>
-                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-                  </div>
-              
-                </template>
+                </div>
               </div>
 
-           
+              <!-- ZMIANA 4: Styl & Czcionka - sekcja złożona z czcionki, rozmiaru i stylów -->
+              <div class="tc-section-box">
+                <div class="tc-section-title">Styl & Czcionka</div>
+
+                <div class="tc-field-group">
+                  <label class="tc-label">Czcionka</label>
+                  <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
+                    <option value="Impact">Impact</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Arial Black">Arial Black</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                    <option value="Comic Sans MS">Comic Sans MS</option>
+                  </select>
+                </div>
+
+                <!-- ZMIANA 2: Powiększone przyciski +/- dla Rozmiar (px) na PC -->
+                <div class="tc-field-group">
+                  <label class="tc-label">Rozmiar (px)</label>
+                  <div class="btn-row large-btns">
+                    <button class="num-btn num-btn-lg" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 5); redrawPreviewOverlay()">−</button>
+                    <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
+                    <button class="num-btn num-btn-lg" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 5); redrawPreviewOverlay()">+</button>
+                  </div>
+                </div>
+
+                <div class="tc-field-group">
+                  <label class="tc-label">Styl tekstu</label>
+                  <div class="style-toggles">
+                    <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tc-field-row">
+                <div class="tc-field-group">
+                  <label class="tc-label">Kolor tekstu</label>
+                  <div class="color-row">
+                    <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
+                    <span class="color-hex">{{ activeOverlay.color }}</span>
+                  </div>
+                </div>
+                <div class="tc-field-group">
+                  <label class="tc-label">Obrys / cień</label>
+                  <div class="color-row">
+                    <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
+                    <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
+                  </div>
+                </div>
+                <!-- ZMIANA 2: Powiększone przyciski +/- dla Grub. obrysu na PC -->
+                <div class="tc-field-group">
+                  <label class="tc-label">Grub. obrysu</label>
+                  <div class="btn-row large-btns">
+                    <button class="num-btn num-btn-lg" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
+                    <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
+                    <button class="num-btn num-btn-lg" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ZMIANA 3: Przyciski +/- na krawędziach suwaka Obrót -->
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Obrót</label>
+                  <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                  <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
+                </div>
+                <div class="slider-with-btns">
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()">−</button>
+                  <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()">+</button>
+                </div>
+              </div>
+
+              <!-- ZMIANA 3: Przyciski +/- na krawędziach suwaka Przezroczystość -->
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Przezroczystość</label>
+                  <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                </div>
+                <div class="slider-with-btns">
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()">−</button>
+                  <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()">+</button>
+                </div>
+              </div>
+
+            </template>
+
+            <!-- ======= KONTROLKI DLA OBRAZU ======= -->
+            <template v-else-if="activeOverlay.type === 'image'">
+
+              <!-- ZMIANA 1: Zmiana nazwy 'Obraz' na 'Wgraj obraz z dysku' -->
+              <div class="tc-field-group">
+                <label class="tc-label">Wgraj obraz z dysku</label>
+                <div class="image-preview-box">
+                  <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
+                </div>
+                <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
+              </div>
+
+              <!-- ZMIANA 5: Suwak Skala z przyciskami +/- na krawędziach -->
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Skala</label>
+                  <span class="tc-value">{{ activeOverlay.scale.toFixed(2) }}x</span>
+                </div>
+                <div class="slider-with-btns">
+                  <button class="slider-edge-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.05).toFixed(2)); redrawPreviewOverlay()">−</button>
+                  <input type="range" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.05).toFixed(2)); redrawPreviewOverlay()">+</button>
+                </div>
+              </div>
+
+              <!-- ZMIANA 5: Suwak Obrót z przyciskami +/- na krawędziach -->
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Obrót</label>
+                  <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                </div>
+                <div class="slider-with-btns">
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()">−</button>
+                  <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()">+</button>
+                </div>
+              </div>
+
+              <!-- ZMIANA 5: Suwak Przezroczystość z przyciskami +/- na krawędziach -->
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Przezroczystość</label>
+                  <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                </div>
+                <div class="slider-with-btns">
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()">−</button>
+                  <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()">+</button>
+                </div>
+              </div>
+
+            </template>
+          </div>
 
         <!-- UNIFIED PREVIEW CANVAS -->
         <div class="preview-section">
@@ -388,7 +419,6 @@
             class="unified-preview-wrapper"
             ref="previewWrapper"
           >
-            <!-- Ukryty img żeby znać naturalne wymiary -->
             <img
               ref="previewImg"
               :src="previewFrame"
@@ -396,7 +426,6 @@
               style="display:none"
               @load="onPreviewLoaded"
             />
-            <!-- Jeden canvas: crop overlay + text labels -->
             <canvas
               ref="unifiedCanvas"
               class="unified-canvas"
@@ -476,7 +505,7 @@ const originalFps      = ref(null);
 const originalDuration = ref(null);
 
 // Crop
-const cropEnabled = ref(false);  // kept for VF filter logic
+const cropEnabled = ref(false);
 const cropTop     = ref(0);
 const cropBottom  = ref(0);
 const cropLeft    = ref(0);
@@ -484,16 +513,13 @@ const cropRight   = ref(0);
 const syncVertical   = ref(true);
 const syncHorizontal = ref(true);
 
-// Panel open state (replaces separate cropEnabled + textEditEnabled)
 const editPanelOpen = ref(false);
 
-// Podgląd klatki
 const previewFrame         = ref(null);
 const previewNaturalWidth  = ref(0);
 const previewNaturalHeight = ref(0);
 const isLoadingPreview     = ref(false);
 
-// Template refs
 const previewImg     = ref(null);
 const unifiedCanvas  = ref(null);
 const previewWrapper = ref(null);
@@ -503,10 +529,7 @@ const imageFileInput = ref(null);
 let ffmpeg = null;
 
 // ---- TEXT EDITOR STATE ----
-
 const textInputRef = ref(null);
-
-// Emoji picker state
 const showEmojiPicker = ref(false);
 const activeCat = ref('Popularne');
 
@@ -535,26 +558,6 @@ function insertEmoji(emoji) {
   activeOverlay.value.text += emoji;
   redrawPreviewOverlay();
 }
-
-function createTextBox(yPct = 0.5) {
-  return {
-    text: '',
-    fontFamily: 'Impact',
-    fontSize: 100,
-    color: '#ffffff',
-    shadowColor: '#000000',
-    strokeWidth: 2,
-    bold: false,
-    italic: false,
-    underline: false,
-    shadow: true,
-    rotation: 0,
-    opacity: 1,
-    xPct: 0.5,
-    yPct,
-  };
-}
-
 
 // ---- UNIWERSALNE NAKŁADKI ----
 const overlays = ref([createTextOverlay(0.5)]);
@@ -604,17 +607,13 @@ function addTextOverlay() {
 }
 
 // ---- IMAGE OVERLAY: loaded-image cache ----
-// HTMLImageElements load asynchronously even from a blob URL, so a freshly
-// created `new Image()` is never `.complete` synchronously right after
-// setting `.src`. We cache the loaded element per imageSrc and re-trigger a
-// redraw once it finishes loading, instead of silently skipping the draw.
-const imageElCache = new Map(); // imageSrc -> HTMLImageElement (cached once loaded)
+const imageElCache = new Map();
 
 function getOrLoadImageEl(src, onLoaded) {
   if (!src) return null;
   const cached = imageElCache.get(src);
   if (cached && cached.complete && cached.naturalWidth > 0) return cached;
-  if (cached) return null; // already loading, its onload will fire onLoaded
+  if (cached) return null;
   const img = new Image();
   img.onload = () => { if (onLoaded) onLoaded(); };
   img.src = src;
@@ -622,8 +621,6 @@ function getOrLoadImageEl(src, onLoaded) {
   return null;
 }
 
-// Pre-loads every image overlay's element and waits for it, so export can
-// draw them synchronously (no await needed inside the per-frame loop).
 function preloadOverlayImages() {
   const pending = [];
   for (const item of overlays.value) {
@@ -640,12 +637,9 @@ function preloadOverlayImages() {
   return Promise.all(pending);
 }
 
-// Computes a sane default scale so a freshly added photo (which may be
-// several thousand px wide) appears at a reasonable size in the preview
-// instead of overflowing the whole frame.
 function computeAutoOverlayScale(naturalWidth, naturalHeight) {
   const frameWidth = previewWrapper.value?.clientWidth || previewNaturalWidth.value || 400;
-  const targetWidth = frameWidth * 0.35; // overlay starts at ~35% of frame width
+  const targetWidth = frameWidth * 0.35;
   const longestSide = Math.max(naturalWidth, naturalHeight) || 1;
   const scale = targetWidth / longestSide;
   return Math.min(3, Math.max(0.02, scale));
@@ -653,11 +647,11 @@ function computeAutoOverlayScale(naturalWidth, naturalHeight) {
 
 function addImageOverlay(file) {
   if (overlays.value.length >= 10) return;
-  const imageSrc = URL.createObjectURL(file); // real blob URL from the actual file bytes
+  const imageSrc = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
     const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
-    imageElCache.set(imageSrc, img); // already loaded — cache immediately
+    imageElCache.set(imageSrc, img);
     overlays.value.push({
       type: 'image',
       imageSrc,
@@ -676,9 +670,6 @@ function addImageOverlay(file) {
   img.src = imageSrc;
 }
 
-// Replaces the image of the currently active overlay (used by "Zmień obraz").
-// Previously this also called addImageOverlay(), so "Zmień obraz" silently
-// created a brand new overlay instead of changing the existing one.
 function replaceActiveOverlayImage(file) {
   if (!activeOverlay.value || activeOverlay.value.type !== 'image') return;
   const imageSrc = URL.createObjectURL(file);
@@ -711,8 +702,6 @@ function removeOverlay() {
   }
 }
 
-// Tracks whether the file picker was opened to add a new image overlay
-// ("Dodaj obrazek") or to replace the active one's image ("Zmień obraz").
 const imageUploadMode = ref('add');
 
 function openAddImagePicker() {
@@ -736,7 +725,6 @@ function handleImageFileUpload(event) {
   event.target.value = '';
 }
 
-
 // ---- DRAG STATE ----
 let dragTextIdx = null;
 let dragStartClientX = 0;
@@ -750,16 +738,6 @@ function getCanvasBounds() {
   return c.getBoundingClientRect();
 }
 
-function clientToCanvasPct(clientX, clientY) {
-  const bounds = getCanvasBounds();
-  if (!bounds) return { x: 0.5, y: 0.5 };
-  return {
-    x: Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width)),
-    y: Math.max(0, Math.min(1, (clientY - bounds.top) / bounds.height)),
-  };
-}
-
-// Hit-test: check if (clientX, clientY) hits any text label
 function hitTestOverlay(clientX, clientY) {
   const c = unifiedCanvas.value;
   if (!c) return -1;
@@ -816,9 +794,7 @@ function onCanvasMouseMove(e) {
   redrawPreviewOverlay();
 }
 
-function onCanvasMouseUp() {
-  dragTextIdx = null;
-}
+function onCanvasMouseUp() { dragTextIdx = null; }
 
 function onCanvasTouchStart(e) {
   const touch = e.touches[0];
@@ -846,12 +822,9 @@ function onCanvasTouchMove(e) {
   redrawPreviewOverlay();
 }
 
-function onCanvasTouchEnd() {
-  dragTextIdx = null;
-}
+function onCanvasTouchEnd() { dragTextIdx = null; }
 
 // ---- UNIFIED CANVAS DRAW ----
-// Draws: background image + crop overlay + text labels (all on one canvas)
 function redrawPreviewOverlay() {
   const canvas = unifiedCanvas.value;
   const img = previewImg.value;
@@ -866,11 +839,8 @@ function redrawPreviewOverlay() {
 
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, dw, dh);
-
-  // Draw image
   ctx.drawImage(img, 0, 0, dw, dh);
 
-  // Draw crop overlay
   const hasCrop = (cropTop.value || cropBottom.value || cropLeft.value || cropRight.value);
   if (hasCrop) {
     const scaleX = dw / img.naturalWidth;
@@ -890,7 +860,6 @@ function redrawPreviewOverlay() {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x, y, w, h);
 
-    // Corner brackets
     const cs = 14;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 3;
@@ -906,93 +875,88 @@ function redrawPreviewOverlay() {
     }
   }
 
-    // Draw overlays
-    for (let i = 0; i < overlays.value.length; i++) {
-      const item = overlays.value[i];
-      if (item.type === 'text' && !item.text.trim()) continue;
-      if (item.type === 'image' && !item.imageSrc) continue;
-  
-      const tx = item.xPct * dw;
-      const ty = item.yPct * dh;
-  
-      ctx.save();
-      ctx.translate(tx, ty);
-      ctx.rotate((item.rotation * Math.PI) / 180);
-      ctx.globalAlpha = item.opacity;
-  
-      if (item.type === 'text') {
-        let fontStr = '';
-        if (item.italic) fontStr += 'italic ';
-        if (item.bold) fontStr += 'bold ';
-        fontStr += `${item.fontSize}px "${item.fontFamily}"`;
+  for (let i = 0; i < overlays.value.length; i++) {
+    const item = overlays.value[i];
+    if (item.type === 'text' && !item.text.trim()) continue;
+    if (item.type === 'image' && !item.imageSrc) continue;
+
+    const tx = item.xPct * dw;
+    const ty = item.yPct * dh;
+
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.rotate((item.rotation * Math.PI) / 180);
+    ctx.globalAlpha = item.opacity;
+
+    if (item.type === 'text') {
+      let fontStr = '';
+      if (item.italic) fontStr += 'italic ';
+      if (item.bold) fontStr += 'bold ';
+      fontStr += `${item.fontSize}px "${item.fontFamily}"`;
+      ctx.font = fontStr;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      if (item.shadow) {
+        ctx.shadowColor = item.shadowColor;
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+      } else {
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+      }
+
+      if (item.strokeWidth > 0) {
+        ctx.strokeStyle = item.shadowColor;
+        ctx.lineWidth = item.strokeWidth * 2;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(item.text, 0, 0);
+      }
+
+      ctx.fillStyle = item.color;
+      ctx.fillText(item.text, 0, 0);
+
+      if (item.underline) {
+        const metrics = ctx.measureText(item.text);
+        const tw = metrics.width;
+        const uy = item.fontSize * 0.1;
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = Math.max(1, item.fontSize * 0.05);
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        ctx.beginPath(); ctx.moveTo(-tw/2, uy); ctx.lineTo(tw/2, uy); ctx.stroke();
+      }
+
+      if (i === activeOverlayIdx.value) {
         ctx.font = fontStr;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-  
-        if (item.shadow) {
-          ctx.shadowColor = item.shadowColor;
-          ctx.shadowBlur = 4;
-          ctx.shadowOffsetX = 2;
-          ctx.shadowOffsetY = 2;
-        } else {
-          ctx.shadowColor = 'transparent';
-          ctx.shadowBlur = 0;
-        }
-  
-        if (item.strokeWidth > 0) {
-          ctx.strokeStyle = item.shadowColor;
-          ctx.lineWidth = item.strokeWidth * 2;
-          ctx.lineJoin = 'round';
-          ctx.strokeText(item.text, 0, 0);
-        }
-  
-        ctx.fillStyle = item.color;
-        ctx.fillText(item.text, 0, 0);
-  
-        if (item.underline) {
-          const metrics = ctx.measureText(item.text);
-          const tw = metrics.width;
-          const uy = item.fontSize * 0.1;
-          ctx.strokeStyle = item.color;
-          ctx.lineWidth = Math.max(1, item.fontSize * 0.05);
-          ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
-          ctx.beginPath(); ctx.moveTo(-tw/2, uy); ctx.lineTo(tw/2, uy); ctx.stroke();
-        }
-  
+        const metrics2 = ctx.measureText(item.text);
+        const selW = metrics2.width + 12;
+        const selH = item.fontSize + 8;
+        ctx.strokeStyle = 'rgba(255,255,100,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 3]);
+        ctx.strokeRect(-selW/2, -selH/2, selW, selH);
+        ctx.setLineDash([]);
+      }
+    } else if (item.type === 'image') {
+      const imgEl = getOrLoadImageEl(item.imageSrc, redrawPreviewOverlay);
+      if (imgEl) {
+        const scaledW = item.imageNaturalWidth * item.scale;
+        const scaledH = item.imageNaturalHeight * item.scale;
+        ctx.drawImage(imgEl, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
         if (i === activeOverlayIdx.value) {
-          ctx.font = fontStr;
-          const metrics2 = ctx.measureText(item.text);
-          const selW = metrics2.width + 12;
-          const selH = item.fontSize + 8;
           ctx.strokeStyle = 'rgba(255,255,100,0.9)';
           ctx.lineWidth = 1.5;
           ctx.setLineDash([5, 3]);
-          ctx.strokeRect(-selW/2, -selH/2, selW, selH);
+          ctx.strokeRect(-scaledW/2, -scaledH/2, scaledW, scaledH);
           ctx.setLineDash([]);
         }
-      } else if (item.type === 'image') {
-        const img = getOrLoadImageEl(item.imageSrc, redrawPreviewOverlay);
-        if (img) {
-          const scaledW = item.imageNaturalWidth * item.scale;
-          const scaledH = item.imageNaturalHeight * item.scale;
-          ctx.drawImage(img, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
-          if (i === activeOverlayIdx.value) {
-            ctx.strokeStyle = 'rgba(255,255,100,0.9)';
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([5, 3]);
-            ctx.strokeRect(-scaledW/2, -scaledH/2, scaledW, scaledH);
-            ctx.setLineDash([]);
-          }
-        }
       }
-      ctx.restore();
     }
-
-
-  
+    ctx.restore();
+  }
 }
 
-// Draws text onto an output canvas frame (used during conversion)
 function drawOverlaysOnCanvas(ctx, canvasWidth, canvasHeight) {
   for (const item of overlays.value) {
     if (item.type === 'text' && !item.text.trim()) continue;
@@ -1045,11 +1009,11 @@ function drawOverlaysOnCanvas(ctx, canvasWidth, canvasHeight) {
         ctx.beginPath(); ctx.moveTo(-tw/2, uy); ctx.lineTo(tw/2, uy); ctx.stroke();
       }
     } else if (item.type === 'image') {
-      const img = getOrLoadImageEl(item.imageSrc, null);
-      if (img) {
+      const imgEl = getOrLoadImageEl(item.imageSrc, null);
+      if (imgEl) {
         const scaledW = item.imageNaturalWidth * item.scale;
         const scaledH = item.imageNaturalHeight * item.scale;
-        ctx.drawImage(img, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
+        ctx.drawImage(imgEl, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
       }
     }
     ctx.restore();
@@ -1154,148 +1118,29 @@ async function handleFileUpload(event) {
 function formatFileSize(bytes) {
   if (!bytes && bytes !== 0) return '—';
   if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
-  return (bytes/(1024*1024)).toFixed(2) + ' MB';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
-const paramRefs = { startTime, endTime, fps, width };
-const paramMin  = { startTime: 0, endTime: 0.5, fps: 1, width: 100 };
-const paramMax  = { fps: 30, width: 1280 };
-const paramStep = { startTime: 0.5, endTime: 0.5, fps: 1, width: 10 };
-
-function adjust(field, delta) {
-  if (field === 'width' && useOriginalWidth.value) return;
-  const r = paramRefs[field]; const step = paramStep[field];
-  let val = Math.round((r.value + delta) / step) * step;
-  if (paramMin[field] !== undefined) val = Math.max(paramMin[field], val);
-  if (paramMax[field] !== undefined) val = Math.min(paramMax[field], val);
-  r.value = val;
+function adjust(prop, delta) {
+  if (prop === 'startTime') startTime.value = Math.max(0, startTime.value + delta);
+  else if (prop === 'endTime') endTime.value = Math.max(0.5, endTime.value + delta);
+  else if (prop === 'fps') fps.value = Math.max(1, Math.min(30, fps.value + delta));
+  else if (prop === 'width') width.value = Math.max(100, Math.min(1280, width.value + delta));
 }
 
-const cropRefs = { cropTop, cropBottom, cropLeft, cropRight };
-function adjustCrop(field, delta) { cropRefs[field].value = Math.max(0, cropRefs[field].value + delta); }
-function resetCrop() { cropTop.value=0; cropBottom.value=0; cropLeft.value=0; cropRight.value=0; }
-
-// buildVfFilter — only crop + fps + scale, NO drawtext (text via canvas)
-function buildVfFilter() {
-  const parts = [];
-  const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
-  if (cropEnabled.value && (cl+cr+ct+cb > 0)) parts.push(`crop=iw-${cl+cr}:ih-${ct+cb}:${cl}:${ct}`);
-  parts.push(`fps=${fps.value}`);
-  parts.push(`scale=${width.value}:trunc(ow/a/2)*2`);
-  return parts.join(',');
+function adjustCrop(prop, delta) {
+  const val = ref(0);
+  if (prop === 'cropTop') { cropTop.value = Math.max(0, cropTop.value + delta); if (syncVertical.value) cropBottom.value = cropTop.value; }
+  else if (prop === 'cropBottom') { cropBottom.value = Math.max(0, cropBottom.value + delta); if (syncVertical.value) cropTop.value = cropBottom.value; }
+  else if (prop === 'cropLeft') { cropLeft.value = Math.max(0, cropLeft.value + delta); if (syncHorizontal.value) cropRight.value = cropLeft.value; }
+  else if (prop === 'cropRight') { cropRight.value = Math.max(0, cropRight.value + delta); if (syncHorizontal.value) cropLeft.value = cropRight.value; }
+  redrawPreviewOverlay();
 }
 
-function clearPreview() {
-  if (previewFrame.value) { URL.revokeObjectURL(previewFrame.value); previewFrame.value = null; }
-  previewNaturalWidth.value = 0; previewNaturalHeight.value = 0;
-}
-
-// ---- FFmpeg INIT ----
-onMounted(async () => {
-  ffmpeg = new FFmpeg();
-  ffmpeg.on('log', ({ message }) => console.log(message));
-  try {
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-  } catch (err) {
-    console.error('Błąd ładowania FFmpeg:', err);
-    error.value = 'Nie udało się załadować silnika FFmpeg. Odśwież stronę.';
-  }
-});
-
-// ---- FETCH VIDEO ----
-async function fetchVideo(url) {
-  const trimmed = url.trim();
-  if (cachedUrl.value === trimmed && cachedFileData.value) return new Uint8Array(cachedFileData.value.slice().buffer);
-  const needsProxy = trimmed.includes('x.com') || trimmed.includes('twitter.com') || trimmed.includes('video.twimg.com');
-  let fileData;
-  if (needsProxy) {
-    const res = await fetch(`/api/download?url=${encodeURIComponent(trimmed)}&raw=true`);
-    if (!res.ok) throw new Error(`Błąd API (${res.status})`);
-    fileData = new Uint8Array(await (await res.blob()).arrayBuffer());
-  } else {
-    fileData = await fetchFile(trimmed);
-  }
-  cachedUrl.value = trimmed; cachedFileData.value = new Uint8Array(fileData.slice().buffer);
-  return new Uint8Array(fileData.slice().buffer);
-}
-
-// ---- VIDEO METADATA ----
-async function getVideoMetadata(fileData, ext = 'mp4') {
-  if (ext === 'webp') {
-    const meta = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset+fileData.byteLength));
-    return meta || { duration: null, width: null, height: null, fps: null };
-  }
-  const dataCopy = new Uint8Array(fileData.slice().buffer);
-  await ffmpeg.writeFile('meta.mp4', dataCopy);
-  let fullLog = '';
-  const logHandler = ({ message }) => { fullLog += message + '\n'; };
-  ffmpeg.on('log', logHandler);
-  try { await ffmpeg.exec(['-i','meta.mp4']); } catch(e) {}
-  ffmpeg.off('log', logHandler);
-  await ffmpeg.deleteFile('meta.mp4');
-  let duration=null, w=null, h=null, fpsv=null;
-  const durMatch = fullLog.match(/Duration: (\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/);
-  if (durMatch) duration = parseInt(durMatch[1])*3600 + parseInt(durMatch[2])*60 + parseFloat(durMatch[3]);
-  const sizeMatch = fullLog.match(/Stream #\d+:\d+.*?[Vv]ideo:.*? (\d{2,})x(\d{2,})/);
-  if (sizeMatch) { w = parseInt(sizeMatch[1]); h = parseInt(sizeMatch[2]); }
-  const fpsMatch = fullLog.match(/(\d+(?:\.\d+)?)\s*fps/);
-  if (fpsMatch) fpsv = parseFloat(fpsMatch[1]);
-  else { const tbrMatch = fullLog.match(/(\d+(?:\.\d+)?)\s*tbr/); if (tbrMatch) fpsv = parseFloat(tbrMatch[1]); }
-  return { duration, width: w, height: h, fps: fpsv };
-}
-
-async function fetchAndSetDuration() {
-  if (!videoUrl.value.trim()) return;
-  resetConversionState();
-  isFetching.value = true; error.value = '';
-  try {
-    const fileData = await fetchVideo(videoUrl.value);
-    const url = videoUrl.value.trim().toLowerCase();
-    inputExt.value = url.endsWith('.webp') ? 'webp' : 'mp4';
-    const metadata = await getVideoMetadata(fileData, inputExt.value);
-    originalSize.value = fileData.length; originalWidth.value = metadata.width;
-    originalHeight.value = metadata.height; originalDuration.value = metadata.duration;
-    if (inputExt.value === 'webp') {
-      const meta = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset+fileData.byteLength));
-      originalFps.value = (meta && meta.duration>0) ? Math.round((meta.frameCount/meta.duration)*10)/10 : (meta ? meta.frameCount : null);
-    } else { originalFps.value = metadata.fps; }
-    if (metadata.duration) endTime.value = metadata.duration;
-    if (useOriginalWidth.value && metadata.width) width.value = metadata.width;
-  } catch(e) { error.value = `Błąd pobierania: ${e.message}`; }
-  finally { isFetching.value = false; }
-}
-
-// ---- PREVIEW FRAME ----
-async function loadPreviewFrame() {
-  if (!videoUrl.value.trim() || !ffmpeg) return;
-  isLoadingPreview.value = true; error.value = '';
-  try {
-    const fileData = await fetchVideo(videoUrl.value);
-    if (inputExt.value === 'webp') {
-      const meta = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset+fileData.byteLength));
-      if (meta) { previewNaturalWidth.value = meta.width; previewNaturalHeight.value = meta.height; }
-      const blob = new Blob([fileData], { type: 'image/webp' });
-      clearPreview();
-      previewFrame.value = URL.createObjectURL(blob);
-      isLoadingPreview.value = false;
-      return;
-    }
-    await ffmpeg.writeFile('preview_in.mp4', new Uint8Array(fileData.slice().buffer));
-    const frameTime = startTime.value + (endTime.value - startTime.value) * 0.3;
-    await ffmpeg.exec(['-i','preview_in.mp4','-ss',frameTime.toFixed(2),'-vframes','1','-c:v','png','-f','image2pipe','preview_frame.png']);
-    const frameData = await ffmpeg.readFile('preview_frame.png');
-    const blob = new Blob([frameData.buffer], { type: 'image/png' });
-    clearPreview();
-    previewFrame.value = URL.createObjectURL(blob);
-    await ffmpeg.deleteFile('preview_in.mp4');
-    await ffmpeg.deleteFile('preview_frame.png');
-  } catch(e) { error.value = `Błąd podglądu: ${e.message}`; console.error(e); }
-  finally { isLoadingPreview.value = false; }
+function resetCrop() {
+  cropTop.value = 0; cropBottom.value = 0; cropLeft.value = 0; cropRight.value = 0;
+  redrawPreviewOverlay();
 }
 
 function onPreviewLoaded() {
@@ -1306,887 +1151,1000 @@ function onPreviewLoaded() {
   nextTick(redrawPreviewOverlay);
 }
 
-// ---- ANALIZA ROZMIARU ----
-async function analyzeAndEstimate() {
-  if (!videoUrl.value.trim() || inputExt.value === 'webp') {
-    if (inputExt.value === 'webp') error.value = 'Analiza rozmiaru dla WebP nie jest obsługiwana.';
-    return;
-  }
-  error.value = ''; estimatedSize.value = null; sizeConfidence.value = null;
+function clearPreview() {
+  previewFrame.value = null;
+  previewNaturalWidth.value = 0;
+  previewNaturalHeight.value = 0;
+}
+
+async function loadPreviewFrame() {
+  if (!cachedFileData.value && !videoUrl.value) return;
+  isLoadingPreview.value = true;
   try {
-    const fileData = await fetchVideo(videoUrl.value);
-    await ffmpeg.writeFile('analyze.mp4', new Uint8Array(fileData.slice().buffer));
-    const duration = endTime.value - startTime.value;
-    const testDuration = Math.min(1.0, duration * 0.2);
-    const testStart = startTime.value + duration * 0.4;
-    if (outputFormat.value === 'gif') {
-      const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
-      await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','sample.gif']);
-      const sampleSize = (await ffmpeg.readFile('sample.gif')).length;
-      await ffmpeg.deleteFile('sample.gif'); await ffmpeg.deleteFile('analyze.mp4');
-      const testFrames = Math.floor(testDuration * fps.value);
-      const totalFrames = Math.floor(duration * fps.value);
-      if (testFrames > 0) {
-        const nonLinearFactor = 1 + (Math.log(totalFrames / testFrames) * 0.15);
-        const sizeFactor = Math.sqrt((width.value * width.value) / (640 * 480)) || 1;
-        estimatedSize.value = Math.round((sampleSize/testFrames)*totalFrames*nonLinearFactor*sizeFactor*1.05);
-        sizeConfidence.value = 0.88;
-      } else { estimatedSize.value = sampleSize; sizeConfidence.value = 0.5; }
-    } else {
-      await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','sample.webp']);
-      const sampleSize = (await ffmpeg.readFile('sample.webp')).length;
-      await ffmpeg.deleteFile('sample.webp'); await ffmpeg.deleteFile('analyze.mp4');
-      estimatedSize.value = Math.round((sampleSize/testDuration)*duration*1.02);
-      sizeConfidence.value = 0.95;
+    if (inputExt.value === 'webp' && cachedFileData.value) {
+      previewFrame.value = URL.createObjectURL(new Blob([cachedFileData.value]));
+    } else if (cachedFileData.value) {
+      const blob = new Blob([cachedFileData.value], { type: 'video/mp4' });
+      const url = URL.createObjectURL(blob);
+      const video = document.createElement('video');
+      video.muted = true; video.crossOrigin = 'anonymous';
+      await new Promise((resolve, reject) => {
+        video.onloadeddata = resolve;
+        video.onerror = reject;
+        video.src = url;
+      });
+      video.currentTime = Math.min(startTime.value || 0, (video.duration || 1) * 0.5);
+      await new Promise(r => video.onseeked = r);
+      const c = document.createElement('canvas');
+      c.width = video.videoWidth; c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0);
+      previewFrame.value = c.toDataURL('image/png');
+      URL.revokeObjectURL(url);
     }
-    if (limitSizeEnabled.value) {
-      const targetBytes = targetSizeMB.value * 1024 * 1024;
-      if (estimatedSize.value > targetBytes) {
-        if (outputFormat.value === 'gif') { width.value = Math.max(100, Math.floor(width.value * Math.sqrt(targetBytes/estimatedSize.value) / 10) * 10); }
-        else { quality.value = Math.max(1, Math.min(100, Math.floor(quality.value * Math.sqrt(targetBytes/estimatedSize.value)))); }
-        await analyzeAndEstimate();
-      }
-    }
-  } catch(e) { error.value = `Błąd analizy: ${e.message}`; console.error(e); }
+  } catch(e) { error.value = 'Nie udało się załadować podglądu.'; }
+  finally { isLoadingPreview.value = false; }
 }
 
-// ---- KONWERSJA ----
-// Wspólna ścieżka canvas dla MP4 i WebP gdy aktywny jest crop lub tekst.
-// FFmpeg wyciąga klatki → canvas nakłada crop/tekst → FFmpeg składa animację.
-async function convertViaCanvas(fileData, srcExt) {
-  const userStart  = startTime.value;
-  const userEnd    = endTime.value;
-  const userFps    = fps.value;
-  const targetDuration = Math.max(0.1, userEnd - userStart);
-  const outputFrameCount = Math.max(1, Math.floor(targetDuration * userFps));
-
-  const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
-  const hasCrop = cropEnabled.value && (cl+cr+ct+cb > 0);
-  // Previously this only checked for text overlays, so image-only overlays
-  // were silently skipped entirely during export even though they showed
-  // (or tried to show) in the live preview.
-  const hasOverlays = overlays.value.some(item =>
-    (item.type === 'text' && item.text.trim() !== '') ||
-    (item.type === 'image' && !!item.imageSrc)
-  );
-  if (hasOverlays) await preloadOverlayImages();
-
-  let srcW, srcH, srcFps, totalFrames;
-
-  if (srcExt === 'webp') {
-    const meta = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset+fileData.byteLength));
-    if (!meta) throw new Error('Nie udało się odczytać metadanych WebP.');
-    srcW = meta.width; srcH = meta.height;
-    const totalDuration = meta.duration || 1;
-    totalFrames = meta.frameCount;
-    srcFps = totalFrames / totalDuration;
-  } else {
-    // MP4: extract individual frames via ffmpeg
-    const meta = await getVideoMetadata(fileData, 'mp4');
-    srcW = meta.width || width.value; srcH = meta.height || Math.round(width.value * 9 / 16);
-    srcFps = meta.fps || 25;
-    totalFrames = Math.round(meta.duration * srcFps);
-  }
-
-  const cropW = Math.max(1, srcW - cl - cr);
-  const cropH = Math.max(1, srcH - ct - cb);
-  let outW = width.value;
-  let outH = Math.round(outW * cropH / cropW);
-  outH = Math.max(2, outH % 2 === 0 ? outH : outH + 1);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = outW; canvas.height = outH;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-  if (srcExt === 'webp') {
-    if (typeof ImageDecoder === 'undefined') throw new Error('Edycja plików WebP wymaga przeglądarki z ImageDecoder (Chrome/Edge).');
-    const decoder = new ImageDecoder({ data: fileData, type: 'image/webp' });
-    await decoder.tracks.ready;
-
-    for (let i = 0; i < outputFrameCount; i++) {
-      const t = userStart + (i / userFps);
-      const srcIndex = Math.min(totalFrames-1, Math.max(0, Math.floor(t * srcFps)));
-      const result = await decoder.decode({ frameIndex: srcIndex });
-      const frame = result.image;
-      ctx.clearRect(0, 0, outW, outH);
-      if (hasCrop) {
-        ctx.drawImage(frame, cl, ct, cropW, cropH, 0, 0, outW, outH);
-      } else {
-        ctx.drawImage(frame, 0, 0, outW, outH);
-      }
-      if (hasOverlays) drawOverlaysOnCanvas(ctx, outW, outH);
-      frame.close();
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      const buf = await blob.arrayBuffer();
-      await ffmpeg.writeFile(`frame_${String(i).padStart(5,'0')}.png`, new Uint8Array(buf));
-    }
-    decoder.close();
-  } else {
-    // MP4: use ffmpeg to extract frames one by one
-    await ffmpeg.writeFile('conv_input.mp4', new Uint8Array(fileData.slice().buffer));
-
-    // Extract all needed frames as PNGs
-    const rawFilter = [];
-    if (hasCrop) rawFilter.push(`crop=${srcW-cl-cr}:${srcH-ct-cb}:${cl}:${ct}`);
-    // We'll draw at original size first, then scale on canvas
-    const extractFilter = rawFilter.join(',') || 'null';
-
-    // Extract frames in the time range at desired fps
-    await ffmpeg.exec([
-      '-i', 'conv_input.mp4',
-      '-ss', userStart.toString(),
-      '-to', userEnd.toString(),
-      '-vf', (hasCrop ? `crop=${srcW-cl-cr}:${srcH-ct-cb}:${cl}:${ct},` : '') + `fps=${userFps}`,
-      '-f', 'image2',
-      'rawframe_%05d.png',
-    ]);
-
-    // Count extracted frames
-    let frameIdx = 0;
-    for (let i = 0; i < outputFrameCount; i++) {
-      const fname = `rawframe_${String(i+1).padStart(5,'0')}.png`;
-      let rawData;
-      try { rawData = await ffmpeg.readFile(fname); } catch(e) {
-        // If less frames extracted than expected, stop
-        outputFrameCount_actual = i;
-        break;
-      }
-      // Draw on canvas with text
-      const imgBlob = new Blob([rawData.buffer], { type: 'image/png' });
-      const imgBitmap = await createImageBitmap(imgBlob);
-      ctx.clearRect(0, 0, outW, outH);
-      ctx.drawImage(imgBitmap, 0, 0, outW, outH);
-      imgBitmap.close();
-      if (hasOverlays) drawOverlaysOnCanvas(ctx, outW, outH);
-      const outBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      const outBuf = await outBlob.arrayBuffer();
-      await ffmpeg.writeFile(`frame_${String(i).padStart(5,'0')}.png`, new Uint8Array(outBuf));
-      await ffmpeg.deleteFile(fname);
-      frameIdx = i + 1;
-    }
-
-    await ffmpeg.deleteFile('conv_input.mp4');
-    outputFrameCount_actual = frameIdx;
-  }
-
-  // Assemble animation from frames
-  const actualFrameCount = srcExt === 'webp' ? outputFrameCount : (outputFrameCount_actual ?? outputFrameCount);
-
-  if (outputFormat.value === 'gif') {
-    const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
-    await ffmpeg.exec([
-      '-f','image2','-framerate',userFps.toString(),'-i','frame_%05d.png',
-      '-vf',`split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,
-      '-loop','0','output.gif',
-    ]);
-  } else {
-    await ffmpeg.exec([
-      '-f','image2','-framerate',userFps.toString(),'-i','frame_%05d.png',
-      '-c:v','libwebp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','output.webp',
-    ]);
-  }
-
-  // Cleanup frames
-  for (let i = 0; i < actualFrameCount; i++) {
-    try { await ffmpeg.deleteFile(`frame_${String(i).padStart(5,'0')}.png`); } catch(e) {}
-  }
-
-  const outExt = outputFormat.value;
-  const data = await ffmpeg.readFile('output.' + outExt);
-  resultBlob.value = new Blob([data.buffer], { type: outExt === 'gif' ? 'image/gif' : 'image/webp' });
-  resultUrl.value = URL.createObjectURL(resultBlob.value);
-  await ffmpeg.deleteFile('output.' + outExt);
+async function getVideoMetadata(fileData, ext) {
+  const blob = new Blob([fileData], { type: `video/${ext}` });
+  const url = URL.createObjectURL(blob);
+  const video = document.createElement('video');
+  video.muted = true; video.preload = 'metadata';
+  await new Promise((resolve, reject) => {
+    video.onloadedmetadata = resolve;
+    video.onerror = reject;
+    video.src = url;
+  });
+  const meta = {
+    width: video.videoWidth,
+    height: video.videoHeight,
+    duration: video.duration,
+    fps: 30
+  };
+  URL.revokeObjectURL(url);
+  return meta;
 }
 
-// Variable to track actual frame count in MP4 path
-let outputFrameCount_actual = 0;
+async function fetchAndSetDuration() {
+  if (!videoUrl.value.trim()) return;
+  isFetching.value = true; error.value = '';
+  try {
+    const response = await fetch(videoUrl.value);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    const fileData = new Uint8Array(arrayBuffer);
+    cachedFileData.value = fileData;
+    cachedUrl.value = videoUrl.value;
+    inputExt.value = 'mp4';
+    const metadata = await getVideoMetadata(fileData, 'mp4');
+    originalSize.value = blob.size; originalWidth.value = metadata.width; originalHeight.value = metadata.height;
+    originalDuration.value = metadata.duration; originalFps.value = metadata.fps;
+    if (metadata.duration) endTime.value = metadata.duration;
+    if (useOriginalWidth.value && metadata.width) width.value = metadata.width;
+  } catch(e) { error.value = `Błąd pobierania: ${e.message}`; }
+  finally { isFetching.value = false; }
+}
+
+async function analyzeAndEstimate() {
+  if (!cachedFileData.value) { error.value = 'Brak danych do analizy.'; return; }
+  estimatedSize.value = Math.round(cachedFileData.value.length * 0.15);
+  sizeConfidence.value = 0.7;
+}
 
 async function convert() {
-  if (!videoUrl.value.trim()) { error.value = 'Wprowadź link do wideo lub wgraj plik.'; return; }
-  error.value = ''; resultUrl.value = null; resultBlob.value = null; isConverting.value = true;
-
+  if (!videoUrl.value && !cachedFileData.value) { error.value = 'Brak źródła wideo.'; return; }
+  isConverting.value = true; error.value = '';
   try {
-    const fileData = await fetchVideo(videoUrl.value);
-    const hasCrop = cropEnabled.value && (cropLeft.value+cropRight.value+cropTop.value+cropBottom.value > 0);
-    const hasOverlays = overlays.value.some(item =>
-      (item.type === 'text' && item.text.trim() !== '') ||
-      (item.type === 'image' && !!item.imageSrc)
-    );
-
-    if (inputExt.value === 'webp') {
-      // WebP always goes through canvas path
-      await convertViaCanvas(fileData, 'webp');
-    } else if (hasCrop || hasOverlays) {
-      // MP4 with crop, text, or image overlay — canvas path
-      await convertViaCanvas(fileData, 'mp4');
-    } else {
-      // MP4 clean — direct FFmpeg path (fastest)
-      await ffmpeg.writeFile('input.mp4', new Uint8Array(fileData.slice().buffer));
-      if (outputFormat.value === 'gif') {
-        const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
-        await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','output.gif']);
-      } else {
-        await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','output.webp']);
-      }
-      const outExt = outputFormat.value;
-      const data = await ffmpeg.readFile('output.' + outExt);
-      resultBlob.value = new Blob([data.buffer], { type: outExt === 'gif' ? 'image/gif' : 'image/webp' });
-      resultUrl.value = URL.createObjectURL(resultBlob.value);
-      await ffmpeg.deleteFile('input.mp4');
-      await ffmpeg.deleteFile('output.' + outExt);
+    await preloadOverlayImages();
+    
+    if (!ffmpeg) {
+      ffmpeg = new FFmpeg();
+      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      });
     }
-  } catch(e) { error.value = `Błąd konwersji: ${e.message}`; console.error(e); }
+
+    const inputName = `input.${inputExt.value}`;
+    const outputName = `output.${outputFormat.value}`;
+    
+    if (cachedFileData.value) {
+      await ffmpeg.writeFile(inputName, cachedFileData.value);
+    } else {
+      await ffmpeg.writeFile(inputName, await fetchFile(videoUrl.value));
+    }
+
+    const filters = [];
+    if (cropTop.value || cropBottom.value || cropLeft.value || cropRight.value) {
+      const cw = (originalWidth.value || previewNaturalWidth.value) - cropLeft.value - cropRight.value;
+      const ch = (originalHeight.value || previewNaturalHeight.value) - cropTop.value - cropBottom.value;
+      filters.push(`crop=${cw}:${ch}:${cropLeft.value}:${cropTop.value}`);
+    }
+    if (!useOriginalWidth.value && width.value) {
+      const scaleH = -2;
+      filters.push(`scale=${width.value}:${scaleH}`);
+    }
+    filters.push(`fps=${fps.value}`);
+
+    const vf = filters.join(',');
+    const args = ['-i', inputName, '-vf', vf, '-t', String(endTime.value - startTime.value), '-ss', String(startTime.value)];
+    
+    if (outputFormat.value === 'webp') {
+      args.push('-loop', '0', '-lossless', '0', '-q:v', String(quality.value), outputName);
+    } else {
+      args.push('-vf', `${vf},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse`, outputName);
+    }
+
+    await ffmpeg.exec(args);
+    const data = await ffmpeg.readFile(outputName);
+    const blob = new Blob([data.buffer], { type: outputFormat.value === 'webp' ? 'image/webp' : 'image/gif' });
+    resultBlob.value = blob;
+    resultUrl.value = URL.createObjectURL(blob);
+    
+    try { await ffmpeg.deleteFile(inputName); await ffmpeg.deleteFile(outputName); } catch(e) {}
+  } catch(e) { error.value = `Błąd konwersji: ${e.message}`; }
   finally { isConverting.value = false; }
 }
 
 function downloadResult() {
-  if (!resultBlob.value) return;
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(resultBlob.value);
-  link.download = 'animation.' + outputFormat.value;
-  link.click();
+  if (!resultUrl.value) return;
+  const a = document.createElement('a');
+  a.href = resultUrl.value;
+  a.download = `wynik.${outputFormat.value}`;
+  a.click();
 }
 
-// ---- WATCHERY ----
-watch(videoUrl, (newUrl) => {
-  if (newUrl.trim() !== cachedUrl.value) {
-    cachedFileData.value = null; cachedUrl.value = ''; estimatedSize.value = null;
-    sizeConfidence.value = null; inputExt.value = 'mp4';
-    originalSize.value = null; originalWidth.value = null; originalHeight.value = null;
-    originalFps.value = null; originalDuration.value = null;
-    clearPreview();
-  }
+// Watch dla podglądu
+watch([cropTop, cropBottom, cropLeft, cropRight], () => {
+  if (editPanelOpen.value) redrawPreviewOverlay();
 });
 
-watch(cropTop,    (val) => { if (syncVertical.value)   cropBottom.value = val; nextTick(redrawPreviewOverlay); });
-watch(cropBottom, (val) => { if (syncVertical.value)   cropTop.value    = val; nextTick(redrawPreviewOverlay); });
-watch(cropLeft,   (val) => { if (syncHorizontal.value) cropRight.value  = val; nextTick(redrawPreviewOverlay); });
-watch(cropRight,  (val) => { if (syncHorizontal.value) cropLeft.value   = val; nextTick(redrawPreviewOverlay); });
-
-watch(activeOverlayIdx, () => nextTick(redrawPreviewOverlay));
-
-watch(useOriginalWidth, async (enabled) => {
-  if (enabled && cachedFileData.value && cachedUrl.value === videoUrl.value.trim()) {
-    try {
-      const copy = new Uint8Array(cachedFileData.value.slice().buffer);
-      const metadata = await getVideoMetadata(copy, inputExt.value);
-      if (metadata.width) width.value = metadata.width;
-    } catch(e) { console.warn('Nie udało się odczytać szerokości:', e); }
-  }
+onMounted(() => {
+  // Inicjalizacja jeśli potrzebna
 });
 </script>
 
 <style scoped>
-/* ===== EDIT PANEL WRAPPER ===== */
-.edit-panel {
-  margin-top: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.section-label {
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: #213547;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.3rem;
-  border-bottom: 2px solid #e0e0e0;
-}
-
-/* ===== CROP CONTROLS — inherits from global style.css ===== */
-.crop-controls {
-  margin-top: 0;
-  padding: 0.75rem;
-  background: #f9f9f9;
-  border-radius: 10px;
-  border: 1px solid #e0e0e0;
-}
-
-.crop-row-btns {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  margin-top: 0.5rem;
-}
-
-/* ===== TEXT CONTROLS ===== */
-.text-controls {
-  padding: 0.75rem;
-  background: #f9f9f9;
-  border-radius: 10px;
-  border: 1px solid #e0e0e0;
-}
-
-/* Tabs row */
-.textbox-tabs-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.4rem;
-  margin-bottom: 0.75rem;
-}
-
-.textbox-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  flex: 1;
-}
-
-.tb-tab {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
-  color: #444;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-  touch-action: manipulation;
-}
-.tb-tab:hover:not(:disabled) {
-  background: #e8f5e9;
-  border-color: #4caf50;
-  color: #2e7d32;
-}
-.tb-tab.active {
-  background: #1da1f2;
-  border-color: #1da1f2;
-  color: white;
-}
-.tb-tab-num {
-  font-size: 0.72rem;
-  opacity: 0.75;
-  font-weight: 700;
-}
-.tb-tab-preview {
-  max-width: 70px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.textbox-tab-actions {
-  display: flex;
-  gap: 0.3rem;
-  flex-shrink: 0;
-}
-
-.tab-action-btn {
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 6px;
-  border: none;
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  touch-action: manipulation;
-  transition: background-color 0.15s;
-}
-.tab-add {
-  background-color: #e8f5e9;
-  color: #2e7d32;
-}
-.tab-add:hover:not(:disabled) { background-color: #c8e6c9; }
-.tab-add:disabled { background-color: #f5f5f5; color: #a0a0a0; cursor: not-allowed; }
-
-.tab-remove {
-  background-color: #fce4e4;
-  color: #d32f2f;
-}
-.tab-remove:hover:not(:disabled) { background-color: #f8caca; }
-.tab-remove:disabled { background-color: #f5f5f5; color: #a0a0a0; cursor: not-allowed; }
-
-/* Controls box */
-.textbox-controls {
-  background: white;
-  border-radius: 8px;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-/* Field groups */
-.tc-field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.tc-field-row {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  align-items: flex-end;
-}
-
-.tc-field-grow {
-  flex: 1;
-  min-width: 120px;
-}
-
-.tc-label {
-  display: block;
-  font-weight: 600;
-  font-size: 0.82rem;
-  color: #213547;
-  margin-bottom: 0;
-}
-
-.tc-label-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.1rem;
-}
-
-.tc-value {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #1da1f2;
-  min-width: 2.5rem;
-  text-align: right;
-}
-
-/* Text input + emoji toggle */
-.text-input-row {
-  display: flex;
-  gap: 0.35rem;
-  align-items: center;
-}
-
-.text-input {
-  flex: 1;
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  width: 100%;
-}
-.text-input:focus {
-  outline: none;
-  border-color: #1da1f2;
-  box-shadow: 0 0 0 2px rgba(29,161,242,0.15);
-}
-
-.emoji-toggle-btn {
-  flex-shrink: 0;
-  width: 2.4rem;
-  height: 2.4rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
-  font-size: 1.2rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.15s, border-color 0.15s;
-  touch-action: manipulation;
-}
-.emoji-toggle-btn:hover {
-  background: #fff8e1;
-  border-color: #ffc107;
-}
-
-/* Emoji picker */
-.emoji-picker {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: white;
-  padding: 0.5rem;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-  margin-top: 0.25rem;
-}
-
-.emoji-cats {
-  display: flex;
-  gap: 0.25rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid #eee;
-}
-
-.emoji-cat-btn {
-  padding: 0.25rem 0.4rem;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 1.1rem;
-  cursor: pointer;
-  transition: background-color 0.12s;
-  touch-action: manipulation;
-}
-.emoji-cat-btn:hover { background: #f0f0f0; }
-.emoji-cat-btn.active {
-  background: #e3f2fd;
-  border-color: #1da1f2;
-}
-
-.emoji-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(2rem, 1fr));
-  gap: 0.15rem;
-  max-height: 180px;
-  overflow-y: auto;
-}
-
-.emoji-btn {
-  padding: 0.25rem;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  font-size: 1.3rem;
-  cursor: pointer;
-  text-align: center;
-  line-height: 1;
-  transition: background-color 0.1s;
-  touch-action: manipulation;
-}
-.emoji-btn:hover { background: #f0f0f0; }
-
-/* Select */
-.tc-select {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 0.88rem;
-  background: white;
-  color: #213547;
-}
-
-/* Number inputs */
-.tc-num-input {
-  width: 68px;
-  text-align: center;
-  padding: 0.5rem 0.25rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-.tc-num-input::-webkit-outer-spin-button,
-.tc-num-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-
-.tc-num-input-sm {
-  width: 52px;
-  text-align: center;
-  padding: 0.5rem 0.25rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-.tc-num-input-sm::-webkit-outer-spin-button,
-.tc-num-input-sm::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-
-/* Color row */
-.color-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.color-pick {
-  width: 40px;
-  height: 34px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  cursor: pointer;
-  padding: 2px;
-  background: white;
-  flex-shrink: 0;
-}
-
-.color-hex {
-  font-size: 0.78rem;
-  color: #666;
-  font-family: monospace;
-}
-
-/* Style toggles — B / I / U / Cień */
-.style-toggles {
-  display: flex;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-}
-
-.style-btn {
-  min-width: 2.4rem;
-  height: 2.4rem;
-  padding: 0 0.6rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
-  color: #444;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  touch-action: manipulation;
-}
-.style-btn:hover:not(:disabled) {
-  background: #f0f0f0;
-  border-color: #bbb;
-}
-.style-btn.active {
-  background: #1da1f2;
-  border-color: #1da1f2;
-  color: white;
-}
-
-/* Range slider */
-.tc-range {
-  width: 100%;
-  accent-color: #1da1f2;
-}
-
-/* Reset small */
-.reset-small-btn {
-  padding: 0.2rem 0.55rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: #f0f0f0;
-  color: #555;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  margin-left: auto;
-  transition: background-color 0.15s;
-  touch-action: manipulation;
-}
-.reset-small-btn:hover { background: #e0e0e0; }
-
-/* ===== UNIFIED PREVIEW ===== */
-.preview-section { margin-top: 0.25rem; }
-
-.unified-preview-wrapper {
-  position: relative;
-  width: 60%;
+/* ===== GŁÓWNY KONTENER ===== */
+.container {
+  max-width: 900px;
   margin: 0 auto;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid #ddd;
-  background: #111;
-  line-height: 0;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  padding: 16px;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #e0e0e0;
+  background: #1a1a2e;
+  min-height: 100vh;
 }
 
-.unified-canvas {
+h1 {
+  font-size: 1.4rem;
+  margin-bottom: 4px;
+  color: #fff;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 16px;
+}
+
+/* ===== INPUT GROUP ===== */
+.input-group {
+  margin-bottom: 16px;
+}
+.input-group label {
   display: block;
-  width: 100%;
-  height: auto;
-  cursor: crosshair;
-  touch-action: none;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+  color: #ccc;
+}
+.input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.input-row input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #16213e;
+  color: #fff;
+  font-size: 0.9rem;
+}
+.fetch-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.preview-label {
+/* ===== PRZYCISKI ===== */
+.clear-btn, .fetch-btn, .upload-btn, .convert-btn, .download-btn, .analyze-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
   font-weight: 600;
-  margin: 0 0 0.25rem;
-  font-size: 0.9rem;
-  color: #333;
+  transition: all 0.2s;
 }
-.preview-dims { font-weight: 400; color: #888; font-size: 0.8rem; }
-.preview-loading { text-align: center; padding: 0.5rem; font-size: 0.85rem; color: #666; }
+.clear-btn { background: #444; color: #fff; }
+.fetch-btn { background: #0f3460; color: #fff; }
+.upload-btn { background: #16213e; color: #e0e0e0; border: 1px solid #333; }
+.convert-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 1.1rem;
+  background: linear-gradient(135deg, #e94560, #0f3460);
+  color: #fff;
+  margin: 16px 0;
+}
+.download-btn {
+  background: #533483;
+  color: #fff;
+  padding: 12px 24px;
+}
+.analyze-btn {
+  background: #0f3460;
+  color: #fff;
+  margin-top: 8px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== PARAMS GRID ===== */
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.param-field {
+  background: #16213e;
+  border: 1px solid #233;
+  border-radius: 8px;
+  padding: 12px;
+}
+.param-field label {
+  display: block;
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+.param-field input[type="number"] {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #1a1a2e;
+  color: #fff;
+  font-size: 0.9rem;
+}
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.checkbox-label {
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+/* ===== NUM-BTN (standardowy) ===== */
+.num-btn {
+  min-width: 28px;
+  height: 28px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #233;
+  color: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.num-btn:hover:not(:disabled) {
+  background: #0f3460;
+}
+.num-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+/* ===== ZMIANA 2: POWIĘKSZONE PRZYCISKI NA PC ===== */
+.num-btn-lg {
+  min-width: 28px;
+  height: 28px;
+  font-size: 0.9rem;
+}
+
+@media (min-width: 769px) {
+  .num-btn-lg {
+    min-width: 90px;
+    height: 90px;
+    font-size: 2.2rem;
+    border-radius: 10px;
+    border-width: 2px;
+  }
+  .large-btns {
+    gap: 8px;
+  }
+  .large-btns .tc-num-input,
+  .large-btns .tc-num-input-sm {
+    height: 90px;
+    font-size: 1.5rem;
+    text-align: center;
+  }
+}
+
+/* ===== QUALITY ===== */
+.quality-field { grid-column: span 2; }
+.quality-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.quality-value {
+  font-weight: bold;
+  color: #e94560;
+  font-size: 1.1rem;
+}
+.quality-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.quality-controls input[type="range"] {
+  flex: 1;
+}
+
+/* ===== SIZE ESTIMATE ===== */
+.size-estimate .estimate-display {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.estimate-value {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #e94560;
+}
+.estimate-note { font-size: 0.75rem; color: #666; }
+.estimate-confidence { font-size: 0.75rem; color: #533483; margin-top: 4px; }
+.size-limit { grid-column: span 2; }
+.limit-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+.limit-control input {
+  width: 80px;
+  padding: 6px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #1a1a2e;
+  color: #fff;
+}
 
 /* ===== FORMAT SELECTOR ===== */
 .format-selector {
-  margin-bottom: 1.25rem;
-  background: #f9f9f9;
-  border-radius: 10px;
-  padding: 0.75rem 1rem;
-  border: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
 }
-.format-label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem; color: #213547; }
-.format-options { display: flex; gap: 0.5rem; }
+.format-label { font-size: 0.9rem; color: #ccc; }
+.format-options { display: flex; gap: 8px; }
 .format-btn {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem;
-  padding: 0.6rem 1rem; border: 2px solid #ddd; border-radius: 8px;
-  background: white; color: #444; font-weight: 600; font-size: 0.95rem;
-  cursor: pointer; transition: all 0.2s; touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border: 2px solid #333;
+  border-radius: 8px;
+  background: #16213e;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s;
 }
-.format-btn:hover:not(:disabled) { border-color: #adb5bd; background: #f0f0f0; }
-.format-btn.active { border-color: #1da1f2; background: #e3f2fd; color: #0c63e4; }
-.format-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.format-icon { font-size: 1.1rem; }
+.format-btn.active {
+  border-color: #e94560;
+  background: #0f3460;
+  color: #fff;
+}
+.format-icon { font-size: 1.2rem; }
 
-/* ===== META ===== */
+/* ===== METADATA ===== */
 .original-meta {
-  margin-bottom: 1.25rem; background: #f9f9f9; border-radius: 10px;
-  padding: 0.75rem 1rem; border: 1px solid #e0e0e0;
+  background: #16213e;
+  border: 1px solid #233;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
 }
-.original-meta h4 { margin: 0 0 0.5rem; font-size: 0.9rem; color: #213547; font-weight: 700; }
-.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; font-size: 0.85rem; color: #555; }
-.meta-grid div span { font-weight: 600; color: #213547; }
-
-/* ===== RESPONSIVE ===== */
-@media (max-width: 600px) {
-  .meta-grid {
-    grid-template-columns: 1fr;
-  }
-  .format-options {
-    flex-direction: column;
-  }
-  .unified-preview-wrapper {
-    width: 100%;
-  }
-
-  /* ===== TEKST NA OBRAZIE – MOBILE FIX ===== */
-
-  /* Zakładki – pozwól im się przewijać, zamiast łamać */
-  .textbox-tabs-row {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 0.2rem;
-  }
-  .textbox-tabs {
-    flex-wrap: nowrap;   /* zapobiega łamaniu się przycisków w pionie */
-  }
-
-  /* Główne grupy pól – układ pionowy już był, ale wzmacniamy go */
-  .tc-field-row {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  /* Każde pole w pionie zajmuje całą szerokość */
-  .tc-field-group {
-    width: 100%;
-  }
-  /* Rozwijane listy i pola tekstowe wypełniają dostępne miejsce */
-  .tc-select,
-  .text-input {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  /* Rzędy z przyciskami +/- i inputem – zapobiegaj rozjeżdżaniu */
-  .btn-row {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-  .tc-num-input,
-  .tc-num-input-sm {
-    min-width: 0;       /* pozwala się zmniejszyć */
-    flex: 1;            /* dzielą dostępną przestrzeń */
-    max-width: 100%;
-  }
-  .num-btn {
-    flex-shrink: 0;     /* przyciski nie zmniejszają się */
-  }
-
-  /* Kolor i grubość obrysu – układ w poziomie z zawijaniem */
-  .color-row {
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
-  .color-hex {
-    font-size: 0.75rem;
-    word-break: break-all;
-  }
-
-  /* Kontrolki stylu (B, I, U, Cień) – bardziej zwarte */
-  .style-toggles {
-    gap: 0.3rem;
-  }
-  .style-btn {
-    min-width: 2.2rem;
-    height: 2.2rem;
-    font-size: 0.9rem;
-  }
-
-  /* Picker emoji – mniejsze kafelki i przewijanie w pionie */
-  .emoji-grid {
-    grid-template-columns: repeat(auto-fill, minmax(1.8rem, 1fr));
-    max-height: 140px;   /* nie zajmuje pół ekranu */
-  }
-  .emoji-btn {
-    font-size: 1.2rem;
-    padding: 0.2rem;
-  }
-
-  /* Suwaki i etykiety – zachowanie czytelności */
-  .tc-label-row {
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
-  .reset-small-btn {
-    margin-left: 0;
-  }
-    .tab-add-img {
-    font-size: 1rem;
-    padding: 0 0.5rem;
-  }
-  .tab-action-label {
-    font-size: 0.7rem;
-  }
-  .image-preview-box {
-    min-height: 50px;
-  }
+.original-meta h4 { margin: 0 0 8px; font-size: 0.9rem; }
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 4px;
+  font-size: 0.8rem;
 }
-  /* ===== PRZYCISK DODAWANIA OBRAZU ===== */
-.tab-add-img {
-  width: auto;
-  height: 2.2rem;
-  padding: 0 0.65rem;
-  gap: 0.35rem;
-  background-color: #e3f2fd;
-  color: #1565c0;
-  font-size: 1.2rem;
+.meta-grid span { color: #666; }
+
+/* ===== CROP / EDIT PANEL ===== */
+.crop-section { margin: 16px 0; }
+.crop-toggle-btn {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #333;
+  border-radius: 8px;
+  background: #16213e;
+  color: #ccc;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.crop-toggle-btn.active {
+  border-color: #e94560;
+  background: #0f3460;
+  color: #fff;
+}
+.edit-panel {
+  margin-top: 12px;
+  background: #16213e;
+  border: 1px solid #233;
+  border-radius: 10px;
+  padding: 16px;
+}
+.section-label {
+  font-size: 1rem;
+  font-weight: bold;
+  color: #e94560;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #233;
+}
+
+/* ===== CROP CONTROLS ===== */
+.crop-controls { margin-bottom: 20px; }
+.sync-row { margin: 8px 0; }
+.sync-row label { font-size: 0.8rem; }
+.crop-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.crop-field label { font-size: 0.8rem; color: #aaa; }
+.crop-field input[type="number"] {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #1a1a2e;
+  color: #fff;
+  margin: 4px 0;
+}
+.crop-row-btns {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.reset-crop-btn {
+  padding: 6px 12px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #233;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.crop-summary { font-size: 0.8rem; color: #888; }
+.crop-summary strong { color: #e94560; }
+
+/* ===== TEXT EDITOR ===== */
+.text-controls { margin-bottom: 16px; }
+
+.textbox-tabs-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.textbox-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 4px;
+}
+.tb-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #888;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+}
+.tb-tab.active {
+  border-color: #e94560;
+  background: #0f3460;
+  color: #fff;
+}
+.tb-tab-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #333;
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+.tb-tab.active .tb-tab-num { background: #e94560; }
+.tb-tab-preview {
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== ZMIANA 1: TAB ACTION BTNS - etykiety zawsze widoczne ===== */
+.textbox-tab-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.tab-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.15s;
   white-space: nowrap;
 }
-.tab-add-img:hover:not(:disabled) { background-color: #bbdefb; }
-.tab-add-img:disabled { background-color: #f5f5f5; color: #a0a0a0; cursor: not-allowed; }
-.tab-action-icon {
-  font-size: 1.1rem;
-  line-height: 1;
-}
+.tab-add { border-color: #533483; color: #a855f7; }
+.tab-add:hover:not(:disabled) { background: #533483; color: #fff; }
+.tab-add-img { border-color: #0f3460; color: #3b82f6; }
+.tab-add-img:hover:not(:disabled) { background: #0f3460; color: #fff; }
+.tab-remove:hover:not(:disabled) { background: #e94560; color: #fff; border-color: #e94560; }
+.tab-action-icon { font-size: 1rem; }
+/* Etykiety widoczne na PC i mobilnej */
 .tab-action-label {
+  display: inline;
   font-size: 0.8rem;
-  font-weight: 600;
 }
 
-/* ===== PODGLĄD OBRAZU W KONTROLKACH ===== */
-.image-preview-box {
-  background: #eee;
-  border-radius: 6px;
-  padding: 0.4rem;
+/* ===== TEXTBOX CONTROLS ===== */
+.textbox-controls {
+  background: #1a1a2e;
+  border: 1px solid #233;
+  border-radius: 8px;
+  padding: 14px;
+}
+.tc-field-group { margin-bottom: 12px; }
+.tc-field-row {
   display: flex;
-  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.tc-field-grow { flex: 1; min-width: 120px; }
+.tc-label {
+  display: block;
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+.text-input-row {
+  display: flex;
+  gap: 6px;
+}
+.text-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #16213e;
+  color: #fff;
+  font-size: 0.9rem;
+}
+.emoji-toggle-btn {
+  padding: 8px 12px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #233;
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+/* ===== EMOJI PICKER ===== */
+.emoji-picker {
+  margin-top: 8px;
+  background: #16213e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+.emoji-cats {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.emoji-cat-btn {
+  padding: 4px 8px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #1a1a2e;
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+.emoji-cat-btn.active { border-color: #e94560; background: #0f3460; }
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  gap: 2px;
+}
+.emoji-btn {
+  padding: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1.3rem;
+  border-radius: 4px;
+}
+.emoji-btn:hover { background: #333; }
+
+/* ===== ZMIANA 4: TC SECTION BOX (Styl & Czcionka) ===== */
+.tc-section-box {
+  background: #16213e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.tc-section-title {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #e94560;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #233;
+}
+
+/* ===== TC SELECT / INPUTS ===== */
+.tc-select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #fff;
+  font-size: 0.9rem;
+}
+.tc-num-input {
+  width: 70px;
+  padding: 6px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #16213e;
+  color: #fff;
+  text-align: center;
+  font-size: 0.9rem;
+}
+.tc-num-input-sm {
+  width: 50px;
+  padding: 6px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #16213e;
+  color: #fff;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+/* ===== COLOR ===== */
+.color-row {
+  display: flex;
   align-items: center;
-  min-height: 60px;
-  margin-bottom: 0.3rem;
+  gap: 6px;
+}
+.color-pick {
+  width: 40px;
+  height: 34px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+.color-hex {
+  font-size: 0.8rem;
+  color: #888;
+  font-family: monospace;
+}
+
+/* ===== STYLE TOGGLES ===== */
+.style-toggles {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.style-btn {
+  min-width: 38px;
+  height: 34px;
+  padding: 4px 10px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #1a1a2e;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.15s;
+}
+.style-btn.active {
+  border-color: #e94560;
+  background: #0f3460;
+  color: #fff;
+}
+
+/* ===== TC LABEL ROW ===== */
+.tc-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.tc-value {
+  font-weight: bold;
+  color: #e94560;
+  font-size: 0.85rem;
+}
+.reset-small-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #233;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+/* ===== ZMIANA 3 & 5: SLIDER WITH BTNS ===== */
+.slider-with-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.slider-edge-btn {
+  min-width: 36px;
+  height: 36px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #233;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.slider-edge-btn:hover:not(:disabled) {
+  background: #0f3460;
+  border-color: #e94560;
+}
+.slider-edge-btn:active:not(:disabled) {
+  transform: scale(0.9);
+}
+.slider-with-btns .tc-range {
+  flex: 1;
+}
+
+/* ===== RANGE INPUT ===== */
+.tc-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  outline: none;
+}
+.tc-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e94560;
+  cursor: pointer;
+  border: 2px solid #fff;
+}
+.tc-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e94560;
+  cursor: pointer;
+  border: 2px solid #fff;
+}
+
+/* ===== IMAGE PREVIEW ===== */
+.image-preview-box {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 8px;
+  text-align: center;
+  margin-bottom: 8px;
 }
 .change-img-btn {
-  padding: 0.35rem 0.75rem;
-  border: 1px solid #ccc;
+  padding: 8px 16px;
+  border: 1px solid #0f3460;
   border-radius: 6px;
-  background: white;
-  font-size: 0.82rem;
-  font-weight: 600;
+  background: #0f3460;
+  color: #fff;
   cursor: pointer;
-  transition: background-color 0.15s;
+  font-size: 0.85rem;
 }
-.change-img-btn:hover { background: #f0f0f0; }
+.change-img-btn:hover { background: #1a4a80; }
 
+/* ===== PREVIEW SECTION ===== */
+.preview-section { margin-top: 16px; }
+.preview-label {
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 8px;
+}
+.preview-dims { color: #e94560; font-weight: bold; }
+.unified-preview-wrapper {
+  position: relative;
+  border: 2px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+.unified-canvas {
+  display: block;
+  width: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+.unified-canvas:active { cursor: grabbing; }
+.preview-loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 0.9rem;
+}
 
+/* ===== LOADER ===== */
+.loader-container {
+  text-align: center;
+  padding: 20px;
+}
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #333;
+  border-top-color: #e94560;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loader-text { color: #888; }
 
+/* ===== ERROR ===== */
+.error {
+  background: #3d1010;
+  border: 1px solid #e94560;
+  color: #ff6b6b;
+  padding: 12px;
+  border-radius: 8px;
+  margin: 12px 0;
+  font-size: 0.9rem;
+}
+
+/* ===== RESULT ===== */
+.result-area {
+  background: #16213e;
+  border: 1px solid #233;
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+  margin: 16px 0;
+}
+.result-area h3 { margin: 0 0 12px; color: #e94560; }
+.result-area img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.result-info { font-size: 0.85rem; color: #888; margin-bottom: 12px; }
+
+/* ===== NOTE ===== */
+.note {
+  font-size: 0.75rem;
+  color: #555;
+  margin-top: 16px;
+  line-height: 1.6;
+}
+
+/* ===== RANGE (quality) ===== */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e94560;
+  cursor: pointer;
+  border: 2px solid #fff;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e94560;
+  cursor: pointer;
+  border: 2px solid #fff;
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 768px) {
+  .container { padding: 10px; }
+  h1 { font-size: 1.1rem; }
+  .params-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .param-field { padding: 8px; }
+  .quality-field, .size-estimate, .size-limit { grid-column: span 2; }
+  .crop-grid { grid-template-columns: 1fr; }
+  .tc-field-row { flex-direction: column; }
+  .format-btn { padding: 6px 14px; font-size: 0.85rem; }
+  .tab-action-label { font-size: 0.75rem; }
+  .slider-edge-btn { min-width: 32px; height: 32px; font-size: 1rem; }
+}
 </style>
