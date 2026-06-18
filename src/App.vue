@@ -1,13 +1,3 @@
-=Oto kompletny, poprawiony kod komponentu z wprowadzonymi zmianami. 
-
-Główne modyfikacje:
-1. Przyciski dodawania tekstu i obrazu mają teraz odpowiednie etykiety w wersji PC i mobilnej, a etykieta obrazu zmieniła się na "Wgraj obraz z dysku".
-2. Przyciski `+` i `-` dla rozmiaru czcionki i grubości obrysu są znacznie większe (klasa `.large-num-btn`).
-3. Do suwaków "Obrót" i "Przezroczystość" (dla tekstu) dodano przyciski `+`/`-` na ich krawędziach.
-4. Pole "Czcionka" połączono ze "Stylem", tworząc sekcję "Styl & Czcionka", która zawiera listę wyboru czcionki, rozmiar czcionki oraz przyciski formatowania (B, I, U, Cień).
-5. W menu dla wgranych obrazów, dla "Skala", "Obrót" i "Przezroczystość" dodano suwaki (gdzie ich brakowało) z przyciskami `+`/`-` na krawędziach.
-
-```vue
 <template>
   <div class="container">
     <h1>🎬 MP4 / WebP → WebP / GIF</h1>
@@ -246,7 +236,7 @@ Główne modyfikacje:
                       />
                       <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
                     </div>
-                    <!-- Emoji picker panel (dokładnie taki sam jak poprzednio) -->
+                    <!-- Emoji picker panel -->
                     <div v-if="showEmojiPicker" class="emoji-picker">
                       <div class="emoji-cats">
                         <button
@@ -270,22 +260,22 @@ Główne modyfikacje:
               
                   <div class="tc-field-group">
                     <label class="tc-label">Styl & Czcionka</label>
-                    <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
-                      <option value="Impact">Impact</option>
-                      <option value="Arial">Arial</option>
-                      <option value="Arial Black">Arial Black</option>
-                      <option value="Georgia">Georgia</option>
-                      <option value="Times New Roman">Times New Roman</option>
-                      <option value="Courier New">Courier New</option>
-                      <option value="Verdana">Verdana</option>
-                      <option value="Trebuchet MS">Trebuchet MS</option>
-                      <option value="Comic Sans MS">Comic Sans MS</option>
-                    </select>
-                    <div class="font-style-row">
+                    <div class="font-style-line">
+                      <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
+                        <option value="Impact">Impact</option>
+                        <option value="Arial">Arial</option>
+                        <option value="Arial Black">Arial Black</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Times New Roman">Times New Roman</option>
+                        <option value="Courier New">Courier New</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="Trebuchet MS">Trebuchet MS</option>
+                        <option value="Comic Sans MS">Comic Sans MS</option>
+                      </select>
                       <div class="btn-row">
-                        <button class="num-btn large-num-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 5); redrawPreviewOverlay()">−</button>
+                        <button class="num-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 5); redrawPreviewOverlay()">−</button>
                         <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn large-num-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 5); redrawPreviewOverlay()">+</button>
+                        <button class="num-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 5); redrawPreviewOverlay()">+</button>
                       </div>
                       <div class="style-toggles">
                         <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
@@ -312,11 +302,11 @@ Główne modyfikacje:
                       </div>
                     </div>
                     <div class="tc-field-group">
-                      <label class="tc-label">Grub. obrysu</label>
+                      <label class="tc-label">Grubość obrysu</label>
                       <div class="btn-row">
-                        <button class="num-btn large-num-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
+                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
                         <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
-                        <button class="num-btn large-num-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
+                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
                       </div>
                     </div>
                   </div>
@@ -1829,7 +1819,6 @@ watch(useOriginalWidth, async (enabled) => {
 
 /* Select */
 .tc-select {
-  width: 100%;
   padding: 0.5rem;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -1840,12 +1829,12 @@ watch(useOriginalWidth, async (enabled) => {
 
 /* Number inputs */
 .tc-num-input {
-  width: 68px;
+  width: 52px;
   text-align: center;
-  padding: 0.5rem 0.25rem;
+  padding: 0.4rem 0.2rem;
   border: 1px solid #ddd;
   border-radius: 6px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   -moz-appearance: textfield;
   appearance: textfield;
 }
@@ -1853,12 +1842,12 @@ watch(useOriginalWidth, async (enabled) => {
 .tc-num-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 .tc-num-input-sm {
-  width: 52px;
+  width: 44px;
   text-align: center;
-  padding: 0.5rem 0.25rem;
+  padding: 0.4rem 0.2rem;
   border: 1px solid #ddd;
   border-radius: 6px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   -moz-appearance: textfield;
   appearance: textfield;
 }
@@ -1889,14 +1878,16 @@ watch(useOriginalWidth, async (enabled) => {
   font-family: monospace;
 }
 
-/* Large +/- Buttons */
-.large-num-btn {
-  width: 3.5rem;
-  height: 3.5rem;
-  font-size: 1.6rem;
+/* Standard +/- Buttons */
+.num-btn {
+  width: 2.2rem;
+  height: 2.2rem;
   border: 1px solid #ddd;
   border-radius: 6px;
   background: white;
+  color: #444;
+  font-size: 1rem;
+  font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
   transition: background-color 0.15s, border-color 0.15s;
@@ -1906,7 +1897,7 @@ watch(useOriginalWidth, async (enabled) => {
   touch-action: manipulation;
   line-height: 1;
 }
-.large-num-btn:hover {
+.num-btn:hover {
   background: #f0f0f0;
   border-color: #bbb;
 }
@@ -1939,13 +1930,19 @@ watch(useOriginalWidth, async (enabled) => {
   border-color: #bbb;
 }
 
-/* Font Style Row */
-.font-style-row {
+/* Font Style Line */
+.font-style-line {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-top: 0.5rem;
+}
+.font-style-line .tc-select {
+  flex: 1;
+  min-width: 100px;
+}
+.font-style-line .style-toggles {
+  flex-shrink: 0;
 }
 
 /* Style toggles — B / I / U / Cień */
@@ -1956,14 +1953,14 @@ watch(useOriginalWidth, async (enabled) => {
 }
 
 .style-btn {
-  min-width: 2.4rem;
-  height: 2.4rem;
-  padding: 0 0.6rem;
+  min-width: 2.2rem;
+  height: 2.2rem;
+  padding: 0 0.5rem;
   border: 1px solid #ddd;
   border-radius: 6px;
   background: white;
   color: #444;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s, color 0.15s;
@@ -2161,12 +2158,6 @@ watch(useOriginalWidth, async (enabled) => {
   .num-btn {
     flex-shrink: 0;     
   }
-  
-  .large-num-btn {
-    width: 2.8rem;
-    height: 2.8rem;
-    font-size: 1.4rem;
-  }
 
   .color-row {
     flex-wrap: wrap;
@@ -2186,9 +2177,16 @@ watch(useOriginalWidth, async (enabled) => {
     font-size: 0.9rem;
   }
 
-  .font-style-row {
+  .font-style-line {
     flex-direction: column;
     align-items: stretch;
+  }
+  .font-style-line .tc-select {
+    flex: 1 1 100%;
+  }
+  .font-style-line .btn-row {
+    flex: 1;
+    justify-content: space-between;
   }
 
   .emoji-grid {
@@ -2223,4 +2221,3 @@ watch(useOriginalWidth, async (enabled) => {
   }
 }
 </style>
-```
