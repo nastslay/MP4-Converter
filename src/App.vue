@@ -206,15 +206,12 @@
               </button>
             </div>
             <div class="textbox-tab-actions">
-              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">
-                ＋ <span class="btn-lbl">Tekst</span>
-              </button>
+              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">＋</button>
               <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Dodaj obrazek">
-                🖼️ <span class="btn-lbl">Obraz</span>
+                <span class="tab-action-icon">🖼️</span>
+                <span class="tab-action-label">Dodaj zdjęcie</span>
               </button>
-              <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">
-                🗑
-              </button>
+              <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
             </div>
           </div>
 
@@ -656,13 +653,11 @@ function computeAutoOverlayScale(naturalWidth, naturalHeight) {
 
 function addImageOverlay(file) {
   if (overlays.value.length >= 10) return;
-  const imageSrc = URL.createObjectURL(file); // Tworzy poprawny odnośnik od razu z pliku
-  
+  const imageSrc = URL.createObjectURL(file); // real blob URL from the actual file bytes
   const img = new Image();
   img.onload = () => {
     const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
-    imageElCache.set(imageSrc, img);
-    
+    imageElCache.set(imageSrc, img); // already loaded — cache immediately
     overlays.value.push({
       type: 'image',
       imageSrc,
@@ -677,31 +672,30 @@ function addImageOverlay(file) {
     activeOverlayIdx.value = overlays.value.length - 1;
     nextTick(redrawPreviewOverlay);
   };
+  img.onerror = () => URL.revokeObjectURL(imageSrc);
   img.src = imageSrc;
 }
 
+// Replaces the image of the currently active overlay (used by "Zmień obraz").
+// Previously this also called addImageOverlay(), so "Zmień obraz" silently
+// created a brand new overlay instead of changing the existing one.
 function replaceActiveOverlayImage(file) {
   if (!activeOverlay.value || activeOverlay.value.type !== 'image') return;
   const imageSrc = URL.createObjectURL(file);
-  
   const img = new Image();
   img.onload = () => {
     const target = activeOverlay.value;
-    if (!target) return;
-    
+    if (!target) { URL.revokeObjectURL(imageSrc); return; }
     const oldSrc = target.imageSrc;
     imageElCache.set(imageSrc, img);
     target.imageSrc = imageSrc;
     target.imageNaturalWidth = img.naturalWidth;
     target.imageNaturalHeight = img.naturalHeight;
     target.scale = computeAutoOverlayScale(img.naturalWidth, img.naturalHeight);
-    
-    if (oldSrc) { 
-      URL.revokeObjectURL(oldSrc); 
-      imageElCache.delete(oldSrc); 
-    }
+    if (oldSrc) { URL.revokeObjectURL(oldSrc); imageElCache.delete(oldSrc); }
     nextTick(redrawPreviewOverlay);
   };
+  img.onerror = () => URL.revokeObjectURL(imageSrc);
   img.src = imageSrc;
 }
 
@@ -1684,8 +1678,7 @@ watch(useOriginalWidth, async (enabled) => {
 }
 
 .tab-action-btn {
-  min-width: 2.2rem; /* Zamienione ze sztywnego width: 2.2rem; */
-  padding: 0 0.5rem; /* Dodany padding, by tekst miał marginesy wewnętrzne */
+  width: 2.2rem;
   height: 2.2rem;
   border-radius: 6px;
   border: none;
@@ -1695,22 +1688,8 @@ watch(useOriginalWidth, async (enabled) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem; /* Mały odstęp między emotikonką a tekstem */
   touch-action: manipulation;
   transition: background-color 0.15s;
-}
-
-/* Styl dla etykiet tekstowych w przyciskach */
-.btn-lbl {
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-/* Na bardzo małych ekranach telefonów możemy chcieć schować same napisy, żeby zachować miejsce - dodaj to na końcu sekcji @media (max-width: 600px) */
-@media (max-width: 600px) {
-  .btn-lbl {
-    display: none;
-  }
 }
 .tab-add {
   background-color: #e8f5e9;
@@ -2154,6 +2133,10 @@ watch(useOriginalWidth, async (enabled) => {
   }
     .tab-add-img {
     font-size: 1rem;
+    padding: 0 0.5rem;
+  }
+  .tab-action-label {
+    font-size: 0.7rem;
   }
   .image-preview-box {
     min-height: 50px;
@@ -2161,11 +2144,25 @@ watch(useOriginalWidth, async (enabled) => {
 }
   /* ===== PRZYCISK DODAWANIA OBRAZU ===== */
 .tab-add-img {
+  width: auto;
+  height: 2.2rem;
+  padding: 0 0.65rem;
+  gap: 0.35rem;
   background-color: #e3f2fd;
   color: #1565c0;
   font-size: 1.2rem;
+  white-space: nowrap;
 }
 .tab-add-img:hover:not(:disabled) { background-color: #bbdefb; }
+.tab-add-img:disabled { background-color: #f5f5f5; color: #a0a0a0; cursor: not-allowed; }
+.tab-action-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.tab-action-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
 
 /* ===== PODGLĄD OBRAZU W KONTROLKACH ===== */
 .image-preview-box {
