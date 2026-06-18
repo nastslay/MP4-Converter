@@ -188,37 +188,73 @@
         <!-- TEXT EDITOR CONTROLS -->
         <div class="text-controls">
           <div class="section-label">✏️ Tekst na obrazie</div>
-          <div class="textbox-tabs">
-            <button v-for="(tb, idx) in textBoxes" :key="idx" class="tb-tab" :class="{ active: activeTextBoxIdx === idx }" @click="activeTextBoxIdx = idx">
-              Tekst {{ idx + 1 }}{{ tb.text ? ': ' + tb.text.slice(0, 10) + (tb.text.length > 10 ? '…' : '') : '' }}
-            </button>
-            <button class="tb-tab tb-add" @click="addTextBox" :disabled="textBoxes.length >= 10">+ Dodaj</button>
-            <button class="tb-tab tb-remove" @click="removeTextBox" :disabled="textBoxes.length <= 1">🗑</button>
+
+          <!-- Scrollowalny rząd zakładek -->
+          <div class="textbox-tabs-row">
+            <div class="textbox-tabs">
+              <button
+                v-for="(tb, idx) in textBoxes"
+                :key="idx"
+                class="tb-tab"
+                :class="{ active: activeTextBoxIdx === idx }"
+                @click="activeTextBoxIdx = idx"
+              >
+                <span class="tb-tab-num">{{ idx + 1 }}</span>
+                <span class="tb-tab-preview">{{ tb.text ? tb.text.slice(0, 8) + (tb.text.length > 8 ? '…' : '') : '(pusty)' }}</span>
+              </button>
+            </div>
+            <div class="textbox-tab-actions">
+              <button class="tab-action-btn tab-add" @click="addTextBox" :disabled="textBoxes.length >= 10" title="Dodaj tekst">＋</button>
+              <button class="tab-action-btn tab-remove" @click="removeTextBox" :disabled="textBoxes.length <= 1" title="Usuń aktywny tekst">🗑</button>
+            </div>
           </div>
 
           <div v-if="activeTextBox" class="textbox-controls">
-            <div class="tc-row">
-              <label>Tekst:</label>
-              <input type="text" v-model="activeTextBox.text" placeholder="Wpisz tekst…" class="text-input" @input="redrawPreviewOverlay" />
-              <div style="position: relative; display: inline-block;">
-                <button class="emoji-btn" @click="toggleEmojiPicker" title="Wybierz emotikon">😊</button>
-                <div v-if="showEmojiPicker" class="emoji-picker">
-                  <div
-                    v-for="emoji in emojiList"
-                    :key="emoji"
-                    class="emoji-item"
-                    @click="insertEmoji(emoji)"
-                  >{{ emoji }}</div>
+
+            <!-- Wiersz: pole tekstowe + emoji picker -->
+            <div class="tc-field-group">
+              <label class="tc-label">Tekst</label>
+              <div class="text-input-row">
+                <input
+                  type="text"
+                  v-model="activeTextBox.text"
+                  placeholder="Wpisz tekst lub emoji…"
+                  class="text-input"
+                  ref="textInputRef"
+                  @input="redrawPreviewOverlay"
+                />
+                <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
+              </div>
+              <!-- Emoji picker panel -->
+              <div v-if="showEmojiPicker" class="emoji-picker">
+                <div class="emoji-cats">
+                  <button
+                    v-for="cat in emojiCategories"
+                    :key="cat.name"
+                    class="emoji-cat-btn"
+                    :class="{ active: activeCat === cat.name }"
+                    @click="activeCat = cat.name"
+                  >{{ cat.icon }}</button>
+                </div>
+                <div class="emoji-grid">
+                  <button
+                    v-for="em in currentEmojis"
+                    :key="em"
+                    class="emoji-btn"
+                    @click="insertEmoji(em)"
+                  >{{ em }}</button>
                 </div>
               </div>
             </div>
-            <div class="tc-row tc-row-wrap">
-              <div class="tc-group">
-                <label>Czcionka:</label>
-                <select v-model="activeTextBox.fontFamily" @change="redrawPreviewOverlay">
+
+            <!-- Czcionka + rozmiar -->
+            <div class="tc-field-row">
+              <div class="tc-field-group tc-field-grow">
+                <label class="tc-label">Czcionka</label>
+                <select class="tc-select" v-model="activeTextBox.fontFamily" @change="redrawPreviewOverlay">
+                  <option value="Impact">Impact</option>
                   <option value="Arial">Arial</option>
                   <option value="Arial Black">Arial Black</option>
-                  <option value="Impact">Impact</option>
                   <option value="Georgia">Georgia</option>
                   <option value="Times New Roman">Times New Roman</option>
                   <option value="Courier New">Courier New</option>
@@ -227,48 +263,88 @@
                   <option value="Comic Sans MS">Comic Sans MS</option>
                 </select>
               </div>
-              <div class="tc-group">
-                <label>Rozmiar:</label>
-                <div class="size-row">
-                  <button class="num-btn" @click="activeTextBox.fontSize = Math.max(8, activeTextBox.fontSize - 2); redrawPreviewOverlay()">−</button>
-                  <input type="number" v-model.number="activeTextBox.fontSize" min="8" max="300" style="width:58px" @change="redrawPreviewOverlay" />
-                  <button class="num-btn" @click="activeTextBox.fontSize = Math.min(300, activeTextBox.fontSize + 2); redrawPreviewOverlay()">+</button>
+              <div class="tc-field-group">
+                <label class="tc-label">Rozmiar (px)</label>
+                <div class="btn-row">
+                  <button class="num-btn" @click="activeTextBox.fontSize = Math.max(8, activeTextBox.fontSize - 5); redrawPreviewOverlay()">−</button>
+                  <input type="number" v-model.number="activeTextBox.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
+                  <button class="num-btn" @click="activeTextBox.fontSize = Math.min(500, activeTextBox.fontSize + 5); redrawPreviewOverlay()">+</button>
                 </div>
               </div>
             </div>
-            <div class="tc-row tc-row-wrap">
-              <div class="tc-group">
-                <label>Kolor tekstu:</label>
-                <input type="color" v-model="activeTextBox.color" class="color-pick" @input="redrawPreviewOverlay" />
+
+            <!-- Kolory -->
+            <div class="tc-field-row">
+              <div class="tc-field-group">
+                <label class="tc-label">Kolor tekstu</label>
+                <div class="color-row">
+                  <input type="color" v-model="activeTextBox.color" class="color-pick" @input="redrawPreviewOverlay" />
+                  <span class="color-hex">{{ activeTextBox.color }}</span>
+                </div>
               </div>
-              <div class="tc-group">
-                <label>Kolor obrysu/cienia:</label>
-                <input type="color" v-model="activeTextBox.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
+              <div class="tc-field-group">
+                <label class="tc-label">Obrys / cień</label>
+                <div class="color-row">
+                  <input type="color" v-model="activeTextBox.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
+                  <span class="color-hex">{{ activeTextBox.shadowColor }}</span>
+                </div>
               </div>
-              <div class="tc-group">
-                <label>Obrys px:</label>
-                <div class="size-row">
+              <div class="tc-field-group">
+                <label class="tc-label">Grub. obrysu</label>
+                <div class="btn-row">
                   <button class="num-btn" @click="activeTextBox.strokeWidth = Math.max(0, activeTextBox.strokeWidth - 1); redrawPreviewOverlay()">−</button>
-                  <input type="number" v-model.number="activeTextBox.strokeWidth" min="0" max="20" style="width:48px" @change="redrawPreviewOverlay" />
+                  <input type="number" v-model.number="activeTextBox.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
                   <button class="num-btn" @click="activeTextBox.strokeWidth = Math.min(20, activeTextBox.strokeWidth + 1); redrawPreviewOverlay()">+</button>
                 </div>
               </div>
             </div>
-            <div class="tc-row tc-row-wrap">
-              <label class="checkbox-label"><input type="checkbox" v-model="activeTextBox.bold" @change="redrawPreviewOverlay" /> <strong>Bold</strong></label>
-              <label class="checkbox-label"><input type="checkbox" v-model="activeTextBox.italic" @change="redrawPreviewOverlay" /> <em>Kursywa</em></label>
-              <label class="checkbox-label"><input type="checkbox" v-model="activeTextBox.underline" @change="redrawPreviewOverlay" /> <u>Podkr.</u></label>
-              <label class="checkbox-label"><input type="checkbox" v-model="activeTextBox.shadow" @change="redrawPreviewOverlay" /> Cień</label>
+
+            <!-- Styl tekstu — przyciski toggle -->
+            <div class="tc-field-group">
+              <label class="tc-label">Styl</label>
+              <div class="style-toggles">
+                <button
+                  class="style-btn"
+                  :class="{ active: activeTextBox.bold }"
+                  @click="activeTextBox.bold = !activeTextBox.bold; redrawPreviewOverlay()"
+                ><strong>B</strong></button>
+                <button
+                  class="style-btn"
+                  :class="{ active: activeTextBox.italic }"
+                  @click="activeTextBox.italic = !activeTextBox.italic; redrawPreviewOverlay()"
+                ><em>I</em></button>
+                <button
+                  class="style-btn"
+                  :class="{ active: activeTextBox.underline }"
+                  @click="activeTextBox.underline = !activeTextBox.underline; redrawPreviewOverlay()"
+                ><u>U</u></button>
+                <button
+                  class="style-btn"
+                  :class="{ active: activeTextBox.shadow }"
+                  @click="activeTextBox.shadow = !activeTextBox.shadow; redrawPreviewOverlay()"
+                >Cień</button>
+              </div>
             </div>
-            <div class="tc-row">
-              <label>Obrót: {{ activeTextBox.rotation }}°</label>
-              <input type="range" v-model.number="activeTextBox.rotation" min="-180" max="180" @input="redrawPreviewOverlay" />
-              <button class="num-btn" @click="activeTextBox.rotation = 0; redrawPreviewOverlay()">0°</button>
+
+            <!-- Obrót -->
+            <div class="tc-field-group">
+              <div class="tc-label-row">
+                <label class="tc-label">Obrót</label>
+                <span class="tc-value">{{ activeTextBox.rotation }}°</span>
+                <button class="reset-small-btn" @click="activeTextBox.rotation = 0; redrawPreviewOverlay()">Reset</button>
+              </div>
+              <input type="range" v-model.number="activeTextBox.rotation" min="-180" max="180" class="tc-range" @input="redrawPreviewOverlay" />
             </div>
-            <div class="tc-row">
-              <label>Przezrocz.: {{ Math.round(activeTextBox.opacity * 100) }}%</label>
-              <input type="range" v-model.number="activeTextBox.opacity" min="0.1" max="1" step="0.05" @input="redrawPreviewOverlay" />
+
+            <!-- Przezroczystość -->
+            <div class="tc-field-group">
+              <div class="tc-label-row">
+                <label class="tc-label">Przezroczystość</label>
+                <span class="tc-value">{{ Math.round(activeTextBox.opacity * 100) }}%</span>
+              </div>
+              <input type="range" v-model.number="activeTextBox.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
             </div>
+
           </div>
         </div>
 
@@ -371,7 +447,7 @@ const originalFps      = ref(null);
 const originalDuration = ref(null);
 
 // Crop
-const cropEnabled = ref(false);
+const cropEnabled = ref(false);  // kept for VF filter logic
 const cropTop     = ref(0);
 const cropBottom  = ref(0);
 const cropLeft    = ref(0);
@@ -379,7 +455,7 @@ const cropRight   = ref(0);
 const syncVertical   = ref(true);
 const syncHorizontal = ref(true);
 
-// Panel open state
+// Panel open state (replaces separate cropEnabled + textEditEnabled)
 const editPanelOpen = ref(false);
 
 // Podgląd klatki
@@ -398,6 +474,38 @@ let ffmpeg = null;
 
 // ---- TEXT EDITOR STATE ----
 const activeTextBoxIdx = ref(0);
+const textInputRef = ref(null);
+
+// Emoji picker state
+const showEmojiPicker = ref(false);
+const activeCat = ref('Popularne');
+
+const emojiCategories = [
+  { name: 'Popularne', icon: '⭐', emojis: ['😂','😍','🔥','❤️','👍','😭','🙏','😊','🤣','💀','😎','🤔','💯','🎉','👀','😅','🥺','😩','😤','🤩','😇','🥰','😆','😋','🤗','😏','😒','😞','😠','🤬','😱','😨','😰','😥','😓','🤯','😳','🥵','🥶','😴','🤤','🤮','🤧','🥸','🤡','🤠'] },
+  { name: 'Gest', icon: '👋', emojis: ['👋','🤚','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','🤲','🙏','✍️','💅','🤳','💪','🦾','🖕','👐','🫶','🫂'] },
+  { name: 'Natura', icon: '🌿', emojis: ['🌸','🌺','🌻','🌹','🌷','🌼','🌵','🎋','🎍','🍀','🌿','☘️','🍃','🍂','🍁','🍄','🌾','🌱','🌲','🌳','🌴','🪴','🌊','🌈','⭐','🌟','✨','💫','❄️','🔥','💧','🌙','☀️','⛅','🌤️','🌦️','⛈️','🌪️','🌫️'] },
+  { name: 'Jedzenie', icon: '🍕', emojis: ['🍕','🍔','🌮','🌯','🍜','🍣','🍱','🍩','🍪','🎂','🍰','🍫','🍬','🍭','🍦','🥤','☕','🧋','🍺','🥂','🍷','🥃','🫖','🍵','🧃','🥛','🍶','🍾','🍸','🍹','🧉','🥃','🍻','🍮','🍯','🧇','🥞','🧈','🥓','🥚'] },
+  { name: 'Aktywność', icon: '⚽', emojis: ['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🥏','🎱','🏓','🏸','🏒','🥅','⛳','🏹','🎣','🤿','🎽','🎿','🛷','🥌','🎯','🪃','🏋️','🤸','⛹️','🤺','🏇','🧘','🏊','🚴','🏄','🤽','🧗','🚵','🤼','🤾','🏌️','🏂'] },
+  { name: 'Obiekty', icon: '💡', emojis: ['💡','📱','💻','🖥️','⌨️','🖱️','🖨️','📷','📸','🎥','📽️','🎬','📺','📻','📡','🔊','🎵','🎶','🎸','🎹','🥁','🎺','🎻','🪗','🎷','🎤','🎧','📝','✏️','🖊️','🖋️','✒️','📚','📖','🔍','🔎','🔬','🔭','💊','💉'] },
+  { name: 'Symbole', icon: '❤️', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','❤️‍🔥','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☯️','🕉️','✡️','🔯','🕎','☸️','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑'] },
+  { name: 'Flagi', icon: '🏳️', emojis: ['🏳️','🏴','🚩','🏁','🏳️‍🌈','🏳️‍⚧️','🏴‍☠️','🇵🇱','🇺🇸','🇬🇧','🇩🇪','🇫🇷','🇪🇸','🇮🇹','🇧🇷','🇯🇵','🇰🇷','🇨🇳','🇷🇺','🇮🇳','🇨🇦','🇦🇺','🇲🇽','🇸🇦','🇿🇦','🇳🇱','🇧🇪','🇸🇪','🇳🇴','🇩🇰','🇫🇮','🇨🇭','🇦🇹','🇵🇹','🇬🇷'] },
+];
+
+const currentEmojis = computed(() => {
+  const cat = emojiCategories.find(c => c.name === activeCat.value);
+  return cat ? cat.emojis : [];
+});
+
+function toggleEmojiPicker() {
+  showEmojiPicker.value = !showEmojiPicker.value;
+}
+
+function insertEmoji(emoji) {
+  if (!activeTextBox.value) return;
+  activeTextBox.value.text += emoji;
+  redrawPreviewOverlay();
+  // Keep picker open for multiple insertions
+}
 
 function createTextBox(yPct = 0.5) {
   return {
@@ -423,7 +531,9 @@ const activeTextBox = computed(() => textBoxes.value[activeTextBoxIdx.value] || 
 
 function addTextBox() {
   if (textBoxes.value.length < 10) {
-    textBoxes.value.push(createTextBox(0.75));
+    // Spread new boxes vertically so they don't overlap
+    const newYPct = Math.min(0.95, 0.2 + (textBoxes.value.length * 0.08));
+    textBoxes.value.push(createTextBox(newYPct));
     activeTextBoxIdx.value = textBoxes.value.length - 1;
     nextTick(redrawPreviewOverlay);
   }
@@ -435,19 +545,6 @@ function removeTextBox() {
     activeTextBoxIdx.value = Math.min(activeTextBoxIdx.value, textBoxes.value.length - 1);
     nextTick(redrawPreviewOverlay);
   }
-}
-
-// ---- Emoji picker ----
-const showEmojiPicker = ref(false);
-const emojiList = [
-  '😀','😂','🤣','😍','🥰','😎','🤔','👍','👎','🔥','💯','❤️','💔','✨','🎉','🚀','💀','🤡','🤯','🥶','🤠','😈','👻','🤖','💩','👀','🙏','💪','🧠','🫡','🥳','😤','🤬','😱','🤮','🤧','😴','😵‍💫','🫠','🤓','🥸','🤥','🫢','🫣','🤭','🤫','🤪','🤑','🤠','😷','🤒','🤕','🤢','🤮','🤧','😇','🥳','🥺','🤠','🤡','🤥','🤫','🤭','🧐','🤓','😈','👿','👹','👺','💀','☠️','👻','👽','👾','🤖','💩','😺','😸','😹','😻','😼','😽','🙀','😿','😾','🙈','🙉','🙊','💋','💌','💘','💝','💖','💗','💓','💞','💕','💟','❣️','💔','❤️‍🔥','❤️‍🩹','❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍','💯','💢','💥','💫','💦','💨','🕳️','💣','💬','👁️‍🗨️','🗨️','🗯️','💭','💤'
-];
-
-function toggleEmojiPicker() { showEmojiPicker.value = !showEmojiPicker.value; }
-function insertEmoji(emoji) {
-  if (emoji) activeTextBox.value.text += emoji;
-  showEmojiPicker.value = false;
-  redrawPreviewOverlay();
 }
 
 // ---- DRAG STATE ----
@@ -472,6 +569,7 @@ function clientToCanvasPct(clientX, clientY) {
   };
 }
 
+// Hit-test: check if (clientX, clientY) hits any text label
 function hitTestText(clientX, clientY) {
   const c = unifiedCanvas.value;
   if (!c) return -1;
@@ -481,11 +579,13 @@ function hitTestText(clientX, clientY) {
   const cw = c.width;
   const ch = c.height;
 
+  // Check in reverse order (last = top)
   for (let i = textBoxes.value.length - 1; i >= 0; i--) {
     const tb = textBoxes.value[i];
     if (!tb.text.trim()) continue;
     const tx = tb.xPct * cw;
     const ty = tb.yPct * ch;
+    // Estimate text bounding box
     const estW = tb.fontSize * tb.text.length * 0.6 + 20;
     const estH = tb.fontSize + 10;
     const dx = (px * cw) - tx;
@@ -554,6 +654,7 @@ function onCanvasTouchEnd() {
 }
 
 // ---- UNIFIED CANVAS DRAW ----
+// Draws: background image + crop overlay + text labels (all on one canvas)
 function redrawPreviewOverlay() {
   const canvas = unifiedCanvas.value;
   const img = previewImg.value;
@@ -568,8 +669,11 @@ function redrawPreviewOverlay() {
 
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, dw, dh);
+
+  // Draw image
   ctx.drawImage(img, 0, 0, dw, dh);
 
+  // Draw crop overlay
   const hasCrop = (cropTop.value || cropBottom.value || cropLeft.value || cropRight.value);
   if (hasCrop) {
     const scaleX = dw / img.naturalWidth;
@@ -589,6 +693,7 @@ function redrawPreviewOverlay() {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x, y, w, h);
 
+    // Corner brackets
     const cs = 14;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 3;
@@ -604,6 +709,7 @@ function redrawPreviewOverlay() {
     }
   }
 
+  // Draw text labels
   for (let i = 0; i < textBoxes.value.length; i++) {
     const tb = textBoxes.value[i];
     if (!tb.text.trim()) continue;
@@ -655,6 +761,7 @@ function redrawPreviewOverlay() {
 
     ctx.restore();
 
+    // Active text indicator (dashed selection box)
     if (i === activeTextBoxIdx.value) {
       ctx.save();
       ctx.translate(tx, ty);
@@ -675,6 +782,7 @@ function redrawPreviewOverlay() {
   }
 }
 
+// Draws text onto an output canvas frame (used during conversion)
 function drawTextOnCanvas(ctx, canvasWidth, canvasHeight) {
   for (const tb of textBoxes.value) {
     if (!tb.text.trim()) continue;
@@ -784,6 +892,7 @@ function resetConversionState() {
   editPanelOpen.value = false;
   textBoxes.value = [createTextBox(0.5)];
   activeTextBoxIdx.value = 0;
+  showEmojiPicker.value = false;
   if (resultUrl.value) { URL.revokeObjectURL(resultUrl.value); resultUrl.value = null; resultBlob.value = null; }
   clearPreview();
   estimatedSize.value = null; sizeConfidence.value = null;
@@ -847,6 +956,7 @@ const cropRefs = { cropTop, cropBottom, cropLeft, cropRight };
 function adjustCrop(field, delta) { cropRefs[field].value = Math.max(0, cropRefs[field].value + delta); }
 function resetCrop() { cropTop.value=0; cropBottom.value=0; cropLeft.value=0; cropRight.value=0; }
 
+// buildVfFilter — only crop + fps + scale, NO drawtext (text via canvas)
 function buildVfFilter() {
   const parts = [];
   const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
@@ -1021,6 +1131,8 @@ async function analyzeAndEstimate() {
 }
 
 // ---- KONWERSJA ----
+// Wspólna ścieżka canvas dla MP4 i WebP gdy aktywny jest crop lub tekst.
+// FFmpeg wyciąga klatki → canvas nakłada crop/tekst → FFmpeg składa animację.
 async function convertViaCanvas(fileData, srcExt) {
   const userStart  = startTime.value;
   const userEnd    = endTime.value;
@@ -1042,6 +1154,7 @@ async function convertViaCanvas(fileData, srcExt) {
     totalFrames = meta.frameCount;
     srcFps = totalFrames / totalDuration;
   } else {
+    // MP4: extract individual frames via ffmpeg
     const meta = await getVideoMetadata(fileData, 'mp4');
     srcW = meta.width || width.value; srcH = meta.height || Math.round(width.value * 9 / 16);
     srcFps = meta.fps || 25;
@@ -1082,8 +1195,16 @@ async function convertViaCanvas(fileData, srcExt) {
     }
     decoder.close();
   } else {
+    // MP4: use ffmpeg to extract frames one by one
     await ffmpeg.writeFile('conv_input.mp4', new Uint8Array(fileData.slice().buffer));
 
+    // Extract all needed frames as PNGs
+    const rawFilter = [];
+    if (hasCrop) rawFilter.push(`crop=${srcW-cl-cr}:${srcH-ct-cb}:${cl}:${ct}`);
+    // We'll draw at original size first, then scale on canvas
+    const extractFilter = rawFilter.join(',') || 'null';
+
+    // Extract frames in the time range at desired fps
     await ffmpeg.exec([
       '-i', 'conv_input.mp4',
       '-ss', userStart.toString(),
@@ -1093,14 +1214,17 @@ async function convertViaCanvas(fileData, srcExt) {
       'rawframe_%05d.png',
     ]);
 
+    // Count extracted frames
     let frameIdx = 0;
     for (let i = 0; i < outputFrameCount; i++) {
       const fname = `rawframe_${String(i+1).padStart(5,'0')}.png`;
       let rawData;
       try { rawData = await ffmpeg.readFile(fname); } catch(e) {
+        // If less frames extracted than expected, stop
         outputFrameCount_actual = i;
         break;
       }
+      // Draw on canvas with text
       const imgBlob = new Blob([rawData.buffer], { type: 'image/png' });
       const imgBitmap = await createImageBitmap(imgBlob);
       ctx.clearRect(0, 0, outW, outH);
@@ -1118,6 +1242,7 @@ async function convertViaCanvas(fileData, srcExt) {
     outputFrameCount_actual = frameIdx;
   }
 
+  // Assemble animation from frames
   const actualFrameCount = srcExt === 'webp' ? outputFrameCount : (outputFrameCount_actual ?? outputFrameCount);
 
   if (outputFormat.value === 'gif') {
@@ -1134,6 +1259,7 @@ async function convertViaCanvas(fileData, srcExt) {
     ]);
   }
 
+  // Cleanup frames
   for (let i = 0; i < actualFrameCount; i++) {
     try { await ffmpeg.deleteFile(`frame_${String(i).padStart(5,'0')}.png`); } catch(e) {}
   }
@@ -1145,6 +1271,7 @@ async function convertViaCanvas(fileData, srcExt) {
   await ffmpeg.deleteFile('output.' + outExt);
 }
 
+// Variable to track actual frame count in MP4 path
 let outputFrameCount_actual = 0;
 
 async function convert() {
@@ -1157,10 +1284,13 @@ async function convert() {
     const hasText = textBoxes.value.some(tb => tb.text.trim() !== '');
 
     if (inputExt.value === 'webp') {
+      // WebP always goes through canvas path
       await convertViaCanvas(fileData, 'webp');
     } else if (hasCrop || hasText) {
+      // MP4 with crop or text — canvas path
       await convertViaCanvas(fileData, 'mp4');
     } else {
+      // MP4 clean — direct FFmpeg path (fastest)
       await ffmpeg.writeFile('input.mp4', new Uint8Array(fileData.slice().buffer));
       if (outputFormat.value === 'gif') {
         const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
@@ -1217,28 +1347,30 @@ watch(useOriginalWidth, async (enabled) => {
 </script>
 
 <style scoped>
-/* ===== UNIFIED EDIT PANEL ===== */
+/* ===== EDIT PANEL WRAPPER ===== */
 .edit-panel {
   margin-top: 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .section-label {
   font-weight: 700;
-  font-size: 0.88rem;
-  color: #374151;
+  font-size: 0.9rem;
+  color: #213547;
   margin-bottom: 0.5rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.3rem;
+  border-bottom: 2px solid #e0e0e0;
 }
 
+/* ===== CROP CONTROLS — inherits from global style.css ===== */
 .crop-controls {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  margin-top: 0;
   padding: 0.75rem;
+  background: #f9f9f9;
+  border-radius: 10px;
+  border: 1px solid #e0e0e0;
 }
 
 .crop-row-btns {
@@ -1249,233 +1381,382 @@ watch(useOriginalWidth, async (enabled) => {
   margin-top: 0.5rem;
 }
 
-/* ===== TEXT EDITOR – UJEDNOLICONY WYGLĄD ===== */
+/* ===== TEXT CONTROLS ===== */
 .text-controls {
-  background: #f0f4f8;       /* jak pozostałe panele */
-  border: 1px solid #dde3ea;
+  padding: 0.75rem;
+  background: #f9f9f9;
   border-radius: 10px;
-  padding: 0.85rem 1rem;
+  border: 1px solid #e0e0e0;
 }
 
-/* Zakładki */
+/* Tabs row */
+.textbox-tabs-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
 .textbox-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 0.9rem;
+  gap: 0.35rem;
+  flex: 1;
 }
 
 .tb-tab {
-  padding: 0.35rem 0.85rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
   background: white;
-  color: #4b5563;
+  color: #444;
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  touch-action: manipulation;
 }
 .tb-tab:hover:not(:disabled) {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  background: #e8f5e9;
+  border-color: #4caf50;
+  color: #2e7d32;
 }
 .tb-tab.active {
-  background: #e7f5ff;       /* jasnoniebieski, spójny z .format-btn.active */
-  color: #0c63e4;
+  background: #1da1f2;
   border-color: #1da1f2;
+  color: white;
 }
-.tb-tab.tb-add {
-  border-style: dashed;
-  color: #4caf50;
-  border-color: #4caf50;
-  background: #f0fdf4;
+.tb-tab-num {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  font-weight: 700;
 }
-.tb-tab.tb-add:hover:not(:disabled) {
-  background: #dcfce7;
-}
-.tb-tab.tb-add:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.tb-tab.tb-remove {
-  color: #e53935;
-  border-color: #e53935;
-  background: #fef2f2;
-}
-.tb-tab.tb-remove:hover:not(:disabled) {
-  background: #fee2e2;
-}
-.tb-tab.tb-remove:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+.tb-tab-preview {
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Kontrolki wybranego tekstu */
+.textbox-tab-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.tab-action-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  transition: background-color 0.15s;
+}
+.tab-add {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+.tab-add:hover:not(:disabled) { background-color: #c8e6c9; }
+.tab-add:disabled { background-color: #f5f5f5; color: #a0a0a0; cursor: not-allowed; }
+
+.tab-remove {
+  background-color: #fce4e4;
+  color: #d32f2f;
+}
+.tab-remove:hover:not(:disabled) { background-color: #f8caca; }
+.tab-remove:disabled { background-color: #f5f5f5; color: #a0a0a0; cursor: not-allowed; }
+
+/* Controls box */
 .textbox-controls {
   background: white;
   border-radius: 8px;
   padding: 0.75rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
-.tc-row {
+/* Field groups */
+.tc-field-group {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.5rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.25rem;
 }
-.tc-row label {
-  font-size: 0.85rem;
+
+.tc-field-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.tc-field-grow {
+  flex: 1;
+  min-width: 120px;
+}
+
+.tc-label {
+  display: block;
   font-weight: 600;
-  color: #374151;
-  white-space: nowrap;
-  min-width: 80px;
-}
-.tc-row-wrap {
-  flex-wrap: wrap;
-  gap: 0.7rem;
-}
-.tc-group {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.tc-group label {
   font-size: 0.82rem;
-  font-weight: 600;
-  color: #374151;
-  white-space: nowrap;
+  color: #213547;
+  margin-bottom: 0;
+}
+
+.tc-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.1rem;
+}
+
+.tc-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1da1f2;
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+/* Text input + emoji toggle */
+.text-input-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
 }
 
 .text-input {
   flex: 1;
-  min-width: 110px;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid #d1d5db;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 0.9rem;
-  background: #fff;
-  transition: border-color 0.15s;
+  width: 100%;
 }
 .text-input:focus {
   outline: none;
   border-color: #1da1f2;
-  box-shadow: 0 0 0 2px rgba(29,161,242,0.2);
+  box-shadow: 0 0 0 2px rgba(29,161,242,0.15);
+}
+
+.emoji-toggle-btn {
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s, border-color 0.15s;
+  touch-action: manipulation;
+}
+.emoji-toggle-btn:hover {
+  background: #fff8e1;
+  border-color: #ffc107;
+}
+
+/* Emoji picker */
+.emoji-picker {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  padding: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  margin-top: 0.25rem;
+}
+
+.emoji-cats {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #eee;
+}
+
+.emoji-cat-btn {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background-color 0.12s;
+  touch-action: manipulation;
+}
+.emoji-cat-btn:hover { background: #f0f0f0; }
+.emoji-cat-btn.active {
+  background: #e3f2fd;
+  border-color: #1da1f2;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2rem, 1fr));
+  gap: 0.15rem;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.emoji-btn {
+  padding: 0.25rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 1.3rem;
+  cursor: pointer;
+  text-align: center;
+  line-height: 1;
+  transition: background-color 0.1s;
+  touch-action: manipulation;
+}
+.emoji-btn:hover { background: #f0f0f0; }
+
+/* Select */
+.tc-select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  background: white;
+  color: #213547;
+}
+
+/* Number inputs */
+.tc-num-input {
+  width: 68px;
+  text-align: center;
+  padding: 0.5rem 0.25rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.tc-num-input::-webkit-outer-spin-button,
+.tc-num-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.tc-num-input-sm {
+  width: 52px;
+  text-align: center;
+  padding: 0.5rem 0.25rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.tc-num-input-sm::-webkit-outer-spin-button,
+.tc-num-input-sm::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Color row */
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .color-pick {
   width: 40px;
-  height: 32px;
-  border: 1px solid #d1d5db;
+  height: 34px;
+  border: 1px solid #ddd;
   border-radius: 6px;
   cursor: pointer;
   padding: 2px;
   background: white;
+  flex-shrink: 0;
 }
 
-.size-row {
+.color-hex {
+  font-size: 0.78rem;
+  color: #666;
+  font-family: monospace;
+}
+
+/* Style toggles — B / I / U / Cień */
+.style-toggles {
   display: flex;
-  align-items: center;
-  gap: 0.2rem;
+  gap: 0.35rem;
+  flex-wrap: wrap;
 }
 
-/* Przyciski +/- (takie same jak .num-btn w reszcie apki) */
-.num-btn {
-  display: inline-flex;
+.style-btn {
+  min-width: 2.4rem;
+  height: 2.4rem;
+  padding: 0 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  color: #444;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 6px;
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  color: #4b5563;
-  font-weight: 700;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.15s;
+  touch-action: manipulation;
 }
-.num-btn:hover:not(:disabled) {
-  background: #e5e7eb;
-  border-color: #9ca3af;
+.style-btn:hover:not(:disabled) {
+  background: #f0f0f0;
+  border-color: #bbb;
 }
-.num-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.style-btn.active {
+  background: #1da1f2;
+  border-color: #1da1f2;
+  color: white;
 }
 
-/* Przycisk emotikon */
-.emoji-btn {
-  background: #fef9c3;
-  border: 1px solid #fde047;
-  border-radius: 6px;
-  padding: 0.4rem 0.6rem;
-  font-size: 1.1rem;
-  cursor: pointer;
-  transition: all 0.15s;
-  line-height: 1;
-  position: relative;
-}
-.emoji-btn:hover:not(:disabled) {
-  background: #fef08a;
-  transform: scale(1.05);
-}
-.emoji-btn:active:not(:disabled) {
-  transform: scale(0.95);
+/* Range slider */
+.tc-range {
+  width: 100%;
+  accent-color: #1da1f2;
 }
 
-/* Siatka emotikon */
-.emoji-picker {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
-  padding: 0.5rem;
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 0.3rem;
-  z-index: 20;
-  width: 260px;
-}
-.emoji-item {
-  font-size: 1.3rem;
-  cursor: pointer;
-  padding: 0.2rem;
-  text-align: center;
+/* Reset small */
+.reset-small-btn {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid #ddd;
   border-radius: 6px;
-  transition: background 0.15s;
-  user-select: none;
-}
-.emoji-item:hover {
-  background: #f3f4f6;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.82rem;
+  background: #f0f0f0;
+  color: #555;
+  font-size: 0.78rem;
+  font-weight: 600;
   cursor: pointer;
-  user-select: none;
+  margin-left: auto;
+  transition: background-color 0.15s;
+  touch-action: manipulation;
 }
+.reset-small-btn:hover { background: #e0e0e0; }
 
 /* ===== UNIFIED PREVIEW ===== */
 .preview-section { margin-top: 0.25rem; }
 
 .unified-preview-wrapper {
   position: relative;
-  width: 100%;
-  border-radius: 8px;
+  width: 60%;
+  margin: 0 auto;
+  border-radius: 6px;
   overflow: hidden;
-  border: 2px solid #4b6cb7;
+  border: 1px solid #ddd;
   background: #111;
   line-height: 0;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
 .unified-canvas {
@@ -1487,45 +1768,50 @@ watch(useOriginalWidth, async (enabled) => {
 }
 
 .preview-label {
-  font-size: 0.82rem;
-  color: #6b7280;
-  margin: 0 0 0.35rem;
-  font-style: italic;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  color: #333;
 }
-.preview-dims { color: #9ca3af; margin-left: 0.3rem; }
-.preview-loading { font-size: 0.88rem; color: #6b7280; padding: 0.5rem 0; }
+.preview-dims { font-weight: 400; color: #888; font-size: 0.8rem; }
+.preview-loading { text-align: center; padding: 0.5rem; font-size: 0.85rem; color: #666; }
 
 /* ===== FORMAT SELECTOR ===== */
 .format-selector {
   margin-bottom: 1.25rem;
-  background: #f8f9fa;
+  background: #f9f9f9;
   border-radius: 10px;
   padding: 0.75rem 1rem;
-  border: 1px solid #e9ecef;
+  border: 1px solid #e0e0e0;
 }
-.format-label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem; color: #495057; }
+.format-label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem; color: #213547; }
 .format-options { display: flex; gap: 0.5rem; }
 .format-btn {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem;
-  padding: 0.6rem 1rem; border: 2px solid #dee2e6; border-radius: 8px;
-  background: white; color: #495057; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: all 0.2s;
+  padding: 0.6rem 1rem; border: 2px solid #ddd; border-radius: 8px;
+  background: white; color: #444; font-weight: 600; font-size: 0.95rem;
+  cursor: pointer; transition: all 0.2s; touch-action: manipulation;
 }
-.format-btn:hover:not(:disabled) { border-color: #adb5bd; background: #f8f9fa; }
-.format-btn.active { border-color: #1da1f2; background: #e7f5ff; color: #0c63e4; }
+.format-btn:hover:not(:disabled) { border-color: #adb5bd; background: #f0f0f0; }
+.format-btn.active { border-color: #1da1f2; background: #e3f2fd; color: #0c63e4; }
 .format-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .format-icon { font-size: 1.1rem; }
 
 /* ===== META ===== */
 .original-meta {
-  margin-bottom: 1.25rem; background: #f0f4f8; border-radius: 10px;
-  padding: 0.75rem 1rem; border: 1px solid #dde3ea;
+  margin-bottom: 1.25rem; background: #f9f9f9; border-radius: 10px;
+  padding: 0.75rem 1rem; border: 1px solid #e0e0e0;
 }
-.original-meta h4 { margin: 0 0 0.5rem; font-size: 0.9rem; color: #334155; }
-.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; font-size: 0.85rem; color: #475569; }
-.meta-grid div span { font-weight: 600; color: #1e293b; }
+.original-meta h4 { margin: 0 0 0.5rem; font-size: 0.9rem; color: #213547; font-weight: 700; }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; font-size: 0.85rem; color: #555; }
+.meta-grid div span { font-weight: 600; color: #213547; }
 
+/* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   .meta-grid { grid-template-columns: 1fr; }
   .format-options { flex-direction: column; }
+  .unified-preview-wrapper { width: 100%; }
+  .tc-field-row { flex-direction: column; gap: 0.5rem; }
+  .emoji-grid { grid-template-columns: repeat(auto-fill, minmax(1.8rem, 1fr)); }
 }
 </style>
