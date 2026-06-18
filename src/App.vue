@@ -716,20 +716,7 @@ function replaceActiveOverlayImage(file) {
   reader.readAsDataURL(file);
 }
 
-function adjustScale(amount) {
-  if (!activeOverlay.value) return;
-  // Zmiana zaokrąglona do 2 miejsc po przecinku, aby uniknąć błędów zmiennoprzecinkowych JS
-  activeOverlay.value.scale = Math.max(0.1, Math.min(5, parseFloat((activeOverlay.value.scale + amount).toFixed(2))));
-  nextTick(redrawPreviewOverlay);
-}
 
-function adjustRotation(amount) {
-  if (!activeOverlay.value) return;
-  let newRot = (activeOverlay.value.rotation + amount) % 360;
-  if (newRot < 0) newRot += 360;
-  activeOverlay.value.rotation = newRot;
-  nextTick(redrawPreviewOverlay);
-}
 
   
 function adjustScale(amount) {
