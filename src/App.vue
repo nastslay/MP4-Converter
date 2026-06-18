@@ -1808,10 +1808,98 @@ watch(useOriginalWidth, async (enabled) => {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
-  .meta-grid { grid-template-columns: 1fr; }
-  .format-options { flex-direction: column; }
-  .unified-preview-wrapper { width: 100%; }
-  .tc-field-row { flex-direction: column; gap: 0.5rem; }
-  .emoji-grid { grid-template-columns: repeat(auto-fill, minmax(1.8rem, 1fr)); }
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+  .format-options {
+    flex-direction: column;
+  }
+  .unified-preview-wrapper {
+    width: 100%;
+  }
+
+  /* ===== TEKST NA OBRAZIE – MOBILE FIX ===== */
+
+  /* Zakładki – pozwól im się przewijać, zamiast łamać */
+  .textbox-tabs-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.2rem;
+  }
+  .textbox-tabs {
+    flex-wrap: nowrap;   /* zapobiega łamaniu się przycisków w pionie */
+  }
+
+  /* Główne grupy pól – układ pionowy już był, ale wzmacniamy go */
+  .tc-field-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  /* Każde pole w pionie zajmuje całą szerokość */
+  .tc-field-group {
+    width: 100%;
+  }
+  /* Rozwijane listy i pola tekstowe wypełniają dostępne miejsce */
+  .tc-select,
+  .text-input {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Rzędy z przyciskami +/- i inputem – zapobiegaj rozjeżdżaniu */
+  .btn-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .tc-num-input,
+  .tc-num-input-sm {
+    min-width: 0;       /* pozwala się zmniejszyć */
+    flex: 1;            /* dzielą dostępną przestrzeń */
+    max-width: 100%;
+  }
+  .num-btn {
+    flex-shrink: 0;     /* przyciski nie zmniejszają się */
+  }
+
+  /* Kolor i grubość obrysu – układ w poziomie z zawijaniem */
+  .color-row {
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .color-hex {
+    font-size: 0.75rem;
+    word-break: break-all;
+  }
+
+  /* Kontrolki stylu (B, I, U, Cień) – bardziej zwarte */
+  .style-toggles {
+    gap: 0.3rem;
+  }
+  .style-btn {
+    min-width: 2.2rem;
+    height: 2.2rem;
+    font-size: 0.9rem;
+  }
+
+  /* Picker emoji – mniejsze kafelki i przewijanie w pionie */
+  .emoji-grid {
+    grid-template-columns: repeat(auto-fill, minmax(1.8rem, 1fr));
+    max-height: 140px;   /* nie zajmuje pół ekranu */
+  }
+  .emoji-btn {
+    font-size: 1.2rem;
+    padding: 0.2rem;
+  }
+
+  /* Suwaki i etykiety – zachowanie czytelności */
+  .tc-label-row {
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .reset-small-btn {
+    margin-left: 0;
+  }
 }
 </style>
