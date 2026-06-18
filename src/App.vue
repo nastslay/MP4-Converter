@@ -721,7 +721,6 @@ function replaceActiveOverlayImage(file) {
   
 function adjustScale(amount) {
   if (!activeOverlay.value) return;
-  // Zmiana zaokrąglona do 2 miejsc po przecinku, aby uniknąć błędów zmiennoprzecinkowych JS
   activeOverlay.value.scale = Math.max(0.1, Math.min(5, parseFloat((activeOverlay.value.scale + amount).toFixed(2))));
   nextTick(redrawPreviewOverlay);
 }
