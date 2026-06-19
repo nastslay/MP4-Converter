@@ -1,14 +1,3 @@
-Build nie przeszedł, ponieważ w szablonie Vue brakuje zamknięcia znacznika `<template v-if="textPanelOpen">` — po kontrolkach tekstowych. Dodatkowo w kodzie został zduplikowany blok zakładek, co również należy usunąć.
-
-Poniżej przekazuję **poprawiony komponent** `App.vue`. Wprowadzone zmiany to:
-
-1. **Zamknięcie `<template v-if="textPanelOpen">`** po bloku `.textbox-controls`.
-2. **Usunięcie zduplikowanego rzędu zakładek** (był wklejony dwa razy).
-3. Zachowanie całej reszty funkcjonalności (zwijanie panelu tekstowego, usunięta pusta ramka, przyciski, ciemny tryb itd.).
-
-Kod gotowy do skopiowania i wgrania:
-
-```vue
 <template>
   <div class="container">
     <button
@@ -2345,4 +2334,3 @@ html.dark-mode #app {
   color: #e8e8e8 !important;
 }
 </style>
-```
