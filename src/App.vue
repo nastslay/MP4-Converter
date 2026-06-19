@@ -281,11 +281,10 @@
                     </div>
                     <div class="tc-field-group fontsize-field">
                       <label class="tc-label">Rozmiar (px)</label>
-                      <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 5); redrawPreviewOverlay()">−</button>
-                        <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 5); redrawPreviewOverlay()">+</button>
-                      </div>
+                        <div class="btn-row">
+                          <button class="num-btn wide-btn" @click="adjust('width', -10)" :disabled="isConverting || useOriginalWidth">−</button>
+                          <button class="num-btn wide-btn" @click="adjust('width', 10)" :disabled="isConverting || useOriginalWidth">+</button>
+                        </div>
                     </div>
                     <div class="tc-field-group style-field">
                       <label class="tc-label">Styl</label>
