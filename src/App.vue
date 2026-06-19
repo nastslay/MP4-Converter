@@ -5,7 +5,10 @@
       @click="toggleDarkMode"
       :title="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
       :aria-label="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
-    >{{ isDarkMode ? '☀️' : '🌙' }}</button>
+    >
+      <span class="theme-icon">{{ isDarkMode ? '☀️' : '🌙' }}</span>
+      <span class="theme-label">{{ isDarkMode ? 'Jasny' : 'Ciemny' }}</span>
+    </button>
     <h1>🎬 MP4 / WebP → WebP / GIF</h1>
     <p class="subtitle">Wklej link do X.com, MP4 lub wgraj plik MP4 / animowany WebP</p>
 
@@ -1182,7 +1185,7 @@ onMounted(async () => {
     if (savedTheme) {
       isDarkMode.value = savedTheme === 'dark';
     } else {
-      isDarkMode.value = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      isDarkMode.value = false; // domyślnie jasny tryb
     }
   } catch (e) {}
   applyDarkModeClass();
@@ -1556,23 +1559,27 @@ watch(useOriginalWidth, async (enabled) => {
   position: absolute;
   top: 0.6rem;
   right: 0.6rem;
-  width: 2.3rem;
   height: 2.3rem;
-  border-radius: 50%;
+  border-radius: 1.15rem;
   border: none;
   background-color: #eef1f5;
-  font-size: 1.15rem;
-  line-height: 1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #444;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.35rem;
+  padding: 0 0.9rem;
   transition: background-color 0.2s, transform 0.15s;
   touch-action: manipulation;
   z-index: 5;
 }
-.theme-toggle-btn:hover { background-color: #dde3ea; transform: scale(1.06); }
-.theme-toggle-btn:active { transform: scale(0.94); }
+.theme-toggle-btn:hover { background-color: #dde3ea; transform: scale(1.04); }
+.theme-toggle-btn:active { transform: scale(0.96); }
+.theme-icon { font-size: 1.15rem; line-height: 1; }
+.theme-label { white-space: nowrap; }
 
 /* ===== EDIT PANEL WRAPPER ===== */
 .edit-panel {
@@ -2246,6 +2253,13 @@ watch(useOriginalWidth, async (enabled) => {
     height: 2.3rem;
     font-size: 1.25rem;
   }
+  .theme-toggle-btn {
+    padding: 0 0.6rem;
+    font-size: 0.75rem;
+  }
+  .theme-label {
+    display: none;
+  }
 }
 
 /* ===== DARK MODE ===== */
@@ -2329,12 +2343,17 @@ watch(useOriginalWidth, async (enabled) => {
 .dark-mode .original-meta h4 { color: #e8e8e8; }
 .dark-mode .meta-grid { color: #b0b0b0; }
 .dark-mode .meta-grid div span { color: #e8e8e8; }
+.dark-mode .size-estimate label { color: #e8e8e8; }
+.dark-mode .estimate-display { color: #e8e8e8; }
+.dark-mode .estimate-value { color: #5ec1f7; }
+.dark-mode .estimate-note { color: #999; }
+.dark-mode .estimate-confidence { color: #aaa; }
 
 .dark-mode .image-preview-box { background: #2a2d34; }
 .dark-mode .change-img-btn { background: #2a2d34; border-color: #3a3d44; color: #e8e8e8; }
 .dark-mode .change-img-btn:hover { background: #3a3d44; }
 
-.dark-mode .theme-toggle-btn { background-color: #2a2d34; color: #ffd54f; }
+.dark-mode .theme-toggle-btn { background-color: #2a2d34; color: #e8e8e8; }
 .dark-mode .theme-toggle-btn:hover { background-color: #3a3d44; }
 </style>
 
