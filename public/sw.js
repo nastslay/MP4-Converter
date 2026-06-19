@@ -1,7 +1,8 @@
 // Service Worker dla PWA — AnimConverter
-const CACHE_NAME = 'animconverter-v1';
+const CACHE_VERSION = 'v2';  // <-- Zwiększaj ręcznie przy każdym deployu lub użyj timestamp
+const CACHE_NAME = `animconverter-${CACHE_VERSION}`;
 
-// Pliki do cache'owania przy instalacji (shell aplikacji)
+// Pliki do pre-cache (powłoka aplikacji)
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -10,57 +11,76 @@ const PRECACHE_URLS = [
   '/icons/icon-512.png',
 ];
 
-// Install: cache shell
+// Install: pre-cache i natychmiastowe przejęcie
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS).catch((err) => {
-        console.warn('SW: Pre-cache partial failure (ok in dev):', err);
-      });
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(PRECACHE_URLS))
+      .catch(err => console.warn('SW: Pre-cache partial failure:', err))
+      .then(() => self.skipWaiting())
   );
 });
 
-// Activate: remove old caches
+// Activate: usuń stare caches i przejmij kontrolę
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))
     ).then(() => self.clients.claim())
   );
 });
 
-// Fetch: network-first dla API/CDN, cache-first dla shell
+// Fetch: network-first dla HTML/manifest, cache-first dla assetów
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
+  const request = event.request;
 
-  // Nie cachuj: CDN ffmpeg (za duże), API proxy
+  // Nie cache'uj zewnętrznych CDN ani API
   if (
     url.hostname.includes('unpkg.com') ||
     url.hostname.includes('cdnjs.cloudflare.com') ||
     url.pathname.startsWith('/api/')
   ) {
-    event.respondWith(fetch(event.request));
+    event.respondWith(fetch(request));
     return;
   }
 
-  // Cache-first dla shell assets
+  // Dla nawigacji (HTML) i manifest – zawsze pobieraj z sieci
+  if (request.mode === 'navigate' || url.pathname === '/manifest.json' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          // Zapisz świeżą kopię do cache na przyszłość (opcjonalnie)
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => {
+          // Offline – wróć do cache (jeśli istnieje)
+          return caches.match(request);
+        })
+    );
+    return;
+  }
+
+  // Dla pozostałych zasobów (JS, CSS, obrazy) – cache-first, potem sieć
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // Cache successful GET responses
-        if (response && response.status === 200 && event.request.method === 'GET') {
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
-        }
-        return response;
-      }).catch(() => {
-        // Offline fallback: return index.html for navigation requests
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
-      });
-    })
+    caches.match(request)
+      .then(cached => cached || fetch(request)
+        .then(response => {
+          // Cache'uj tylko udane odpowiedzi
+          if (response && response.status === 200 && request.method === 'GET') {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          // Jeśli offline i brak cache – zwróć index.html (dla SPA)
+          if (request.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
+        })
+      )
   );
 });
