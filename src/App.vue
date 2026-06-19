@@ -311,6 +311,17 @@
                       <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 2); redrawPreviewOverlay()">+</button>
                     </div>
                   </div>
+                  <div class="tc-field-group strokewidth-field">
+                    <label class="tc-label">Grub. obrysu</label>
+                    <div class="btn-row">
+                      <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
+                      <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
+                      <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="tc-field-row style-color-row">
                   <div class="tc-field-group style-field">
                     <label class="tc-label">Styl</label>
                     <div class="style-toggles">
@@ -320,9 +331,6 @@
                       <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
                     </div>
                   </div>
-                </div>
-
-                <div class="tc-field-row">
                   <div class="tc-field-group">
                     <label class="tc-label">Kolor tekstu</label>
                     <div class="color-row">
@@ -335,14 +343,6 @@
                     <div class="color-row">
                       <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
                       <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
-                    </div>
-                  </div>
-                  <div class="tc-field-group strokewidth-field">
-                    <label class="tc-label">Grub. obrysu</label>
-                    <div class="btn-row">
-                      <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
-                      <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
-                      <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
                     </div>
                   </div>
                 </div>
@@ -2179,6 +2179,24 @@ watch(useOriginalWidth, async (enabled) => {
   .tc-field-group {
     width: 100%;
   }
+
+  /* "Styl", "Kolor tekstu" i "Obrys / cień" pozostają w jednym wierszu na mobile */
+  .style-color-row {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 0.5rem;
+    padding-bottom: 0.2rem;
+  }
+  .style-color-row .tc-field-group {
+    width: auto;
+    flex: 0 0 auto;
+  }
+  .style-color-row .tc-label {
+    white-space: nowrap;
+  }
+
   .tc-select,
   .text-input {
     width: 100%;
@@ -2300,6 +2318,23 @@ watch(useOriginalWidth, async (enabled) => {
   color: #e8e8e8;
 }
 .dark-mode .text-input:focus { border-color: #1da1f2; }
+
+/* Wszystkie pozostałe pola tekstowe/numeryczne (bez własnej klasy) – ten sam ciemny kolor co w ramce "Tekst na obrazie" */
+.dark-mode input[type="text"],
+.dark-mode input[type="number"] {
+  background-color: #2a2d34;
+  border: 1px solid #3a3d44;
+  color: #e8e8e8;
+}
+.dark-mode input[type="text"]::placeholder,
+.dark-mode input[type="number"]::placeholder {
+  color: #8a8d94;
+}
+.dark-mode input[type="text"]:focus,
+.dark-mode input[type="number"]:focus {
+  outline: none;
+  border-color: #1da1f2;
+}
 
 .dark-mode .emoji-toggle-btn { background: #2a2d34; border-color: #3a3d44; }
 .dark-mode .emoji-toggle-btn:hover { background: #3a3422; border-color: #ffc107; }
