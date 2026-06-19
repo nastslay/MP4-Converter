@@ -192,9 +192,48 @@
           </div>
         </div>
 
-        <!-- TEXT EDITOR CONTROLS -->
-        <div class="text-controls"></div>
-          <div class="section-label">✏️ Tekst na obrazie</div>
+  <!-- TEXT EDITOR CONTROLS – teraz z nagłówkiem zwijanym -->
+        <div class="text-controls">
+          <div
+            class="section-label clickable-section-label"
+            @click="textPanelOpen = !textPanelOpen"
+            role="button"
+            tabindex="0"
+            :aria-expanded="textPanelOpen"
+          >
+            ✏️ Tekst na obrazie
+            <span class="toggle-arrow">{{ textPanelOpen ? '▼' : '▶' }}</span>
+          </div>
+
+          <template v-if="textPanelOpen">
+            <!-- Scrollowalny rząd zakładek -->
+            <div class="textbox-tabs-row">
+              <div class="textbox-tabs">
+                <button
+                  v-for="(item, idx) in overlays"
+                  :key="idx"
+                  class="tb-tab"
+                  :class="{ active: activeOverlayIdx === idx }"
+                  @click="activeOverlayIdx = idx"
+                >
+                  <span class="tb-tab-num">{{ idx + 1 }}</span>
+                  <span v-if="item.type === 'text'" class="tb-tab-preview">{{ item.text ? item.text.slice(0, 8) + (item.text.length > 8 ? '…' : '') : '(pusty)' }}</span>
+                  <span v-else class="tb-tab-preview">🖼️ obrazek</span>
+                </button>
+              </div>
+              <div class="textbox-tab-actions">
+                <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">
+                  <span class="tab-action-icon">＋</span>
+                  <span class="tab-action-label">Dodaj tekst</span>
+                </button>
+                <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Wgraj obraz z dysku">
+                  <span class="tab-action-icon">🖼️</span>
+                  <span class="tab-action-label">Wgraj obraz z dysku</span>
+                </button>
+                <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
+              </div>
+            </div>
+
 
           <!-- Scrollowalny rząd zakładek -->
           <div class="textbox-tabs-row">
@@ -512,6 +551,7 @@ const syncHorizontal = ref(true);
 
 // Panel open state (replaces separate cropEnabled + textEditEnabled)
 const editPanelOpen = ref(false);
+const textPanelOpen = ref(true);
 
 // Podgląd klatki
 const previewFrame         = ref(null);
@@ -1664,6 +1704,18 @@ watch(useOriginalWidth, async (enabled) => {
   gap: 0.75rem;
 }
 
+.clickable-section-label {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.toggle-arrow {
+  font-size: 0.8rem;
+  color: #888;
+}
+  
 .section-label {
   font-weight: 700;
   font-size: 0.9rem;
