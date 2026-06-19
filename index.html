@@ -1,114 +1,4 @@
-<!DOCTYPE html>
-<html lang="pl">
-  <head>
-    <!-- ========== PODSTAWOWE META ========== -->
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    />
-
-    <!-- ========== META PWA ========== -->
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="AnimConverter" />
-    <meta name="theme-color" content="#4b6cb7" />
-    <meta
-      name="description"
-      content="Konwertuj MP4 i WebP na GIF lub animowany WebP"
-    />
-
-    <!-- ========== IKONY I MANIFEST ========== -->
-    <link rel="manifest" href="/manifest.json" />
-    <!-- Favicon (Vite) -->
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <!-- Apple Touch Icons (Safari nie czyta manifestu) -->
-    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
-    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
-
-    <title>AnimConverter</title>
-  </head>
-
-  <body>
-    <!-- ========== BANER INSTALACJI PWA ========== -->
-    <div
-      id="pwa-install-banner"
-      style="
-        display: none;
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        z-index: 9999;
-        background: #4b6cb7;
-        color: white;
-        padding: 12px 16px;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.3);
-        font-family: system-ui, sans-serif;
-      "
-    >
-      <div style="display: flex; align-items: center; gap: 10px">
-        <img
-          src="/icons/icon-192.png"
-          width="36"
-          height="36"
-          style="border-radius: 8px"
-          alt=""
-        />
-        <div>
-          <div style="font-weight: 700; font-size: 0.9rem">
-            Zainstaluj AnimConverter
-          </div>
-          <div style="font-size: 0.78rem; opacity: 0.85">
-            Działa offline, jak natywna aplikacja
-          </div>
-        </div>
-      </div>
-      <div style="display: flex; gap: 8px; flex-shrink: 0">
-        <button
-          id="pwa-install-btn"
-          style="
-            background: white;
-            color: #4b6cb7;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: 700;
-            font-size: 0.85rem;
-            cursor: pointer;
-          "
-        >
-          Zainstaluj
-        </button>
-        <button
-          id="pwa-install-dismiss"
-          style="
-            background: transparent;
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-size: 0.82rem;
-            cursor: pointer;
-          "
-        >
-          ✕
-        </button>
-      </div>
-    </div>
-
-    <!-- ========== MIEJSCE NA APLIKACJĘ VUE ========== -->
-    <div id="app"></div>
-
-    <!-- ========== SKRYPTY ========== -->
-    <!-- Główny skrypt aplikacji (Vue) -->
-    <script type="module" src="/src/main.js"></script>
-    <!-- Rejestracja Service Worker (PWA) -->
-    <script>
+<script>
   (function() {
     'use strict';
 
@@ -117,12 +7,26 @@
         navigator.serviceWorker.register('/sw.js', { scope: '/' })
           .then(reg => {
             console.log('[PWA] Service Worker registered:', reg.scope);
+            // Sprawdzaj aktualizacje co 60 sekund
             setInterval(() => reg.update(), 60000);
+
+            // Wykryj nową wersję i automatycznie odśwież (opcjonalnie)
+            reg.addEventListener('updatefound', () => {
+              const newWorker = reg.installing;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // Nowa wersja jest gotowa – odświeżamy stronę, aby aktywować
+                  console.log('[PWA] Nowa wersja dostępna – odświeżam...');
+                  window.location.reload();
+                }
+              });
+            });
           })
           .catch(err => console.warn('[PWA] SW registration failed:', err));
       });
     }
 
+    // Instalacja PWA – baner
     let deferredPrompt = null;
     const installBanner = document.getElementById('pwa-install-banner');
     const installBtn    = document.getElementById('pwa-install-btn');
@@ -157,6 +61,4 @@
       if (installBanner) installBanner.style.display = 'none';
     });
   })();
-  </script>
-  </body>
-</html>
+</script>
