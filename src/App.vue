@@ -139,7 +139,18 @@
 
         <!-- CROP CONTROLS -->
         <div class="crop-controls">
-          <div class="section-label">✂️ Kadrowanie</div>
+          <div
+            class="section-label clickable-section-label"
+            @click="cropPanelOpen = !cropPanelOpen"
+            role="button"
+            tabindex="0"
+            :aria-expanded="cropPanelOpen"
+          >
+            ✂️ Kadrowanie
+            <span class="toggle-arrow">{{ cropPanelOpen ? '▼' : '▶' }}</span>
+          </div>
+
+          <template v-if="cropPanelOpen">
           <div class="sync-row">
             <label><input type="checkbox" v-model="syncVertical" :disabled="isConverting" /> Synchronizuj (Góra/Dół)</label>
           </div>
@@ -190,6 +201,7 @@
               <span v-else>(oryg. − {{ cropLeft + cropRight }}px szer., − {{ cropTop + cropBottom }}px wys.)</span>
             </div>
           </div>
+          </template>
         </div>
 
         <!-- TEXT EDITOR CONTROLS – z nagłówkiem zwijanym -->
@@ -518,7 +530,8 @@ const syncHorizontal = ref(true);
 
 // Panel open states
 const editPanelOpen = ref(false);
-const textPanelOpen = ref(true);
+const textPanelOpen = ref(false);
+const cropPanelOpen = ref(true);
 
 // Podgląd klatki
 const previewFrame         = ref(null);
