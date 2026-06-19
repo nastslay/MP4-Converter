@@ -193,7 +193,7 @@
         </div>
 
         <!-- TEXT EDITOR CONTROLS -->
-        <div class="text-controls"></div>
+        <div class="text-controls">
           <div class="section-label">✏️ Tekst na obrazie</div>
 
           <!-- Scrollowalny rząd zakładek -->
@@ -224,184 +224,177 @@
             </div>
           </div>
 
-              <div v-if="activeOverlay" class="textbox-controls">
-              
-                <!-- ======= KONTROLKI DLA TEKSTU ======= -->
-                <template v-if="activeOverlay.type === 'text'">
-              
-                  <div class="tc-field-group">
-                    <label class="tc-label">Tekst</label>
-                    <div class="text-input-row">
-                      <input
-                        type="text"
-                        v-model="activeOverlay.text"
-                        placeholder="Wpisz tekst lub emoji…"
-                        class="text-input"
-                        ref="textInputRef"
-                        @input="redrawPreviewOverlay"
-                      />
-                      <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
-                    </div>
-                    <!-- Emoji picker panel (dokładnie taki sam jak poprzednio) -->
-                    <div v-if="showEmojiPicker" class="emoji-picker">
-                      <div class="emoji-cats">
-                        <button
-                          v-for="cat in emojiCategories"
-                          :key="cat.name"
-                          class="emoji-cat-btn"
-                          :class="{ active: activeCat === cat.name }"
-                          @click="activeCat = cat.name"
-                        >{{ cat.icon }}</button>
-                      </div>
-                      <div class="emoji-grid">
-                        <button
-                          v-for="em in currentEmojis"
-                          :key="em"
-                          class="emoji-btn"
-                          @click="insertEmoji(em)"
-                        >{{ em }}</button>
-                      </div>
-                    </div>
+          <div v-if="activeOverlay" class="textbox-controls">
+            <!-- ======= KONTROLKI DLA TEKSTU ======= -->
+            <template v-if="activeOverlay.type === 'text'">
+              <div class="tc-field-group">
+                <label class="tc-label">Tekst</label>
+                <div class="text-input-row">
+                  <input
+                    type="text"
+                    v-model="activeOverlay.text"
+                    placeholder="Wpisz tekst lub emoji…"
+                    class="text-input"
+                    ref="textInputRef"
+                    @input="redrawPreviewOverlay"
+                  />
+                  <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
+                </div>
+                <div v-if="showEmojiPicker" class="emoji-picker">
+                  <div class="emoji-cats">
+                    <button
+                      v-for="cat in emojiCategories"
+                      :key="cat.name"
+                      class="emoji-cat-btn"
+                      :class="{ active: activeCat === cat.name }"
+                      @click="activeCat = cat.name"
+                    >{{ cat.icon }}</button>
                   </div>
-              
-                  <div class="tc-field-row style-font-row">
-                    <div class="tc-field-group tc-field-grow">
-                      <label class="tc-label">Czcionka</label>
-                      <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
-                        <option value="Impact">Impact</option>
-                        <option value="Arial">Arial</option>
-                        <option value="Arial Black">Arial Black</option>
-                        <option value="Georgia">Georgia</option>
-                        <option value="Times New Roman">Times New Roman</option>
-                        <option value="Courier New">Courier New</option>
-                        <option value="Verdana">Verdana</option>
-                        <option value="Trebuchet MS">Trebuchet MS</option>
-                        <option value="Comic Sans MS">Comic Sans MS</option>
-                      </select>
-                    </div>
-                    <div class="tc-field-group fontsize-field">
-                      <label class="tc-label">Rozmiar (px)</label>
-                      <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 5); redrawPreviewOverlay()">−</button>
-                        <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 5); redrawPreviewOverlay()">+</button>
-                      </div>
-                    </div>
-                    <div class="tc-field-group style-field">
-                      <label class="tc-label">Styl</label>
-                      <div class="style-toggles">
-                        <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
-                        <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
-                        <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
-                        <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
-                      </div>
-                    </div>
+                  <div class="emoji-grid">
+                    <button
+                      v-for="em in currentEmojis"
+                      :key="em"
+                      class="emoji-btn"
+                      @click="insertEmoji(em)"
+                    >{{ em }}</button>
                   </div>
-              
-                  <div class="tc-field-row">
-                    <div class="tc-field-group">
-                      <label class="tc-label">Kolor tekstu</label>
-                      <div class="color-row">
-                        <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
-                        <span class="color-hex">{{ activeOverlay.color }}</span>
-                      </div>
-                    </div>
-                    <div class="tc-field-group">
-                      <label class="tc-label">Obrys / cień</label>
-                      <div class="color-row">
-                        <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
-                        <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
-                      </div>
-                    </div>
-                    <div class="tc-field-group strokewidth-field">
-                      <label class="tc-label">Grub. obrysu</label>
-                      <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
-                        <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
-                      </div>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Obrót</label>
-                      <span class="tc-value">{{ activeOverlay.rotation }}°</span>
-                      <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
-                    </div>
-                    <div class="slider-edge-row">
-                      <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
-                      <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
-                      <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Przezroczystość</label>
-                      <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
-                    </div>
-                    <div class="slider-edge-row">
-                      <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
-                      <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-                      <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
-                    </div>
-                  </div>
-              
-                </template>
-              
-                <!-- ======= KONTROLKI DLA OBRAZU ======= -->
-                <template v-else-if="activeOverlay.type === 'image'">
-                  
-                  <div class="tc-field-group">
-                    <label class="tc-label">Wgraj obraz z dysku</label>
-                    <div class="image-preview-box">
-                      <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
-                    </div>
-                    <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Skala</label>
-                      <span class="tc-value">{{ activeOverlay.scale.toFixed(2) }}×</span>
-                    </div>
-                    <div class="slider-edge-row">
-                      <button class="slider-edge-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.25).toFixed(2)); redrawPreviewOverlay()" title="−0.25">−</button>
-                      <input type="range" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.25" class="tc-range" @input="redrawPreviewOverlay" />
-                      <button class="slider-edge-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.25).toFixed(2)); redrawPreviewOverlay()" title="+0.25">+</button>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Obrót</label>
-                      <span class="tc-value">{{ activeOverlay.rotation }}°</span>
-                      <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
-                    </div>
-                    <div class="slider-edge-row">
-                      <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
-                      <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
-                      <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Przezroczystość</label>
-                      <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
-                    </div>
-                    <div class="slider-edge-row">
-                      <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
-                      <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-                      <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
-                    </div>
-                  </div>
-              
-                </template>
+                </div>
               </div>
 
-           
+              <div class="tc-field-row style-font-row">
+                <div class="tc-field-group tc-field-grow">
+                  <label class="tc-label">Czcionka</label>
+                  <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
+                    <option value="Impact">Impact</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Arial Black">Arial Black</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                    <option value="Comic Sans MS">Comic Sans MS</option>
+                  </select>
+                </div>
+                <div class="tc-field-group fontsize-field">
+                  <label class="tc-label">Rozmiar (px)</label>
+                  <div class="btn-row">
+                    <button class="num-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 5); redrawPreviewOverlay()">−</button>
+                    <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
+                    <button class="num-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 5); redrawPreviewOverlay()">+</button>
+                  </div>
+                </div>
+                <div class="tc-field-group style-field">
+                  <label class="tc-label">Styl</label>
+                  <div class="style-toggles">
+                    <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tc-field-row">
+                <div class="tc-field-group">
+                  <label class="tc-label">Kolor tekstu</label>
+                  <div class="color-row">
+                    <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
+                    <span class="color-hex">{{ activeOverlay.color }}</span>
+                  </div>
+                </div>
+                <div class="tc-field-group">
+                  <label class="tc-label">Obrys / cień</label>
+                  <div class="color-row">
+                    <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
+                    <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
+                  </div>
+                </div>
+                <div class="tc-field-group strokewidth-field">
+                  <label class="tc-label">Grub. obrysu</label>
+                  <div class="btn-row">
+                    <button class="num-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
+                    <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
+                    <button class="num-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Obrót</label>
+                  <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                  <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
+                  <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
+                </div>
+              </div>
+
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Przezroczystość</label>
+                  <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
+                  <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
+                </div>
+              </div>
+            </template>
+
+            <!-- ======= KONTROLKI DLA OBRAZU ======= -->
+            <template v-else-if="activeOverlay.type === 'image'">
+              <div class="tc-field-group">
+                <label class="tc-label">Wgraj obraz z dysku</label>
+                <div class="image-preview-box">
+                  <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
+                </div>
+                <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
+              </div>
+
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Skala</label>
+                  <span class="tc-value">{{ activeOverlay.scale.toFixed(2) }}×</span>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.25).toFixed(2)); redrawPreviewOverlay()" title="−0.25">−</button>
+                  <input type="range" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.25" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.25).toFixed(2)); redrawPreviewOverlay()" title="+0.25">+</button>
+                </div>
+              </div>
+
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Obrót</label>
+                  <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                  <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
+                  <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
+                </div>
+              </div>
+
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Przezroczystość</label>
+                  <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
+                  <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
 
         <!-- UNIFIED PREVIEW CANVAS -->
         <div class="preview-section">
@@ -2097,8 +2090,6 @@ watch(useOriginalWidth, async (enabled) => {
   flex-shrink: 0;
 }
 
-
-
 /* Reset small */
 .reset-small-btn {
   padding: 0.2rem 0.55rem;
@@ -2272,7 +2263,7 @@ watch(useOriginalWidth, async (enabled) => {
   .reset-small-btn {
     margin-left: 0;
   }
-    .tab-add-img {
+  .tab-add-img {
     font-size: 1rem;
     padding: 0 0.5rem;
   }
@@ -2336,94 +2327,6 @@ watch(useOriginalWidth, async (enabled) => {
   transition: background-color 0.15s;
 }
 .change-img-btn:hover { background: #f0f0f0; }
-
-/* ===================================================== */
-/* ===== DARK MODE — panel edycji / nakładki / suwaki === */
-/* ===================================================== */
-.dark-mode .section-label { color: #e8e8e8; border-bottom-color: #3a3d44; }
-.dark-mode .crop-controls,
-.dark-mode .text-controls { background: #23262c; border-color: #3a3d44; }
-
-.dark-mode .tb-tab { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
-.dark-mode .tb-tab:hover:not(:disabled) { background: #1f3a26; border-color: #4caf50; color: #8fd99f; }
-.dark-mode .tb-tab.active { background: #1da1f2; border-color: #1da1f2; color: #fff; }
-
-.dark-mode .tab-add { background-color: #1f3a26; color: #8fd99f; }
-.dark-mode .tab-add:hover:not(:disabled) { background-color: #2a4a32; }
-.dark-mode .tab-add:disabled { background-color: #2a2d34; color: #6a6d74; }
-
-.dark-mode .tab-remove { background-color: #3a1f1f; color: #ff9a9a; }
-.dark-mode .tab-remove:hover:not(:disabled) { background-color: #4a2828; }
-.dark-mode .tab-remove:disabled { background-color: #2a2d34; color: #6a6d74; }
-
-.dark-mode .tab-add-img { background-color: #16415e; color: #8fd0ff; }
-.dark-mode .tab-add-img:hover:not(:disabled) { background-color: #1d567a; }
-.dark-mode .tab-add-img:disabled { background-color: #2a2d34; color: #6a6d74; }
-
-.dark-mode .textbox-controls { background: #1f2228; border-color: #3a3d44; }
-.dark-mode .tc-label { color: #e8e8e8; }
-.dark-mode .tc-value { color: #5ec1f7; }
-
-.dark-mode .text-input,
-.dark-mode .tc-select,
-.dark-mode .tc-num-input,
-.dark-mode .tc-num-input-sm {
-  background: #2a2d34;
-  border-color: #3a3d44;
-  color: #e8e8e8;
-}
-.dark-mode .text-input:focus { border-color: #1da1f2; }
-
-.dark-mode .emoji-toggle-btn { background: #2a2d34; border-color: #3a3d44; }
-.dark-mode .emoji-toggle-btn:hover { background: #3a3422; border-color: #ffc107; }
-.dark-mode .emoji-picker { background: #23262c; border-color: #3a3d44; }
-.dark-mode .emoji-cats { border-bottom-color: #3a3d44; }
-.dark-mode .emoji-cat-btn:hover { background: #3a3d44; }
-.dark-mode .emoji-cat-btn.active { background: #16415e; border-color: #1da1f2; }
-.dark-mode .emoji-btn:hover { background: #3a3d44; }
-
-.dark-mode .color-pick { background: #2a2d34; border-color: #3a3d44; }
-.dark-mode .color-hex { color: #aaa; }
-
-.dark-mode .style-btn { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
-.dark-mode .style-btn:hover:not(:disabled) { background: #3a3d44; border-color: #555; }
-.dark-mode .style-btn.active { background: #1da1f2; border-color: #1da1f2; color: #fff; }
-
-.dark-mode .num-btn { background-color: #3a3d44; color: #e8e8e8; }
-.dark-mode .num-btn:hover:not(:disabled) { background-color: #4a4d54; }
-.dark-mode .num-btn:active:not(:disabled) { background-color: #5a5d64; }
-.dark-mode .num-btn:disabled { background-color: #2a2d34; color: #6a6d74; }
-
-.dark-mode .slider-edge-btn { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
-.dark-mode .slider-edge-btn:hover:not(:disabled) { background: #3a3d44; }
-.dark-mode .slider-edge-btn:active:not(:disabled) { background: #4a4d54; }
-
-.dark-mode .reset-small-btn { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
-.dark-mode .reset-small-btn:hover { background: #3a3d44; }
-
-.dark-mode .unified-preview-wrapper { border-color: #3a3d44; }
-.dark-mode .preview-label { color: #e8e8e8; }
-.dark-mode .preview-dims,
-.dark-mode .preview-loading { color: #999; }
-
-.dark-mode .format-selector { background: #23262c; border-color: #3a3d44; }
-.dark-mode .format-label { color: #e8e8e8; }
-.dark-mode .format-btn { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
-.dark-mode .format-btn:hover:not(:disabled) { background: #3a3d44; border-color: #555; }
-.dark-mode .format-btn.active { background: #16415e; border-color: #1da1f2; color: #8fd0ff; }
-
-.dark-mode .original-meta { background: #23262c; border-color: #3a3d44; }
-.dark-mode .original-meta h4 { color: #e8e8e8; }
-.dark-mode .meta-grid { color: #b0b0b0; }
-.dark-mode .meta-grid div span { color: #e8e8e8; }
-
-.dark-mode .image-preview-box { background: #2a2d34; }
-.dark-mode .change-img-btn { background: #2a2d34; border-color: #3a3d44; color: #e8e8e8; }
-.dark-mode .change-img-btn:hover { background: #3a3d44; }
-
-.dark-mode .theme-toggle-btn { background-color: #2a2d34; color: #ffd54f; }
-.dark-mode .theme-toggle-btn:hover { background-color: #3a3d44; }
-
 </style>
 
 <style>
@@ -2433,11 +2336,9 @@ html.dark-mode body {
   background-color: #121212;
   color: #e0e0e0;
 }
-
 html.dark-mode body {
   margin: 0;
 }
-
 html.dark-mode h1,
 html.dark-mode h2,
 html.dark-mode h3,
@@ -2445,32 +2346,19 @@ html.dark-mode h4,
 html.dark-mode .subtitle {
   color: #f0f0f0;
 }
-
-html.dark-mode input:not([type="checkbox"]):not([type="file"]):not([type="color"]):not([type="range"]),
-html.dark-mode select,
-html.dark-mode textarea {
-  background-color: #2a2d34;
-  color: #e0e0e0;
-  border-color: #3a3d44;
-}
-
 html.dark-mode .container {
   background-color: #121212;
 }
-
 html.dark-mode .input-group label,
 html.dark-mode .param-field label {
   color: #e0e0e0;
 }
-
 html.dark-mode .note {
   color: #aaa;
 }
-
 html.dark-mode .error {
   color: #ff6b6b;
 }
-
 html.dark-mode .fetch-btn,
 html.dark-mode .upload-btn,
 html.dark-mode .clear-btn,
@@ -2480,14 +2368,97 @@ html.dark-mode .crop-toggle-btn {
   color: #e0e0e0;
   border-color: #555;
 }
-
 html.dark-mode .convert-btn {
   background-color: #1da1f2;
   color: white;
 }
-
 html.dark-mode .result-area {
   background-color: #1e1e1e;
   border-color: #333;
 }
+
+/* --- Panel edycji (crop + text) --- */
+html.dark-mode .section-label { color: #e8e8e8; border-bottom-color: #3a3d44; }
+html.dark-mode .crop-controls,
+html.dark-mode .text-controls { background: #23262c; border-color: #3a3d44; }
+
+html.dark-mode .tb-tab { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
+html.dark-mode .tb-tab:hover:not(:disabled) { background: #1f3a26; border-color: #4caf50; color: #8fd99f; }
+html.dark-mode .tb-tab.active { background: #1da1f2; border-color: #1da1f2; color: #fff; }
+
+html.dark-mode .tab-add { background-color: #1f3a26; color: #8fd99f; }
+html.dark-mode .tab-add:hover:not(:disabled) { background-color: #2a4a32; }
+html.dark-mode .tab-add:disabled { background-color: #2a2d34; color: #6a6d74; }
+
+html.dark-mode .tab-remove { background-color: #3a1f1f; color: #ff9a9a; }
+html.dark-mode .tab-remove:hover:not(:disabled) { background-color: #4a2828; }
+html.dark-mode .tab-remove:disabled { background-color: #2a2d34; color: #6a6d74; }
+
+html.dark-mode .tab-add-img { background-color: #16415e; color: #8fd0ff; }
+html.dark-mode .tab-add-img:hover:not(:disabled) { background-color: #1d567a; }
+html.dark-mode .tab-add-img:disabled { background-color: #2a2d34; color: #6a6d74; }
+
+html.dark-mode .textbox-controls { background: #1f2228; border-color: #3a3d44; }
+html.dark-mode .tc-label { color: #e8e8e8; }
+html.dark-mode .tc-value { color: #5ec1f7; }
+
+html.dark-mode .text-input,
+html.dark-mode .tc-select,
+html.dark-mode .tc-num-input,
+html.dark-mode .tc-num-input-sm {
+  background: #2a2d34;
+  border-color: #3a3d44;
+  color: #e8e8e8;
+}
+html.dark-mode .text-input:focus { border-color: #1da1f2; }
+
+html.dark-mode .emoji-toggle-btn { background: #2a2d34; border-color: #3a3d44; }
+html.dark-mode .emoji-toggle-btn:hover { background: #3a3422; border-color: #ffc107; }
+html.dark-mode .emoji-picker { background: #23262c; border-color: #3a3d44; }
+html.dark-mode .emoji-cats { border-bottom-color: #3a3d44; }
+html.dark-mode .emoji-cat-btn:hover { background: #3a3d44; }
+html.dark-mode .emoji-cat-btn.active { background: #16415e; border-color: #1da1f2; }
+html.dark-mode .emoji-btn:hover { background: #3a3d44; }
+
+html.dark-mode .color-pick { background: #2a2d34; border-color: #3a3d44; }
+html.dark-mode .color-hex { color: #aaa; }
+
+html.dark-mode .style-btn { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
+html.dark-mode .style-btn:hover:not(:disabled) { background: #3a3d44; border-color: #555; }
+html.dark-mode .style-btn.active { background: #1da1f2; border-color: #1da1f2; color: #fff; }
+
+html.dark-mode .num-btn { background-color: #3a3d44; color: #e8e8e8; }
+html.dark-mode .num-btn:hover:not(:disabled) { background-color: #4a4d54; }
+html.dark-mode .num-btn:active:not(:disabled) { background-color: #5a5d64; }
+html.dark-mode .num-btn:disabled { background-color: #2a2d34; color: #6a6d74; }
+
+html.dark-mode .slider-edge-btn { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
+html.dark-mode .slider-edge-btn:hover:not(:disabled) { background: #3a3d44; }
+html.dark-mode .slider-edge-btn:active:not(:disabled) { background: #4a4d54; }
+
+html.dark-mode .reset-small-btn { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
+html.dark-mode .reset-small-btn:hover { background: #3a3d44; }
+
+html.dark-mode .unified-preview-wrapper { border-color: #3a3d44; }
+html.dark-mode .preview-label { color: #e8e8e8; }
+html.dark-mode .preview-dims,
+html.dark-mode .preview-loading { color: #999; }
+
+html.dark-mode .format-selector { background: #23262c; border-color: #3a3d44; }
+html.dark-mode .format-label { color: #e8e8e8; }
+html.dark-mode .format-btn { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
+html.dark-mode .format-btn:hover:not(:disabled) { background: #3a3d44; border-color: #555; }
+html.dark-mode .format-btn.active { background: #16415e; border-color: #1da1f2; color: #8fd0ff; }
+
+html.dark-mode .original-meta { background: #23262c; border-color: #3a3d44; }
+html.dark-mode .original-meta h4 { color: #e8e8e8; }
+html.dark-mode .meta-grid { color: #b0b0b0; }
+html.dark-mode .meta-grid div span { color: #e8e8e8; }
+
+html.dark-mode .image-preview-box { background: #2a2d34; }
+html.dark-mode .change-img-btn { background: #2a2d34; border-color: #3a3d44; color: #e8e8e8; }
+html.dark-mode .change-img-btn:hover { background: #3a3d44; }
+
+html.dark-mode .theme-toggle-btn { background-color: #2a2d34; color: #ffd54f; }
+html.dark-mode .theme-toggle-btn:hover { background-color: #3a3d44; }
 </style>
