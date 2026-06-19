@@ -150,7 +150,7 @@
             :aria-expanded="cropPanelOpen"
           >
             ✂️ Kadrowanie
-            <span class="toggle-arrow">{{ cropPanelOpen ? '▼ (zwiń)' : '▶ (rozwniń)' }}</span>
+            <span class="toggle-arrow">{{ cropPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
           </div>
 
           <template v-if="cropPanelOpen">
@@ -217,7 +217,7 @@
             :aria-expanded="textPanelOpen"
           >
             ✏️ Tekst na obrazie
-            <span class="toggle-arrow">{{ textPanelOpen ? '▼ (zwiń)' : '▶ (rozwniń)' }}</span>
+            <span class="toggle-arrow">{{ textPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
           </div>
 
           <template v-if="textPanelOpen">
