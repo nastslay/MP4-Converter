@@ -316,9 +316,9 @@
                     <div class="tc-field-group strokewidth-field">
                       <label class="tc-label">Grub. obrysu</label>
                       <div class="btn-row">
-                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
+                        <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
                         <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
-                        <button class="num-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
+                        <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
                       </div>
                     </div>
                   </div>
@@ -1690,6 +1690,12 @@ watch(useOriginalWidth, async (enabled) => {
   margin-top: 0.5rem;
 }
 
+/* Szersze przyciski +/− dla Rozmiar (px) i Grub. obrysu */
+.wide-btn {
+  min-width: 2.8rem;   /* lub padding: 0 0.8rem; */
+  padding: 0 0.8rem;
+}
+  
 /* ===== TEXT CONTROLS ===== */
 .text-controls {
   padding: 0.75rem;
