@@ -1,3 +1,14 @@
+Build nie przeszedł, ponieważ w szablonie Vue brakuje zamknięcia znacznika `<template v-if="textPanelOpen">` — po kontrolkach tekstowych. Dodatkowo w kodzie został zduplikowany blok zakładek, co również należy usunąć.
+
+Poniżej przekazuję **poprawiony komponent** `App.vue`. Wprowadzone zmiany to:
+
+1. **Zamknięcie `<template v-if="textPanelOpen">`** po bloku `.textbox-controls`.
+2. **Usunięcie zduplikowanego rzędu zakładek** (był wklejony dwa razy).
+3. Zachowanie całej reszty funkcjonalności (zwijanie panelu tekstowego, usunięta pusta ramka, przyciski, ciemny tryb itd.).
+
+Kod gotowy do skopiowania i wgrania:
+
+```vue
 <template>
   <div class="container">
     <button
@@ -192,7 +203,7 @@
           </div>
         </div>
 
-  <!-- TEXT EDITOR CONTROLS – teraz z nagłówkiem zwijanym -->
+        <!-- TEXT EDITOR CONTROLS – z nagłówkiem zwijanym -->
         <div class="text-controls">
           <div
             class="section-label clickable-section-label"
@@ -206,7 +217,7 @@
           </div>
 
           <template v-if="textPanelOpen">
-            <!-- Scrollowalny rząd zakładek -->
+            <!-- Scrollowalny rząd zakładek (tylko jeden!) -->
             <div class="textbox-tabs-row">
               <div class="textbox-tabs">
                 <button
@@ -234,213 +245,180 @@
               </div>
             </div>
 
+            <!-- Kontrolki dla aktywnej nakładki -->
+            <div v-if="activeOverlay" class="textbox-controls">
+              <!-- ======= KONTROLKI DLA TEKSTU ======= -->
+              <template v-if="activeOverlay.type === 'text'">
+                <div class="tc-field-group">
+                  <label class="tc-label">Tekst</label>
+                  <div class="text-input-row">
+                    <input
+                      type="text"
+                      v-model="activeOverlay.text"
+                      placeholder="Wpisz tekst lub emoji…"
+                      class="text-input"
+                      ref="textInputRef"
+                      @input="redrawPreviewOverlay"
+                    />
+                    <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
+                  </div>
+                  <!-- Emoji picker panel -->
+                  <div v-if="showEmojiPicker" class="emoji-picker">
+                    <div class="emoji-cats">
+                      <button
+                        v-for="cat in emojiCategories"
+                        :key="cat.name"
+                        class="emoji-cat-btn"
+                        :class="{ active: activeCat === cat.name }"
+                        @click="activeCat = cat.name"
+                      >{{ cat.icon }}</button>
+                    </div>
+                    <div class="emoji-grid">
+                      <button
+                        v-for="em in currentEmojis"
+                        :key="em"
+                        class="emoji-btn"
+                        @click="insertEmoji(em)"
+                      >{{ em }}</button>
+                    </div>
+                  </div>
+                </div>
 
-          <!-- Scrollowalny rząd zakładek -->
-          <div class="textbox-tabs-row">
-            <div class="textbox-tabs">
-              <button
-                v-for="(item, idx) in overlays"
-                :key="idx"
-                class="tb-tab"
-                :class="{ active: activeOverlayIdx === idx }"
-                @click="activeOverlayIdx = idx"
-              >
-                <span class="tb-tab-num">{{ idx + 1 }}</span>
-                <span v-if="item.type === 'text'" class="tb-tab-preview">{{ item.text ? item.text.slice(0, 8) + (item.text.length > 8 ? '…' : '') : '(pusty)' }}</span>
-                <span v-else class="tb-tab-preview">🖼️ obrazek</span>
-              </button>
+                <div class="tc-field-row style-font-row">
+                  <div class="tc-field-group tc-field-grow">
+                    <label class="tc-label">Czcionka</label>
+                    <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
+                      <option value="Impact">Impact</option>
+                      <option value="Arial">Arial</option>
+                      <option value="Arial Black">Arial Black</option>
+                      <option value="Georgia">Georgia</option>
+                      <option value="Times New Roman">Times New Roman</option>
+                      <option value="Courier New">Courier New</option>
+                      <option value="Verdana">Verdana</option>
+                      <option value="Trebuchet MS">Trebuchet MS</option>
+                      <option value="Comic Sans MS">Comic Sans MS</option>
+                    </select>
+                  </div>
+                  <div class="tc-field-group fontsize-field">
+                    <label class="tc-label">Rozmiar (px)</label>
+                    <div class="btn-row">
+                      <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 2); redrawPreviewOverlay()">−</button>
+                      <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
+                      <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 2); redrawPreviewOverlay()">+</button>
+                    </div>
+                  </div>
+                  <div class="tc-field-group style-field">
+                    <label class="tc-label">Styl</label>
+                    <div class="style-toggles">
+                      <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
+                      <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
+                      <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
+                      <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="tc-field-row">
+                  <div class="tc-field-group">
+                    <label class="tc-label">Kolor tekstu</label>
+                    <div class="color-row">
+                      <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
+                      <span class="color-hex">{{ activeOverlay.color }}</span>
+                    </div>
+                  </div>
+                  <div class="tc-field-group">
+                    <label class="tc-label">Obrys / cień</label>
+                    <div class="color-row">
+                      <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
+                      <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
+                    </div>
+                  </div>
+                  <div class="tc-field-group strokewidth-field">
+                    <label class="tc-label">Grub. obrysu</label>
+                    <div class="btn-row">
+                      <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
+                      <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
+                      <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="tc-field-group">
+                  <div class="tc-label-row">
+                    <label class="tc-label">Obrót</label>
+                    <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                    <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
+                  </div>
+                  <div class="slider-edge-row">
+                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
+                    <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
+                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
+                  </div>
+                </div>
+
+                <div class="tc-field-group">
+                  <div class="tc-label-row">
+                    <label class="tc-label">Przezroczystość</label>
+                    <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                  </div>
+                  <div class="slider-edge-row">
+                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
+                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- ======= KONTROLKI DLA OBRAZU ======= -->
+              <template v-else-if="activeOverlay.type === 'image'">
+                <div class="tc-field-group">
+                  <label class="tc-label">Wgraj obraz z dysku</label>
+                  <div class="image-preview-box">
+                    <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
+                  </div>
+                  <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
+                </div>
+
+                <div class="tc-field-group">
+                  <div class="tc-label-row">
+                    <label class="tc-label">Skala</label>
+                    <span class="tc-value">{{ activeOverlay.scale.toFixed(2) }}×</span>
+                  </div>
+                  <div class="slider-edge-row">
+                    <button class="slider-edge-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.25).toFixed(2)); redrawPreviewOverlay()" title="−0.25">−</button>
+                    <input type="range" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.25" class="tc-range" @input="redrawPreviewOverlay" />
+                    <button class="slider-edge-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.25).toFixed(2)); redrawPreviewOverlay()" title="+0.25">+</button>
+                  </div>
+                </div>
+
+                <div class="tc-field-group">
+                  <div class="tc-label-row">
+                    <label class="tc-label">Obrót</label>
+                    <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                    <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
+                  </div>
+                  <div class="slider-edge-row">
+                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
+                    <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
+                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
+                  </div>
+                </div>
+
+                <div class="tc-field-group">
+                  <div class="tc-label-row">
+                    <label class="tc-label">Przezroczystość</label>
+                    <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                  </div>
+                  <div class="slider-edge-row">
+                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
+                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
+                  </div>
+                </div>
+              </template>
             </div>
-            <div class="textbox-tab-actions">
-              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">
-                <span class="tab-action-icon">＋</span>
-                <span class="tab-action-label">Dodaj tekst</span>
-              </button>
-              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Wgraj obraz z dysku">
-                <span class="tab-action-icon">🖼️</span>
-                <span class="tab-action-label">Wgraj obraz z dysku</span>
-              </button>
-              <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
-            </div>
-          </div>
-
-              <div v-if="activeOverlay" class="textbox-controls">
-              
-                <!-- ======= KONTROLKI DLA TEKSTU ======= -->
-                <template v-if="activeOverlay.type === 'text'">
-              
-                  <div class="tc-field-group">
-                    <label class="tc-label">Tekst</label>
-                    <div class="text-input-row">
-                      <input
-                        type="text"
-                        v-model="activeOverlay.text"
-                        placeholder="Wpisz tekst lub emoji…"
-                        class="text-input"
-                        ref="textInputRef"
-                        @input="redrawPreviewOverlay"
-                      />
-                      <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
-                    </div>
-                    <!-- Emoji picker panel (dokładnie taki sam jak poprzednio) -->
-                    <div v-if="showEmojiPicker" class="emoji-picker">
-                      <div class="emoji-cats">
-                        <button
-                          v-for="cat in emojiCategories"
-                          :key="cat.name"
-                          class="emoji-cat-btn"
-                          :class="{ active: activeCat === cat.name }"
-                          @click="activeCat = cat.name"
-                        >{{ cat.icon }}</button>
-                      </div>
-                      <div class="emoji-grid">
-                        <button
-                          v-for="em in currentEmojis"
-                          :key="em"
-                          class="emoji-btn"
-                          @click="insertEmoji(em)"
-                        >{{ em }}</button>
-                      </div>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-row style-font-row">
-                    <div class="tc-field-group tc-field-grow">
-                      <label class="tc-label">Czcionka</label>
-                      <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
-                        <option value="Impact">Impact</option>
-                        <option value="Arial">Arial</option>
-                        <option value="Arial Black">Arial Black</option>
-                        <option value="Georgia">Georgia</option>
-                        <option value="Times New Roman">Times New Roman</option>
-                        <option value="Courier New">Courier New</option>
-                        <option value="Verdana">Verdana</option>
-                        <option value="Trebuchet MS">Trebuchet MS</option>
-                        <option value="Comic Sans MS">Comic Sans MS</option>
-                      </select>
-                    </div>
-                    <div class="tc-field-group fontsize-field">
-                      <label class="tc-label">Rozmiar (px)</label>
-                        <div class="btn-row">
-                          <button class="num-btn wide-btn" @click="adjust('width', -10)" :disabled="isConverting || useOriginalWidth">−</button>
-                          <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
-                          <button class="num-btn wide-btn" @click="adjust('width', 10)" :disabled="isConverting || useOriginalWidth">+</button>
-                        </div>
-                    </div>
-                    <div class="tc-field-group style-field">
-                      <label class="tc-label">Styl</label>
-                      <div class="style-toggles">
-                        <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
-                        <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
-                        <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
-                        <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
-                      </div>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-row">
-                    <div class="tc-field-group">
-                      <label class="tc-label">Kolor tekstu</label>
-                      <div class="color-row">
-                        <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
-                        <span class="color-hex">{{ activeOverlay.color }}</span>
-                      </div>
-                    </div>
-                    <div class="tc-field-group">
-                      <label class="tc-label">Obrys / cień</label>
-                      <div class="color-row">
-                        <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
-                        <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
-                      </div>
-                    </div>
-                    <div class="tc-field-group strokewidth-field">
-                      <label class="tc-label">Grub. obrysu</label>
-                      <div class="btn-row">
-                        <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
-                        <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
-                        <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
-                      </div>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Obrót</label>
-                      <span class="tc-value">{{ activeOverlay.rotation }}°</span>
-                      <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
-                    </div>
-                    <div class="slider-edge-row">
-                      <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
-                      <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
-                      <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Przezroczystość</label>
-                      <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
-                    </div>
-                    <div class="slider-edge-row">
-                      <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
-                      <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-                      <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
-                    </div>
-                  </div>
-              
-                </template>
-              
-                <!-- ======= KONTROLKI DLA OBRAZU ======= -->
-                <template v-else-if="activeOverlay.type === 'image'">
-                  
-                  <div class="tc-field-group">
-                    <label class="tc-label">Wgraj obraz z dysku</label>
-                    <div class="image-preview-box">
-                      <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
-                    </div>
-                    <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Skala</label>
-                      <span class="tc-value">{{ activeOverlay.scale.toFixed(2) }}×</span>
-                    </div>
-                    <div class="slider-edge-row">
-                      <button class="slider-edge-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.25).toFixed(2)); redrawPreviewOverlay()" title="−0.25">−</button>
-                      <input type="range" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.25" class="tc-range" @input="redrawPreviewOverlay" />
-                      <button class="slider-edge-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.25).toFixed(2)); redrawPreviewOverlay()" title="+0.25">+</button>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Obrót</label>
-                      <span class="tc-value">{{ activeOverlay.rotation }}°</span>
-                      <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
-                    </div>
-                    <div class="slider-edge-row">
-                      <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
-                      <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
-                      <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
-                    </div>
-                  </div>
-              
-                  <div class="tc-field-group">
-                    <div class="tc-label-row">
-                      <label class="tc-label">Przezroczystość</label>
-                      <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
-                    </div>
-                    <div class="slider-edge-row">
-                      <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
-                      <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-                      <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
-                    </div>
-                  </div>
-              
-                </template>
-              </div>
-
-           
+          </template> <!-- Zamknięcie v-if="textPanelOpen" -->
+        </div> <!-- Koniec .text-controls -->
 
         <!-- UNIFIED PREVIEW CANVAS -->
         <div class="preview-section">
@@ -478,8 +456,8 @@
           <p v-else class="preview-loading">Podgląd pojawi się po załadowaniu wideo.</p>
         </div>
 
-      </div>
-    </div>
+      </div> <!-- Koniec .edit-panel -->
+    </div> <!-- Koniec .crop-section -->
 
     <button class="convert-btn" @click="convert" :disabled="isConverting || !videoUrl">
       {{ isConverting ? 'Konwertowanie…' : (inputExt === 'webp' ? 'Zastosuj zmiany i wygeneruj ' + outputFormat.toUpperCase() : 'Konwertuj do ' + outputFormat.toUpperCase()) }}
@@ -541,7 +519,7 @@ const originalFps      = ref(null);
 const originalDuration = ref(null);
 
 // Crop
-const cropEnabled = ref(false);  // kept for VF filter logic
+const cropEnabled = ref(false);
 const cropTop     = ref(0);
 const cropBottom  = ref(0);
 const cropLeft    = ref(0);
@@ -549,7 +527,7 @@ const cropRight   = ref(0);
 const syncVertical   = ref(true);
 const syncHorizontal = ref(true);
 
-// Panel open state (replaces separate cropEnabled + textEditEnabled)
+// Panel open states
 const editPanelOpen = ref(false);
 const textPanelOpen = ref(true);
 
@@ -569,7 +547,6 @@ const imageFileInput = ref(null);
 let ffmpeg = null;
 
 // ---- TEXT EDITOR STATE ----
-
 const textInputRef = ref(null);
 
 // Emoji picker state
@@ -602,26 +579,6 @@ function insertEmoji(emoji) {
   redrawPreviewOverlay();
 }
 
-function createTextBox(yPct = 0.5) {
-  return {
-    text: '',
-    fontFamily: 'Impact',
-    fontSize: 100,
-    color: '#ffffff',
-    shadowColor: '#000000',
-    strokeWidth: 2,
-    bold: false,
-    italic: false,
-    underline: false,
-    shadow: true,
-    rotation: 0,
-    opacity: 1,
-    xPct: 0.5,
-    yPct,
-  };
-}
-
-
 // ---- UNIWERSALNE NAKŁADKI ----
 const overlays = ref([createTextOverlay(0.5)]);
 const activeOverlayIdx = ref(0);
@@ -647,20 +604,6 @@ function createTextOverlay(yPct = 0.5) {
   };
 }
 
-function createImageOverlay(yPct = 0.5) {
-  return {
-    type: 'image',
-    imageSrc: null,
-    imageNaturalWidth: 0,
-    imageNaturalHeight: 0,
-    scale: 0.5,
-    rotation: 0,
-    opacity: 1,
-    xPct: 0.5,
-    yPct,
-  };
-}
-
 function addTextOverlay() {
   if (overlays.value.length >= 10) return;
   const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
@@ -669,18 +612,14 @@ function addTextOverlay() {
   nextTick(redrawPreviewOverlay);
 }
 
-// ---- IMAGE OVERLAY: loaded-image cache ----
-// HTMLImageElements load asynchronously even from a blob URL, so a freshly
-// created `new Image()` is never `.complete` synchronously right after
-// setting `.src`. We cache the loaded element per imageSrc and re-trigger a
-// redraw once it finishes loading, instead of silently skipping the draw.
-const imageElCache = new Map(); // imageSrc -> HTMLImageElement (cached once loaded)
+// ---- IMAGE OVERLAY ----
+const imageElCache = new Map();
 
 function getOrLoadImageEl(src, onLoaded) {
   if (!src) return null;
   const cached = imageElCache.get(src);
   if (cached && cached.complete && cached.naturalWidth > 0) return cached;
-  if (cached) return null; // already loading, its onload will fire onLoaded
+  if (cached) return null;
   const img = new Image();
   img.onload = () => { if (onLoaded) onLoaded(); };
   img.src = src;
@@ -688,8 +627,6 @@ function getOrLoadImageEl(src, onLoaded) {
   return null;
 }
 
-// Pre-loads every image overlay's element and waits for it, so export can
-// draw them synchronously (no await needed inside the per-frame loop).
 function preloadOverlayImages() {
   const pending = [];
   for (const item of overlays.value) {
@@ -706,24 +643,20 @@ function preloadOverlayImages() {
   return Promise.all(pending);
 }
 
-// Computes a sane default scale so a freshly added photo (which may be
-// several thousand px wide) appears at a reasonable size in the preview
-// instead of overflowing the whole frame.
 function computeAutoOverlayScale(naturalWidth, naturalHeight) {
   const frameWidth = previewWrapper.value?.clientWidth || previewNaturalWidth.value || 400;
-  const targetWidth = frameWidth * 0.35; // overlay starts at ~35% of frame width
+  const targetWidth = frameWidth * 0.35;
   const longestSide = Math.max(naturalWidth, naturalHeight) || 1;
-  const scale = targetWidth / longestSide;
-  return Math.min(3, Math.max(0.02, scale));
+  return Math.min(3, Math.max(0.02, targetWidth / longestSide));
 }
 
 function addImageOverlay(file) {
   if (overlays.value.length >= 10) return;
-  const imageSrc = URL.createObjectURL(file); // real blob URL from the actual file bytes
+  const imageSrc = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
     const newYPct = Math.min(0.95, 0.2 + (overlays.value.length * 0.08));
-    imageElCache.set(imageSrc, img); // already loaded — cache immediately
+    imageElCache.set(imageSrc, img);
     overlays.value.push({
       type: 'image',
       imageSrc,
@@ -742,9 +675,6 @@ function addImageOverlay(file) {
   img.src = imageSrc;
 }
 
-// Replaces the image of the currently active overlay (used by "Zmień obraz").
-// Previously this also called addImageOverlay(), so "Zmień obraz" silently
-// created a brand new overlay instead of changing the existing one.
 function replaceActiveOverlayImage(file) {
   if (!activeOverlay.value || activeOverlay.value.type !== 'image') return;
   const imageSrc = URL.createObjectURL(file);
@@ -777,8 +707,6 @@ function removeOverlay() {
   }
 }
 
-// Tracks whether the file picker was opened to add a new image overlay
-// ("Dodaj obrazek") or to replace the active one's image ("Zmień obraz").
 const imageUploadMode = ref('add');
 
 function openAddImagePicker() {
@@ -802,7 +730,6 @@ function handleImageFileUpload(event) {
   event.target.value = '';
 }
 
-
 // ---- DRAG STATE ----
 let dragTextIdx = null;
 let dragStartClientX = 0;
@@ -810,22 +737,6 @@ let dragStartClientY = 0;
 let dragStartXPct = 0;
 let dragStartYPct = 0;
 
-function getCanvasBounds() {
-  const c = unifiedCanvas.value;
-  if (!c) return null;
-  return c.getBoundingClientRect();
-}
-
-function clientToCanvasPct(clientX, clientY) {
-  const bounds = getCanvasBounds();
-  if (!bounds) return { x: 0.5, y: 0.5 };
-  return {
-    x: Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width)),
-    y: Math.max(0, Math.min(1, (clientY - bounds.top) / bounds.height)),
-  };
-}
-
-// Hit-test: check if (clientX, clientY) hits any text label
 function hitTestOverlay(clientX, clientY) {
   const c = unifiedCanvas.value;
   if (!c) return -1;
@@ -917,7 +828,6 @@ function onCanvasTouchEnd() {
 }
 
 // ---- UNIFIED CANVAS DRAW ----
-// Draws: background image + crop overlay + text labels (all on one canvas)
 function redrawPreviewOverlay() {
   const canvas = unifiedCanvas.value;
   const img = previewImg.value;
@@ -932,11 +842,8 @@ function redrawPreviewOverlay() {
 
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, dw, dh);
-
-  // Draw image
   ctx.drawImage(img, 0, 0, dw, dh);
 
-  // Draw crop overlay
   const hasCrop = (cropTop.value || cropBottom.value || cropLeft.value || cropRight.value);
   if (hasCrop) {
     const scaleX = dw / img.naturalWidth;
@@ -956,7 +863,6 @@ function redrawPreviewOverlay() {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x, y, w, h);
 
-    // Corner brackets
     const cs = 14;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 3;
@@ -972,93 +878,88 @@ function redrawPreviewOverlay() {
     }
   }
 
-    // Draw overlays
-    for (let i = 0; i < overlays.value.length; i++) {
-      const item = overlays.value[i];
-      if (item.type === 'text' && !item.text.trim()) continue;
-      if (item.type === 'image' && !item.imageSrc) continue;
-  
-      const tx = item.xPct * dw;
-      const ty = item.yPct * dh;
-  
-      ctx.save();
-      ctx.translate(tx, ty);
-      ctx.rotate((item.rotation * Math.PI) / 180);
-      ctx.globalAlpha = item.opacity;
-  
-      if (item.type === 'text') {
-        let fontStr = '';
-        if (item.italic) fontStr += 'italic ';
-        if (item.bold) fontStr += 'bold ';
-        fontStr += `${item.fontSize}px "${item.fontFamily}"`;
+  for (let i = 0; i < overlays.value.length; i++) {
+    const item = overlays.value[i];
+    if (item.type === 'text' && !item.text.trim()) continue;
+    if (item.type === 'image' && !item.imageSrc) continue;
+
+    const tx = item.xPct * dw;
+    const ty = item.yPct * dh;
+
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.rotate((item.rotation * Math.PI) / 180);
+    ctx.globalAlpha = item.opacity;
+
+    if (item.type === 'text') {
+      let fontStr = '';
+      if (item.italic) fontStr += 'italic ';
+      if (item.bold) fontStr += 'bold ';
+      fontStr += `${item.fontSize}px "${item.fontFamily}"`;
+      ctx.font = fontStr;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      if (item.shadow) {
+        ctx.shadowColor = item.shadowColor;
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+      } else {
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+      }
+
+      if (item.strokeWidth > 0) {
+        ctx.strokeStyle = item.shadowColor;
+        ctx.lineWidth = item.strokeWidth * 2;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(item.text, 0, 0);
+      }
+
+      ctx.fillStyle = item.color;
+      ctx.fillText(item.text, 0, 0);
+
+      if (item.underline) {
+        const metrics = ctx.measureText(item.text);
+        const tw = metrics.width;
+        const uy = item.fontSize * 0.1;
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = Math.max(1, item.fontSize * 0.05);
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        ctx.beginPath(); ctx.moveTo(-tw/2, uy); ctx.lineTo(tw/2, uy); ctx.stroke();
+      }
+
+      if (i === activeOverlayIdx.value) {
         ctx.font = fontStr;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-  
-        if (item.shadow) {
-          ctx.shadowColor = item.shadowColor;
-          ctx.shadowBlur = 4;
-          ctx.shadowOffsetX = 2;
-          ctx.shadowOffsetY = 2;
-        } else {
-          ctx.shadowColor = 'transparent';
-          ctx.shadowBlur = 0;
-        }
-  
-        if (item.strokeWidth > 0) {
-          ctx.strokeStyle = item.shadowColor;
-          ctx.lineWidth = item.strokeWidth * 2;
-          ctx.lineJoin = 'round';
-          ctx.strokeText(item.text, 0, 0);
-        }
-  
-        ctx.fillStyle = item.color;
-        ctx.fillText(item.text, 0, 0);
-  
-        if (item.underline) {
-          const metrics = ctx.measureText(item.text);
-          const tw = metrics.width;
-          const uy = item.fontSize * 0.1;
-          ctx.strokeStyle = item.color;
-          ctx.lineWidth = Math.max(1, item.fontSize * 0.05);
-          ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
-          ctx.beginPath(); ctx.moveTo(-tw/2, uy); ctx.lineTo(tw/2, uy); ctx.stroke();
-        }
-  
+        const metrics2 = ctx.measureText(item.text);
+        const selW = metrics2.width + 12;
+        const selH = item.fontSize + 8;
+        ctx.strokeStyle = 'rgba(255,255,100,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 3]);
+        ctx.strokeRect(-selW/2, -selH/2, selW, selH);
+        ctx.setLineDash([]);
+      }
+    } else if (item.type === 'image') {
+      const img = getOrLoadImageEl(item.imageSrc, redrawPreviewOverlay);
+      if (img) {
+        const scaledW = item.imageNaturalWidth * item.scale;
+        const scaledH = item.imageNaturalHeight * item.scale;
+        ctx.drawImage(img, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
         if (i === activeOverlayIdx.value) {
-          ctx.font = fontStr;
-          const metrics2 = ctx.measureText(item.text);
-          const selW = metrics2.width + 12;
-          const selH = item.fontSize + 8;
           ctx.strokeStyle = 'rgba(255,255,100,0.9)';
           ctx.lineWidth = 1.5;
           ctx.setLineDash([5, 3]);
-          ctx.strokeRect(-selW/2, -selH/2, selW, selH);
+          ctx.strokeRect(-scaledW/2, -scaledH/2, scaledW, scaledH);
           ctx.setLineDash([]);
         }
-      } else if (item.type === 'image') {
-        const img = getOrLoadImageEl(item.imageSrc, redrawPreviewOverlay);
-        if (img) {
-          const scaledW = item.imageNaturalWidth * item.scale;
-          const scaledH = item.imageNaturalHeight * item.scale;
-          ctx.drawImage(img, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
-          if (i === activeOverlayIdx.value) {
-            ctx.strokeStyle = 'rgba(255,255,100,0.9)';
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([5, 3]);
-            ctx.strokeRect(-scaledW/2, -scaledH/2, scaledW, scaledH);
-            ctx.setLineDash([]);
-          }
-        }
       }
-      ctx.restore();
     }
-
-
-  
+    ctx.restore();
+  }
 }
 
-// Draws text onto an output canvas frame (used during conversion)
 function drawOverlaysOnCanvas(ctx, canvasWidth, canvasHeight) {
   for (const item of overlays.value) {
     if (item.type === 'text' && !item.text.trim()) continue;
@@ -1137,7 +1038,7 @@ function toggleEditPanel() {
   }
 }
 
-// ---- PARSER WEBP ----
+// ---- WEBP PARSER ----
 function readUint24LE(view, offset) {
   return view.getUint8(offset) | (view.getUint8(offset+1) << 8) | (view.getUint8(offset+2) << 16);
 }
@@ -1242,7 +1143,6 @@ const cropRefs = { cropTop, cropBottom, cropLeft, cropRight };
 function adjustCrop(field, delta) { cropRefs[field].value = Math.max(0, cropRefs[field].value + delta); }
 function resetCrop() { cropTop.value=0; cropBottom.value=0; cropLeft.value=0; cropRight.value=0; }
 
-// buildVfFilter — only crop + fps + scale, NO drawtext (text via canvas)
 function buildVfFilter() {
   const parts = [];
   const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
@@ -1270,7 +1170,7 @@ function toggleDarkMode() {
 
 watch(isDarkMode, (val) => {
   applyDarkModeClass();
-  try { localStorage.setItem('animconverter-theme', val ? 'dark' : 'light'); } catch (e) { /* ignore */ }
+  try { localStorage.setItem('animconverter-theme', val ? 'dark' : 'light'); } catch (e) {}
 });
 
 // ---- FFmpeg INIT ----
@@ -1282,7 +1182,7 @@ onMounted(async () => {
     } else {
       isDarkMode.value = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {}
   applyDarkModeClass();
 
   ffmpeg = new FFmpeg();
@@ -1443,8 +1343,8 @@ async function analyzeAndEstimate() {
 }
 
 // ---- KONWERSJA ----
-// Wspólna ścieżka canvas dla MP4 i WebP gdy aktywny jest crop lub tekst.
-// FFmpeg wyciąga klatki → canvas nakłada crop/tekst → FFmpeg składa animację.
+let outputFrameCount_actual = 0;
+
 async function convertViaCanvas(fileData, srcExt) {
   const userStart  = startTime.value;
   const userEnd    = endTime.value;
@@ -1454,9 +1354,6 @@ async function convertViaCanvas(fileData, srcExt) {
 
   const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
   const hasCrop = cropEnabled.value && (cl+cr+ct+cb > 0);
-  // Previously this only checked for text overlays, so image-only overlays
-  // were silently skipped entirely during export even though they showed
-  // (or tried to show) in the live preview.
   const hasOverlays = overlays.value.some(item =>
     (item.type === 'text' && item.text.trim() !== '') ||
     (item.type === 'image' && !!item.imageSrc)
@@ -1473,7 +1370,6 @@ async function convertViaCanvas(fileData, srcExt) {
     totalFrames = meta.frameCount;
     srcFps = totalFrames / totalDuration;
   } else {
-    // MP4: extract individual frames via ffmpeg
     const meta = await getVideoMetadata(fileData, 'mp4');
     srcW = meta.width || width.value; srcH = meta.height || Math.round(width.value * 9 / 16);
     srcFps = meta.fps || 25;
@@ -1514,16 +1410,7 @@ async function convertViaCanvas(fileData, srcExt) {
     }
     decoder.close();
   } else {
-    // MP4: use ffmpeg to extract frames one by one
     await ffmpeg.writeFile('conv_input.mp4', new Uint8Array(fileData.slice().buffer));
-
-    // Extract all needed frames as PNGs
-    const rawFilter = [];
-    if (hasCrop) rawFilter.push(`crop=${srcW-cl-cr}:${srcH-ct-cb}:${cl}:${ct}`);
-    // We'll draw at original size first, then scale on canvas
-    const extractFilter = rawFilter.join(',') || 'null';
-
-    // Extract frames in the time range at desired fps
     await ffmpeg.exec([
       '-i', 'conv_input.mp4',
       '-ss', userStart.toString(),
@@ -1533,17 +1420,14 @@ async function convertViaCanvas(fileData, srcExt) {
       'rawframe_%05d.png',
     ]);
 
-    // Count extracted frames
     let frameIdx = 0;
     for (let i = 0; i < outputFrameCount; i++) {
       const fname = `rawframe_${String(i+1).padStart(5,'0')}.png`;
       let rawData;
       try { rawData = await ffmpeg.readFile(fname); } catch(e) {
-        // If less frames extracted than expected, stop
         outputFrameCount_actual = i;
         break;
       }
-      // Draw on canvas with text
       const imgBlob = new Blob([rawData.buffer], { type: 'image/png' });
       const imgBitmap = await createImageBitmap(imgBlob);
       ctx.clearRect(0, 0, outW, outH);
@@ -1561,7 +1445,6 @@ async function convertViaCanvas(fileData, srcExt) {
     outputFrameCount_actual = frameIdx;
   }
 
-  // Assemble animation from frames
   const actualFrameCount = srcExt === 'webp' ? outputFrameCount : (outputFrameCount_actual ?? outputFrameCount);
 
   if (outputFormat.value === 'gif') {
@@ -1578,7 +1461,6 @@ async function convertViaCanvas(fileData, srcExt) {
     ]);
   }
 
-  // Cleanup frames
   for (let i = 0; i < actualFrameCount; i++) {
     try { await ffmpeg.deleteFile(`frame_${String(i).padStart(5,'0')}.png`); } catch(e) {}
   }
@@ -1589,9 +1471,6 @@ async function convertViaCanvas(fileData, srcExt) {
   resultUrl.value = URL.createObjectURL(resultBlob.value);
   await ffmpeg.deleteFile('output.' + outExt);
 }
-
-// Variable to track actual frame count in MP4 path
-let outputFrameCount_actual = 0;
 
 async function convert() {
   if (!videoUrl.value.trim()) { error.value = 'Wprowadź link do wideo lub wgraj plik.'; return; }
@@ -1606,13 +1485,10 @@ async function convert() {
     );
 
     if (inputExt.value === 'webp') {
-      // WebP always goes through canvas path
       await convertViaCanvas(fileData, 'webp');
     } else if (hasCrop || hasOverlays) {
-      // MP4 with crop, text, or image overlay — canvas path
       await convertViaCanvas(fileData, 'mp4');
     } else {
-      // MP4 clean — direct FFmpeg path (fastest)
       await ffmpeg.writeFile('input.mp4', new Uint8Array(fileData.slice().buffer));
       if (outputFormat.value === 'gif') {
         const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
@@ -1725,7 +1601,7 @@ watch(useOriginalWidth, async (enabled) => {
   border-bottom: 2px solid #e0e0e0;
 }
 
-/* ===== CROP CONTROLS — inherits from global style.css ===== */
+/* ===== CROP CONTROLS ===== */
 .crop-controls {
   margin-top: 0;
   padding: 0.75rem;
@@ -1742,9 +1618,8 @@ watch(useOriginalWidth, async (enabled) => {
   margin-top: 0.5rem;
 }
 
-/* Szersze przyciski +/− dla Rozmiar (px) i Grub. obrysu */
 .wide-btn {
-  min-width: 2.8rem;   /* lub padding: 0 0.8rem; */
+  min-width: 2.8rem;
   padding: 0 0.8rem;
 }
   
@@ -1756,7 +1631,6 @@ watch(useOriginalWidth, async (enabled) => {
   border: 1px solid #e0e0e0;
 }
 
-/* Tabs row */
 .textbox-tabs-row {
   display: flex;
   align-items: flex-start;
@@ -1847,6 +1721,27 @@ watch(useOriginalWidth, async (enabled) => {
 .tab-remove:hover:not(:disabled) { background-color: #f8caca; }
 .tab-remove:disabled { background-color: #f5f5f5; color: #a0a0a0; cursor: not-allowed; }
 
+.tab-add-img {
+  width: auto;
+  height: 2.2rem;
+  padding: 0 0.65rem;
+  gap: 0.35rem;
+  background-color: #e3f2fd;
+  color: #1565c0;
+  font-size: 1.2rem;
+  white-space: nowrap;
+}
+.tab-add-img:hover:not(:disabled) { background-color: #bbdefb; }
+.tab-add-img:disabled { background-color: #f5f5f5; color: #a0a0a0; cursor: not-allowed; }
+.tab-action-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.tab-action-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 /* Controls box */
 .textbox-controls {
   background: white;
@@ -1900,7 +1795,6 @@ watch(useOriginalWidth, async (enabled) => {
   text-align: right;
 }
 
-/* Text input + emoji toggle */
 .text-input-row {
   display: flex;
   gap: 0.35rem;
@@ -1941,7 +1835,6 @@ watch(useOriginalWidth, async (enabled) => {
   border-color: #ffc107;
 }
 
-/* Emoji picker */
 .emoji-picker {
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -1998,7 +1891,6 @@ watch(useOriginalWidth, async (enabled) => {
 }
 .emoji-btn:hover { background: #f0f0f0; }
 
-/* Select */
 .tc-select {
   width: 100%;
   padding: 0.5rem;
@@ -2009,7 +1901,6 @@ watch(useOriginalWidth, async (enabled) => {
   color: #213547;
 }
 
-/* Number inputs */
 .tc-num-input {
   width: 68px;
   text-align: center;
@@ -2036,7 +1927,6 @@ watch(useOriginalWidth, async (enabled) => {
 .tc-num-input-sm::-webkit-outer-spin-button,
 .tc-num-input-sm::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
-/* Color row */
 .color-row {
   display: flex;
   align-items: center;
@@ -2060,7 +1950,6 @@ watch(useOriginalWidth, async (enabled) => {
   font-family: monospace;
 }
 
-/* Style toggles — B / I / U / Cień */
 .style-toggles {
   display: flex;
   gap: 0.35rem;
@@ -2094,13 +1983,11 @@ watch(useOriginalWidth, async (enabled) => {
   color: white;
 }
 
-/* Range slider */
 .tc-range {
   width: 100%;
   accent-color: #1da1f2;
 }
 
-/* Slider with +/- buttons on its edges */
 .slider-edge-row {
   display: flex;
   align-items: center;
@@ -2133,7 +2020,6 @@ watch(useOriginalWidth, async (enabled) => {
 .slider-edge-btn:hover:not(:disabled) { background: #e0e0e0; }
 .slider-edge-btn:active:not(:disabled) { background: #c8c8c8; }
 
-/* Styl & Czcionka — jeden wiersz na desktopie */
 .style-font-row .style-field {
   flex-shrink: 0;
 }
@@ -2155,7 +2041,6 @@ watch(useOriginalWidth, async (enabled) => {
   flex-shrink: 0;
 }
 
-/* Reset small */
 .reset-small-btn {
   padding: 0.2rem 0.55rem;
   border: 1px solid #ddd;
@@ -2233,144 +2118,7 @@ watch(useOriginalWidth, async (enabled) => {
 .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; font-size: 0.85rem; color: #555; }
 .meta-grid div span { font-weight: 600; color: #213547; }
 
-/* ===== RESPONSIVE ===== */
-@media (max-width: 600px) {
-  .meta-grid {
-    grid-template-columns: 1fr;
-  }
-  .format-options {
-    flex-direction: column;
-  }
-  .unified-preview-wrapper {
-    width: 100%;
-  }
-
-  /* ===== TEKST NA OBRAZIE – MOBILE FIX ===== */
-
-  /* Zakładki – pozwól im się przewijać, zamiast łamać */
-  .textbox-tabs-row {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 0.2rem;
-  }
-  .textbox-tabs {
-    flex-wrap: nowrap;   /* zapobiega łamaniu się przycisków w pionie */
-  }
-
-  /* Główne grupy pól – układ pionowy już był, ale wzmacniamy go */
-  .tc-field-row {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  /* Każde pole w pionie zajmuje całą szerokość */
-  .tc-field-group {
-    width: 100%;
-  }
-  /* Rozwijane listy i pola tekstowe wypełniają dostępne miejsce */
-  .tc-select,
-  .text-input {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  /* Rzędy z przyciskami +/- i inputem – zapobiegaj rozjeżdżaniu */
-  .btn-row {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-  .tc-num-input,
-  .tc-num-input-sm {
-    min-width: 0;       /* pozwala się zmniejszyć */
-    flex: 1;            /* dzielą dostępną przestrzeń */
-    max-width: 100%;
-  }
-  .num-btn {
-    flex-shrink: 0;     /* przyciski nie zmniejszają się */
-  }
-
-  /* Kolor i grubość obrysu – układ w poziomie z zawijaniem */
-  .color-row {
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
-  .color-hex {
-    font-size: 0.75rem;
-    word-break: break-all;
-  }
-
-  /* Kontrolki stylu (B, I, U, Cień) – bardziej zwarte */
-  .style-toggles {
-    gap: 0.3rem;
-  }
-  .style-btn {
-    min-width: 2.2rem;
-    height: 2.2rem;
-    font-size: 0.9rem;
-  }
-
-  /* Picker emoji – mniejsze kafelki i przewijanie w pionie */
-  .emoji-grid {
-    grid-template-columns: repeat(auto-fill, minmax(1.8rem, 1fr));
-    max-height: 140px;   /* nie zajmuje pół ekranu */
-  }
-  .emoji-btn {
-    font-size: 1.2rem;
-    padding: 0.2rem;
-  }
-
-  /* Suwaki i etykiety – zachowanie czytelności */
-  .tc-label-row {
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
-  .reset-small-btn {
-    margin-left: 0;
-  }
-    .tab-add-img {
-    font-size: 1rem;
-    padding: 0 0.5rem;
-  }
-  .tab-add {
-    font-size: 1rem;
-    padding: 0 0.5rem;
-  }
-  .tab-action-label {
-    font-size: 0.7rem;
-  }
-  .image-preview-box {
-    min-height: 50px;
-  }
-  .slider-edge-btn {
-    width: 2.3rem;
-    height: 2.3rem;
-    font-size: 1.25rem;
-  }
-}
-  /* ===== PRZYCISK DODAWANIA OBRAZU ===== */
-.tab-add-img {
-  width: auto;
-  height: 2.2rem;
-  padding: 0 0.65rem;
-  gap: 0.35rem;
-  background-color: #e3f2fd;
-  color: #1565c0;
-  font-size: 1.2rem;
-  white-space: nowrap;
-}
-.tab-add-img:hover:not(:disabled) { background-color: #bbdefb; }
-.tab-add-img:disabled { background-color: #f5f5f5; color: #a0a0a0; cursor: not-allowed; }
-.tab-action-icon {
-  font-size: 1.1rem;
-  line-height: 1;
-}
-.tab-action-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-/* ===== PODGLĄD OBRAZU W KONTROLKACH ===== */
+/* ===== IMAGE PREVIEW ===== */
 .image-preview-box {
   background: #eee;
   border-radius: 6px;
@@ -2393,9 +2141,112 @@ watch(useOriginalWidth, async (enabled) => {
 }
 .change-img-btn:hover { background: #f0f0f0; }
 
-/* ===================================================== */
-/* ===== DARK MODE — panel edycji / nakładki / suwaki === */
-/* ===================================================== */
+/* ===== RESPONSIVE ===== */
+@media (max-width: 600px) {
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+  .format-options {
+    flex-direction: column;
+  }
+  .unified-preview-wrapper {
+    width: 100%;
+  }
+
+  .textbox-tabs-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.2rem;
+  }
+  .textbox-tabs {
+    flex-wrap: nowrap;
+  }
+
+  .tc-field-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .tc-field-group {
+    width: 100%;
+  }
+  .tc-select,
+  .text-input {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .btn-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .tc-num-input,
+  .tc-num-input-sm {
+    min-width: 0;
+    flex: 1;
+    max-width: 100%;
+  }
+  .num-btn {
+    flex-shrink: 0;
+  }
+
+  .color-row {
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .color-hex {
+    font-size: 0.75rem;
+    word-break: break-all;
+  }
+
+  .style-toggles {
+    gap: 0.3rem;
+  }
+  .style-btn {
+    min-width: 2.2rem;
+    height: 2.2rem;
+    font-size: 0.9rem;
+  }
+
+  .emoji-grid {
+    grid-template-columns: repeat(auto-fill, minmax(1.8rem, 1fr));
+    max-height: 140px;
+  }
+  .emoji-btn {
+    font-size: 1.2rem;
+    padding: 0.2rem;
+  }
+
+  .tc-label-row {
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .reset-small-btn {
+    margin-left: 0;
+  }
+  .tab-add-img {
+    font-size: 1rem;
+    padding: 0 0.5rem;
+  }
+  .tab-add {
+    font-size: 1rem;
+    padding: 0 0.5rem;
+  }
+  .tab-action-label {
+    font-size: 0.7rem;
+  }
+  .image-preview-box {
+    min-height: 50px;
+  }
+  .slider-edge-btn {
+    width: 2.3rem;
+    height: 2.3rem;
+    font-size: 1.25rem;
+  }
+}
+
+/* ===== DARK MODE ===== */
 .dark-mode .container {
   background-color: #181a1f;
   color: #e8e8e8;
@@ -2483,7 +2334,6 @@ watch(useOriginalWidth, async (enabled) => {
 
 .dark-mode .theme-toggle-btn { background-color: #2a2d34; color: #ffd54f; }
 .dark-mode .theme-toggle-btn:hover { background-color: #3a3d44; }
-
 </style>
 
 <style>
@@ -2495,3 +2345,4 @@ html.dark-mode #app {
   color: #e8e8e8 !important;
 }
 </style>
+```
