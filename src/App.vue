@@ -283,6 +283,7 @@
                       <label class="tc-label">Rozmiar (px)</label>
                         <div class="btn-row">
                           <button class="num-btn wide-btn" @click="adjust('width', -10)" :disabled="isConverting || useOriginalWidth">−</button>
+                          <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
                           <button class="num-btn wide-btn" @click="adjust('width', 10)" :disabled="isConverting || useOriginalWidth">+</button>
                         </div>
                     </div>
