@@ -2097,25 +2097,7 @@ watch(useOriginalWidth, async (enabled) => {
   flex-shrink: 0;
 }
 
-/* Większe przyciski +/- dla Rozmiar (px) i Grub. obrysu na desktopie (≈3.4× bazowego rozmiaru) */
-@media (min-width: 601px) {
-  .fontsize-field .num-btn,
-  .strokewidth-field .num-btn {
-    width: 7.5rem;
-    height: 7.5rem;
-    font-size: 3rem;
-  }
-  .fontsize-field .btn-row,
-  .strokewidth-field .btn-row {
-    gap: 0.6rem;
-    align-items: stretch;
-  }
-  .fontsize-field .tc-num-input,
-  .strokewidth-field .tc-num-input-sm {
-    font-size: 1.3rem;
-    height: 7.5rem;
-  }
-}
+
 
 /* Reset small */
 .reset-small-btn {
@@ -2442,4 +2424,70 @@ watch(useOriginalWidth, async (enabled) => {
 .dark-mode .theme-toggle-btn { background-color: #2a2d34; color: #ffd54f; }
 .dark-mode .theme-toggle-btn:hover { background-color: #3a3d44; }
 
+</style>
+
+<style>
+/* ===== GLOBALNY TRYB CIEMNY ===== */
+html.dark-mode,
+html.dark-mode body {
+  background-color: #121212;
+  color: #e0e0e0;
+}
+
+html.dark-mode body {
+  margin: 0;
+}
+
+html.dark-mode h1,
+html.dark-mode h2,
+html.dark-mode h3,
+html.dark-mode h4,
+html.dark-mode .subtitle {
+  color: #f0f0f0;
+}
+
+html.dark-mode input:not([type="checkbox"]):not([type="file"]):not([type="color"]):not([type="range"]),
+html.dark-mode select,
+html.dark-mode textarea {
+  background-color: #2a2d34;
+  color: #e0e0e0;
+  border-color: #3a3d44;
+}
+
+html.dark-mode .container {
+  background-color: #121212;
+}
+
+html.dark-mode .input-group label,
+html.dark-mode .param-field label {
+  color: #e0e0e0;
+}
+
+html.dark-mode .note {
+  color: #aaa;
+}
+
+html.dark-mode .error {
+  color: #ff6b6b;
+}
+
+html.dark-mode .fetch-btn,
+html.dark-mode .upload-btn,
+html.dark-mode .clear-btn,
+html.dark-mode .analyze-btn,
+html.dark-mode .crop-toggle-btn {
+  background-color: #333;
+  color: #e0e0e0;
+  border-color: #555;
+}
+
+html.dark-mode .convert-btn {
+  background-color: #1da1f2;
+  color: white;
+}
+
+html.dark-mode .result-area {
+  background-color: #1e1e1e;
+  border-color: #333;
+}
 </style>
