@@ -7,7 +7,7 @@
       :aria-label="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
     >
       <span class="theme-icon">{{ isDarkMode ? '☀️' : '🌙' }}</span>
-      <span class="theme-label">{{ isDarkMode ? 'Jasny' : 'Ciemny' }}</span>
+      <span class="theme-label">{{ isDarkMode ? 'Tryb Jasny' : 'Tryb Ciemny' }}</span>
     </button>
     <h1>🎬 MP4 / WebP → WebP / GIF</h1>
     <p class="subtitle">Wklej link do X.com, MP4 lub wgraj plik MP4 / animowany WebP</p>
@@ -2343,7 +2343,7 @@ watch(useOriginalWidth, async (enabled) => {
 .dark-mode .original-meta h4 { color: #e8e8e8; }
 .dark-mode .meta-grid { color: #b0b0b0; }
 .dark-mode .meta-grid div span { color: #e8e8e8; }
-.dark-mode .size-estimate label { color: #e8e8e8; }
+.dark-mode .size-estimate label { color: #b0b0b0; }
 .dark-mode .estimate-display { color: #e8e8e8; }
 .dark-mode .estimate-value { color: #5ec1f7; }
 .dark-mode .estimate-note { color: #999; }
