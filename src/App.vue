@@ -1,159 +1,158 @@
 <template>
-  <div class="container">
-    <button
-      class="theme-toggle-btn"
-      @click="toggleDarkMode"
-      :title="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
-      :aria-label="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
-    >
-      <span class="theme-icon">{{ isDarkMode ? '☀️' : '🌙' }}</span>
-      <span class="theme-label">{{ isDarkMode ? 'Tryb Jasny' : 'Tryb Ciemny' }}</span>
-    </button>
-    <h1>🎬 MP4 / WebP → WebP / GIF</h1>
-    <p class="subtitle">Wklej link do X.com, MP4 lub wgraj plik MP4 / animowany WebP</p>
+<div class="container">
+  <button
+    class="theme-toggle-btn"
+    @click="toggleDarkMode"
+    :title="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
+    :aria-label="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
+  >
+    <span class="theme-icon">{{ isDarkMode ? '☀️' : '🌙' }}</span>
+    <span class="theme-label">{{ isDarkMode ? 'Tryb Jasny' : 'Tryb Ciemny' }}</span>
+  </button>
+  <h1>🎬 MP4 / WebP → WebP / GIF</h1>
+  <p class="subtitle">Wklej link do X.com, MP4 lub wgraj plik MP4 / animowany WebP</p>
 
-    <div class="input-group">
-      <label>Wideo (Link lub plik MP4 / WebP):</label>
-      <div class="input-row">
-        <input type="text" v-model="videoUrl" placeholder="Wklej link do wideo..." :disabled="isConverting" />
-        <button class="clear-btn" @click="videoUrl = ''" :disabled="isConverting || !videoUrl">Wyczyść</button>
-      </div>
-      <div class="fetch-row">
-        <button class="fetch-btn" @click="fetchAndSetDuration" :disabled="isConverting || !videoUrl || isFetching">
-          {{ isFetching ? 'Pobieranie…' : '⬇ Pobierz z linku' }}
-        </button>
-        <input type="file" ref="fileInput" accept="video/mp4,video/x-m4v,video/*,image/webp" style="display:none" @change="handleFileUpload" />
-        <input type="file" ref="imageFileInput" accept="image/*" style="display:none" @change="handleImageFileUpload" />
-        <button class="upload-btn" @click="$refs.fileInput.click()" :disabled="isConverting || isFetching">📁 Wgraj z dysku</button>
-      </div>
+  <div class="input-group">
+    <label>Wideo (Link lub plik MP4 / WebP):</label>
+    <div class="input-row">
+      <input type="text" v-model="videoUrl" placeholder="Wklej link do wideo..." :disabled="isConverting" />
+      <button class="clear-btn" @click="videoUrl = ''" :disabled="isConverting || !videoUrl">Wyczyść</button>
     </div>
-
-    <div class="params-grid">
-      <div class="param-field">
-        <label>Czas startu (s):</label>
-        <input type="number" v-model.number="startTime" min="0" step="0.5" :disabled="isConverting" />
-        <div class="btn-row">
-          <button class="num-btn" @click="adjust('startTime', -0.5)" :disabled="isConverting">−</button>
-          <button class="num-btn" @click="adjust('startTime', 0.5)" :disabled="isConverting">+</button>
-        </div>
-      </div>
-      <div class="param-field">
-        <label>Czas końca (s):</label>
-        <input type="number" v-model.number="endTime" min="0.5" step="0.5" :disabled="isConverting" />
-        <div class="btn-row">
-          <button class="num-btn" @click="adjust('endTime', -0.5)" :disabled="isConverting">−</button>
-          <button class="num-btn" @click="adjust('endTime', 0.5)" :disabled="isConverting">+</button>
-        </div>
-      </div>
-      <div class="param-field">
-        <label>FPS (klatki/s):</label>
-        <input type="number" v-model.number="fps" min="1" max="30" step="1" :disabled="isConverting" />
-        <div class="btn-row">
-          <button class="num-btn" @click="adjust('fps', -1)" :disabled="isConverting">−</button>
-          <button class="num-btn" @click="adjust('fps', 1)" :disabled="isConverting">+</button>
-        </div>
-      </div>
-      <div class="param-field">
-        <div class="label-row">
-          <label>Szerokość (px):</label>
-          <label class="checkbox-label">
-            <input type="checkbox" v-model="useOriginalWidth" :disabled="isConverting" />
-            Oryginalny rozmiar
-          </label>
-        </div>
-        <input type="number" v-model.number="width" min="100" max="1280" step="10" :disabled="isConverting || useOriginalWidth" />
-        <div class="btn-row">
-          <button class="num-btn" @click="adjust('width', -10)" :disabled="isConverting || useOriginalWidth">−</button>
-          <button class="num-btn" @click="adjust('width', 10)" :disabled="isConverting || useOriginalWidth">+</button>
-        </div>
-      </div>
-      <div class="param-field quality-field">
-        <div class="quality-header">
-          <label>Jakość (0-100):</label>
-          <span class="quality-value">{{ quality }}</span>
-        </div>
-        <div class="quality-controls">
-          <button class="num-btn" @click="quality = Math.max(0, quality - 5)" :disabled="isConverting || quality <= 0">−5</button>
-          <button class="num-btn" @click="quality = Math.max(0, quality - 1)" :disabled="isConverting || quality <= 0">−1</button>
-          <input type="range" v-model.number="quality" min="0" max="100" :disabled="isConverting" />
-          <button class="num-btn" @click="quality = Math.min(100, quality + 1)" :disabled="isConverting || quality >= 100">+1</button>
-          <button class="num-btn" @click="quality = Math.min(100, quality + 5)" :disabled="isConverting || quality >= 100">+5</button>
-        </div>
-      </div>
-      <div class="param-field size-estimate">
-        <label>📏 Prognozowany rozmiar {{ outputFormat.toUpperCase() }}:</label>
-        <div class="estimate-display">
-          <span class="estimate-value">{{ estimatedSize !== null ? formatFileSize(estimatedSize) : '—' }}</span>
-          <span class="estimate-note">(po analizie)</span>
-        </div>
-        <p v-if="sizeConfidence" class="estimate-confidence">Dokładność: ok. {{ Math.round(sizeConfidence * 100) }}%</p>
-      </div>
-      <div class="param-field size-limit">
-        <label>
-          <input type="checkbox" v-model="limitSizeEnabled" :disabled="isConverting" />
-          Ogranicz rozmiar maksymalny
-        </label>
-        <div v-if="limitSizeEnabled" class="limit-control">
-          <input type="number" v-model.number="targetSizeMB" min="0.1" max="50" step="0.5" :disabled="isConverting" />
-          <span>MB</span>
-        </div>
-        <button class="analyze-btn" @click="analyzeAndEstimate" :disabled="isConverting || !videoUrl || inputExt === 'webp'">
-          🔍 Analizuj rozmiar
-        </button>
-      </div>
-    </div>
-
-    <!-- Format wyjściowy -->
-    <div class="format-selector">
-      <label class="format-label">Format wyjściowy:</label>
-      <div class="format-options">
-        <button class="format-btn" :class="{ active: outputFormat === 'webp' }" @click="outputFormat = 'webp'" :disabled="isConverting">
-          <span class="format-icon">🖼️</span><span>WebP</span>
-        </button>
-        <button class="format-btn" :class="{ active: outputFormat === 'gif' }" @click="outputFormat = 'gif'" :disabled="isConverting">
-          <span class="format-icon">🎞️</span><span>GIF</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Metadane -->
-    <div v-if="originalWidth" class="original-meta">
-      <h4>📁 Informacje o źródle</h4>
-      <div class="meta-grid">
-        <div><span>Rozmiar:</span> {{ formatFileSize(originalSize) }}</div>
-        <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
-        <div><span>FPS:</span> {{ originalFps }}</div>
-        <div><span>Czas trwania:</span> {{ originalDuration?.toFixed(2) }} s</div>
-      </div>
-    </div>
-
-    <!-- ===== SEKCJA CROP + EDYTOR TEKSTU ===== -->
-    <div class="crop-section">
-      <button
-        class="crop-toggle-btn"
-        :class="{ active: editPanelOpen }"
-        @click="toggleEditPanel"
-        :disabled="isConverting"
-      >
-        ✂️✏️ {{ editPanelOpen ? 'Wyłącz przycinanie i edycję' : 'Przytnij i edytuj' }}
+    <div class="fetch-row">
+      <button class="fetch-btn" @click="fetchAndSetDuration" :disabled="isConverting || !videoUrl || isFetching">
+        {{ isFetching ? 'Pobieranie…' : '⬇ Pobierz z linku' }}
       </button>
+      <input type="file" ref="fileInput" accept="video/mp4,video/x-m4v,video/*,image/webp" style="display:none" @change="handleFileUpload" />
+      <input type="file" ref="imageFileInput" accept="image/*" style="display:none" @change="handleImageFileUpload" />
+      <button class="upload-btn" @click="$refs.fileInput.click()" :disabled="isConverting || isFetching">📁 Wgraj z dysku</button>
+    </div>
+  </div>
 
-      <div v-if="editPanelOpen" class="edit-panel">
+  <div class="params-grid">
+    <div class="param-field">
+      <label>Czas startu (s):</label>
+      <input type="number" v-model.number="startTime" min="0" step="0.5" :disabled="isConverting" />
+      <div class="btn-row">
+        <button class="num-btn" @click="adjust('startTime', -0.5)" :disabled="isConverting">−</button>
+        <button class="num-btn" @click="adjust('startTime', 0.5)" :disabled="isConverting">+</button>
+      </div>
+    </div>
+    <div class="param-field">
+      <label>Czas końca (s):</label>
+      <input type="number" v-model.number="endTime" min="0.5" step="0.5" :disabled="isConverting" />
+      <div class="btn-row">
+        <button class="num-btn" @click="adjust('endTime', -0.5)" :disabled="isConverting">−</button>
+        <button class="num-btn" @click="adjust('endTime', 0.5)" :disabled="isConverting">+</button>
+      </div>
+    </div>
+    <div class="param-field">
+      <label>FPS (klatki/s):</label>
+      <input type="number" v-model.number="fps" min="1" max="30" step="1" :disabled="isConverting" />
+      <div class="btn-row">
+        <button class="num-btn" @click="adjust('fps', -1)" :disabled="isConverting">−</button>
+        <button class="num-btn" @click="adjust('fps', 1)" :disabled="isConverting">+</button>
+      </div>
+    </div>
+    <div class="param-field">
+      <div class="label-row">
+        <label>Szerokość (px):</label>
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="useOriginalWidth" :disabled="isConverting" />
+          Oryginalny rozmiar
+        </label>
+      </div>
+      <input type="number" v-model.number="width" min="100" max="1280" step="10" :disabled="isConverting || useOriginalWidth" />
+      <div class="btn-row">
+        <button class="num-btn" @click="adjust('width', -10)" :disabled="isConverting || useOriginalWidth">−</button>
+        <button class="num-btn" @click="adjust('width', 10)" :disabled="isConverting || useOriginalWidth">+</button>
+      </div>
+    </div>
+    <div class="param-field quality-field">
+      <div class="quality-header">
+        <label>Jakość (0-100):</label>
+        <span class="quality-value">{{ quality }}</span>
+      </div>
+      <div class="quality-controls">
+        <button class="num-btn" @click="quality = Math.max(0, quality - 5)" :disabled="isConverting || quality <= 0">−5</button>
+        <button class="num-btn" @click="quality = Math.max(0, quality - 1)" :disabled="isConverting || quality <= 0">−1</button>
+        <input type="range" v-model.number="quality" min="0" max="100" :disabled="isConverting" />
+        <button class="num-btn" @click="quality = Math.min(100, quality + 1)" :disabled="isConverting || quality >= 100">+1</button>
+        <button class="num-btn" @click="quality = Math.min(100, quality + 5)" :disabled="isConverting || quality >= 100">+5</button>
+      </div>
+    </div>
+    <div class="param-field size-estimate">
+      <label>📏 Prognozowany rozmiar {{ outputFormat.toUpperCase() }}:</label>
+      <div class="estimate-display">
+        <span class="estimate-value">{{ estimatedSize !== null ? formatFileSize(estimatedSize) : '—' }}</span>
+        <span class="estimate-note">(po analizie)</span>
+      </div>
+      <p v-if="sizeConfidence" class="estimate-confidence">Dokładność: ok. {{ Math.round(sizeConfidence * 100) }}%</p>
+    </div>
+    <div class="param-field size-limit">
+      <label>
+        <input type="checkbox" v-model="limitSizeEnabled" :disabled="isConverting" />
+        Ogranicz rozmiar maksymalny
+      </label>
+      <div v-if="limitSizeEnabled" class="limit-control">
+        <input type="number" v-model.number="targetSizeMB" min="0.1" max="50" step="0.5" :disabled="isConverting" />
+        <span>MB</span>
+      </div>
+      <button class="analyze-btn" @click="analyzeAndEstimate" :disabled="isConverting || !videoUrl || inputExt === 'webp'">
+        🔍 Analizuj rozmiar
+      </button>
+    </div>
+  </div>
 
-        <!-- CROP CONTROLS -->
-        <div class="crop-controls">
-          <div
-            class="section-label clickable-section-label"
-            @click="cropPanelOpen = !cropPanelOpen"
-            role="button"
-            tabindex="0"
-            :aria-expanded="cropPanelOpen"
-          >
-            ✂️ Kadrowanie
-            <span class="toggle-arrow">{{ cropPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
-          </div>
+  <!-- Format wyjściowy -->
+  <div class="format-selector">
+    <label class="format-label">Format wyjściowy:</label>
+    <div class="format-options">
+      <button class="format-btn" :class="{ active: outputFormat === 'webp' }" @click="outputFormat = 'webp'" :disabled="isConverting">
+        <span class="format-icon">🖼️</span><span>WebP</span>
+      </button>
+      <button class="format-btn" :class="{ active: outputFormat === 'gif' }" @click="outputFormat = 'gif'" :disabled="isConverting">
+        <span class="format-icon">🎞️</span><span>GIF</span>
+      </button>
+    </div>
+  </div>
 
-          <template v-if="cropPanelOpen">
+  <!-- Metadane źródła -->
+  <div v-if="originalWidth" class="original-meta">
+    <h4>📁 Informacje o źródle</h4>
+    <div class="meta-grid">
+      <div><span>Format:</span> {{ inputExt.toUpperCase() }}</div>
+      <div><span>Rozmiar:</span> {{ formatFileSize(originalSize) }}</div>
+      <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
+      <div><span>FPS:</span> {{ originalFps }}</div>
+      <div><span>Czas trwania:</span> {{ originalDuration?.toFixed(2) }} s</div>
+    </div>
+  </div>
+
+  <!-- ===== SEKCJA CROP + EDYTOR TEKSTU ===== -->
+  <div class="crop-section">
+    <button
+      class="crop-toggle-btn"
+      :class="{ active: editPanelOpen }"
+      @click="toggleEditPanel"
+      :disabled="isConverting"
+    >
+      ✂️✏️ {{ editPanelOpen ? 'Wyłącz przycinanie i edycję' : 'Przytnij i edytuj' }}
+    </button>
+
+    <div v-if="editPanelOpen" class="edit-panel">
+      <!-- CROP CONTROLS -->
+      <div class="crop-controls">
+        <div
+          class="section-label clickable-section-label"
+          @click="cropPanelOpen = !cropPanelOpen"
+          role="button"
+          tabindex="0"
+          :aria-expanded="cropPanelOpen"
+        >
+          ✂️ Kadrowanie
+          <span class="toggle-arrow">{{ cropPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
+        </div>
+        <template v-if="cropPanelOpen">
           <div class="sync-row">
             <label><input type="checkbox" v-model="syncVertical" :disabled="isConverting" /> Synchronizuj (Góra/Dół)</label>
           </div>
@@ -204,290 +203,323 @@
               <span v-else>(oryg. − {{ cropLeft + cropRight }}px szer., − {{ cropTop + cropBottom }}px wys.)</span>
             </div>
           </div>
-          </template>
-        </div>
-
-        <!-- TEXT EDITOR CONTROLS – z nagłówkiem zwijanym -->
-        <div class="text-controls">
-          <div
-            class="section-label clickable-section-label"
-            @click="textPanelOpen = !textPanelOpen"
-            role="button"
-            tabindex="0"
-            :aria-expanded="textPanelOpen"
-          >
-            ✏️ Tekst na obrazie
-            <span class="toggle-arrow">{{ textPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
-          </div>
-
-          <template v-if="textPanelOpen">
-            <!-- Scrollowalny rząd zakładek (tylko jeden!) -->
-            <div class="textbox-tabs-row">
-              <div class="textbox-tabs">
-                <button
-                  v-for="(item, idx) in overlays"
-                  :key="idx"
-                  class="tb-tab"
-                  :class="{ active: activeOverlayIdx === idx }"
-                  @click="activeOverlayIdx = idx"
-                >
-                  <span class="tb-tab-num">{{ idx + 1 }}</span>
-                  <span v-if="item.type === 'text'" class="tb-tab-preview">{{ item.text ? item.text.slice(0, 8) + (item.text.length > 8 ? '…' : '') : '(pusty)' }}</span>
-                  <span v-else class="tb-tab-preview">🖼️ obrazek</span>
-                </button>
-              </div>
-              <div class="textbox-tab-actions">
-                <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">
-                  <span class="tab-action-icon">＋</span>
-                  <span class="tab-action-label">Dodaj tekst</span>
-                </button>
-                <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Wgraj obraz z dysku">
-                  <span class="tab-action-icon">🖼️</span>
-                  <span class="tab-action-label">Wgraj obraz z dysku</span>
-                </button>
-                <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
-              </div>
-            </div>
-
-            <!-- Kontrolki dla aktywnej nakładki -->
-            <div v-if="activeOverlay" class="textbox-controls">
-              <!-- ======= KONTROLKI DLA TEKSTU ======= -->
-              <template v-if="activeOverlay.type === 'text'">
-                <div class="tc-field-group">
-                  <label class="tc-label">Tekst</label>
-                  <div class="text-input-row">
-                    <input
-                      type="text"
-                      v-model="activeOverlay.text"
-                      placeholder="Wpisz tekst lub emoji…"
-                      class="text-input"
-                      ref="textInputRef"
-                      @input="redrawPreviewOverlay"
-                    />
-                    <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
-                  </div>
-                  <!-- Emoji picker panel -->
-                  <div v-if="showEmojiPicker" class="emoji-picker">
-                    <div class="emoji-cats">
-                      <button
-                        v-for="cat in emojiCategories"
-                        :key="cat.name"
-                        class="emoji-cat-btn"
-                        :class="{ active: activeCat === cat.name }"
-                        @click="activeCat = cat.name"
-                      >{{ cat.icon }}</button>
-                    </div>
-                    <div class="emoji-grid">
-                      <button
-                        v-for="em in currentEmojis"
-                        :key="em"
-                        class="emoji-btn"
-                        @click="insertEmoji(em)"
-                      >{{ em }}</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="tc-field-row style-font-row">
-                  <div class="tc-field-group tc-field-grow">
-                    <label class="tc-label">Czcionka</label>
-                    <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
-                      <option value="Impact">Impact</option>
-                      <option value="Arial">Arial</option>
-                      <option value="Arial Black">Arial Black</option>
-                      <option value="Georgia">Georgia</option>
-                      <option value="Times New Roman">Times New Roman</option>
-                      <option value="Courier New">Courier New</option>
-                      <option value="Verdana">Verdana</option>
-                      <option value="Trebuchet MS">Trebuchet MS</option>
-                      <option value="Comic Sans MS">Comic Sans MS</option>
-                    </select>
-                  </div>
-                  <div class="tc-field-group fontsize-field">
-                    <label class="tc-label">Rozmiar (px)</label>
-                    <div class="btn-row">
-                      <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 2); redrawPreviewOverlay()">−</button>
-                      <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
-                      <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 2); redrawPreviewOverlay()">+</button>
-                    </div>
-                  </div>
-                  <div class="tc-field-group strokewidth-field">
-                    <label class="tc-label">Grub. obrysu</label>
-                    <div class="btn-row">
-                      <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
-                      <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
-                      <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="tc-field-row style-color-row">
-                  <div class="tc-field-group style-field">
-                    <label class="tc-label">Styl</label>
-                    <div class="style-toggles">
-                      <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
-                    </div>
-                  </div>
-                  <div class="tc-field-group">
-                    <label class="tc-label">Kolor tekstu</label>
-                    <div class="color-row">
-                      <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
-                      <span class="color-hex">{{ activeOverlay.color }}</span>
-                    </div>
-                  </div>
-                  <div class="tc-field-group">
-                    <label class="tc-label">Obrys / cień</label>
-                    <div class="color-row">
-                      <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
-                      <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="tc-field-group">
-                  <div class="tc-label-row">
-                    <label class="tc-label">Obrót</label>
-                    <span class="tc-value">{{ activeOverlay.rotation }}°</span>
-                    <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
-                  </div>
-                  <div class="slider-edge-row">
-                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
-                    <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
-                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
-                  </div>
-                </div>
-
-                <div class="tc-field-group">
-                  <div class="tc-label-row">
-                    <label class="tc-label">Przezroczystość</label>
-                    <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
-                  </div>
-                  <div class="slider-edge-row">
-                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
-                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
-                  </div>
-                </div>
-              </template>
-
-              <!-- ======= KONTROLKI DLA OBRAZU ======= -->
-              <template v-else-if="activeOverlay.type === 'image'">
-                <div class="tc-field-group">
-                  <label class="tc-label">Wgraj obraz z dysku</label>
-                  <div class="image-preview-box">
-                    <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
-                  </div>
-                  <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
-                </div>
-
-                <div class="tc-field-group">
-                  <div class="tc-label-row">
-                    <label class="tc-label">Skala</label>
-                    <span class="tc-value">{{ activeOverlay.scale.toFixed(2) }}×</span>
-                  </div>
-                  <div class="slider-edge-row">
-                    <button class="slider-edge-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.25).toFixed(2)); redrawPreviewOverlay()" title="−0.25">−</button>
-                    <input type="range" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.25" class="tc-range" @input="redrawPreviewOverlay" />
-                    <button class="slider-edge-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.25).toFixed(2)); redrawPreviewOverlay()" title="+0.25">+</button>
-                  </div>
-                </div>
-
-                <div class="tc-field-group">
-                  <div class="tc-label-row">
-                    <label class="tc-label">Obrót</label>
-                    <span class="tc-value">{{ activeOverlay.rotation }}°</span>
-                    <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
-                  </div>
-                  <div class="slider-edge-row">
-                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
-                    <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
-                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
-                  </div>
-                </div>
-
-                <div class="tc-field-group">
-                  <div class="tc-label-row">
-                    <label class="tc-label">Przezroczystość</label>
-                    <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
-                  </div>
-                  <div class="slider-edge-row">
-                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
-                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </template> <!-- Zamknięcie v-if="textPanelOpen" -->
-        </div> <!-- Koniec .text-controls -->
-
-        <!-- UNIFIED PREVIEW CANVAS -->
-        <div class="preview-section">
-          <p class="preview-label" v-if="previewFrame">
-            Podgląd — przeciągnij tekst palcem/myszą, kadrowanie rysuje się automatycznie
-            <span v-if="previewNaturalWidth" class="preview-dims">({{ previewNaturalWidth }}×{{ previewNaturalHeight }}px)</span>
-          </p>
-          <div
-            v-if="previewFrame"
-            class="unified-preview-wrapper"
-            ref="previewWrapper"
-          >
-            <!-- Ukryty img żeby znać naturalne wymiary -->
-            <img
-              ref="previewImg"
-              :src="previewFrame"
-              alt=""
-              style="display:none"
-              @load="onPreviewLoaded"
-            />
-            <!-- Jeden canvas: crop overlay + text labels -->
-            <canvas
-              ref="unifiedCanvas"
-              class="unified-canvas"
-              @mousedown.prevent="onCanvasMouseDown"
-              @mousemove.prevent="onCanvasMouseMove"
-              @mouseup.prevent="onCanvasMouseUp"
-              @mouseleave.prevent="onCanvasMouseUp"
-              @touchstart.prevent="onCanvasTouchStart"
-              @touchmove.prevent="onCanvasTouchMove"
-              @touchend.prevent="onCanvasTouchEnd"
-            ></canvas>
-          </div>
-          <p v-else-if="isLoadingPreview" class="preview-loading">⏳ Ładowanie podglądu…</p>
-          <p v-else class="preview-loading">Podgląd pojawi się po załadowaniu wideo.</p>
-        </div>
-
-      </div> <!-- Koniec .edit-panel -->
-    </div> <!-- Koniec .crop-section -->
-
-    <button class="convert-btn" @click="convert" :disabled="isConverting || !videoUrl">
-      {{ isConverting ? 'Konwertowanie…' : (inputExt === 'webp' ? 'Zastosuj zmiany i wygeneruj ' + outputFormat.toUpperCase() : 'Konwertuj do ' + outputFormat.toUpperCase()) }}
-    </button>
-
-    <div v-if="isConverting" class="loader-container">
-      <div class="spinner"></div>
-      <p class="loader-text">Trwa przetwarzanie...</p>
-    </div>
-
-    <div v-if="error" class="error">{{ error }}</div>
-
-    <div v-if="resultUrl" class="result-area">
-      <h3>Wynik:</h3>
-      <img :src="resultUrl" :alt="'Wynikowy ' + outputFormat.toUpperCase()" />
-      <div class="result-info">
-        <p>Rzeczywisty rozmiar: {{ formatFileSize(resultBlob?.size || 0) }}</p>
+          <p class="crop-drag-hint">💡 Możesz przeciągać ramkę kadru bezpośrednio na podglądzie.</p>
+        </template>
       </div>
-      <button class="download-btn" @click="downloadResult">⬇ Pobierz {{ outputFormat.toUpperCase() }}</button>
-    </div>
 
-    <p class="note">
-      Uwaga: pierwsze uruchomienie FFmpeg.wasm ładuje ~30 MB plików. Kolejne konwersje będą szybsze.<br>
-      Edycja plików WebP (crop / zmiana FPS / jakości) wymaga przeglądarki z ImageDecoder (Chrome/Edge).
-    </p>
+      <!-- FLIP / TRANSFORM CONTROLS -->
+      <div class="transform-controls">
+        <div
+          class="section-label clickable-section-label"
+          @click="transformPanelOpen = !transformPanelOpen"
+          role="button"
+          tabindex="0"
+          :aria-expanded="transformPanelOpen"
+        >
+          🪞 Przekształcenia
+          <span class="toggle-arrow">{{ transformPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
+        </div>
+        <template v-if="transformPanelOpen">
+          <div class="transform-grid">
+            <button class="transform-btn" :class="{ active: flipHorizontal }" @click="flipHorizontal = !flipHorizontal; redrawPreviewOverlay()" :disabled="isConverting">
+              ↔️ Odbij poziomo
+            </button>
+            <button class="transform-btn" :class="{ active: flipVertical }" @click="flipVertical = !flipVertical; redrawPreviewOverlay()" :disabled="isConverting">
+              ↕️ Odbij pionowo
+            </button>
+            <button class="transform-btn" :class="{ active: rotate90 !== 0 }" @click="rotate90 = (rotate90 + 90) % 360; redrawPreviewOverlay()" :disabled="isConverting">
+              🔄 Obróć 90° ({{ rotate90 }}°)
+            </button>
+            <button class="transform-btn" @click="flipHorizontal = false; flipVertical = false; rotate90 = 0; redrawPreviewOverlay()" :disabled="isConverting">
+              ♻️ Resetuj przekształcenia
+            </button>
+          </div>
+        </template>
+      </div>
+
+      <!-- TEXT EDITOR CONTROLS -->
+      <div class="text-controls">
+        <div
+          class="section-label clickable-section-label"
+          @click="textPanelOpen = !textPanelOpen"
+          role="button"
+          tabindex="0"
+          :aria-expanded="textPanelOpen"
+        >
+          ✏️ Tekst na obrazie
+          <span class="toggle-arrow">{{ textPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
+        </div>
+        <template v-if="textPanelOpen">
+          <div class="textbox-tabs-row">
+            <div class="textbox-tabs">
+              <button
+                v-for="(item, idx) in overlays"
+                :key="idx"
+                class="tb-tab"
+                :class="{ active: activeOverlayIdx === idx }"
+                @click="activeOverlayIdx = idx"
+              >
+                <span class="tb-tab-num">{{ idx + 1 }}</span>
+                <span v-if="item.type === 'text'" class="tb-tab-preview">{{ item.text ? item.text.slice(0, 8) + (item.text.length > 8 ? '…' : '') : '(pusty)' }}</span>
+                <span v-else class="tb-tab-preview">🖼️ obrazek</span>
+              </button>
+            </div>
+            <div class="textbox-tab-actions">
+              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">
+                <span class="tab-action-icon">＋</span>
+                <span class="tab-action-label">Dodaj tekst</span>
+              </button>
+              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Wgraj obraz z dysku">
+                <span class="tab-action-icon">🖼️</span>
+                <span class="tab-action-label">Wgraj obraz z dysku</span>
+              </button>
+              <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
+            </div>
+          </div>
+          <div v-if="activeOverlay" class="textbox-controls">
+            <template v-if="activeOverlay.type === 'text'">
+              <div class="tc-field-group">
+                <label class="tc-label">Tekst</label>
+                <div class="text-input-row">
+                  <input
+                    type="text"
+                    v-model="activeOverlay.text"
+                    placeholder="Wpisz tekst lub emoji…"
+                    class="text-input"
+                    ref="textInputRef"
+                    @input="redrawPreviewOverlay"
+                  />
+                  <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
+                </div>
+                <div v-if="showEmojiPicker" class="emoji-picker">
+                  <div class="emoji-cats">
+                    <button
+                      v-for="cat in emojiCategories"
+                      :key="cat.name"
+                      class="emoji-cat-btn"
+                      :class="{ active: activeCat === cat.name }"
+                      @click="activeCat = cat.name"
+                    >{{ cat.icon }}</button>
+                  </div>
+                  <div class="emoji-grid">
+                    <button
+                      v-for="em in currentEmojis"
+                      :key="em"
+                      class="emoji-btn"
+                      @click="insertEmoji(em)"
+                    >{{ em }}</button>
+                  </div>
+                </div>
+              </div>
+              <div class="tc-field-row style-font-row">
+                <div class="tc-field-group tc-field-grow">
+                  <label class="tc-label">Czcionka</label>
+                  <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
+                    <option value="Impact">Impact</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Arial Black">Arial Black</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                    <option value="Comic Sans MS">Comic Sans MS</option>
+                  </select>
+                </div>
+                <div class="tc-field-group fontsize-field">
+                  <label class="tc-label">Rozmiar (px)</label>
+                  <div class="btn-row">
+                    <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 2); redrawPreviewOverlay()">−</button>
+                    <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
+                    <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 2); redrawPreviewOverlay()">+</button>
+                  </div>
+                </div>
+                <div class="tc-field-group strokewidth-field">
+                  <label class="tc-label">Grub. obrysu</label>
+                  <div class="btn-row">
+                    <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
+                    <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
+                    <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
+                  </div>
+                </div>
+              </div>
+              <div class="tc-field-row style-color-row">
+                <div class="tc-field-group style-field">
+                  <label class="tc-label">Styl</label>
+                  <div class="style-toggles">
+                    <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
+                  </div>
+                </div>
+                <div class="tc-field-group">
+                  <label class="tc-label">Kolor tekstu</label>
+                  <div class="color-row">
+                    <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
+                    <span class="color-hex">{{ activeOverlay.color }}</span>
+                  </div>
+                </div>
+                <div class="tc-field-group">
+                  <label class="tc-label">Obrys / cień</label>
+                  <div class="color-row">
+                    <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
+                    <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Obrót</label>
+                  <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                  <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
+                  <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
+                </div>
+              </div>
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Przezroczystość</label>
+                  <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
+                  <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
+                </div>
+              </div>
+            </template>
+            <template v-else-if="activeOverlay.type === 'image'">
+              <div class="tc-field-group">
+                <label class="tc-label">Wgraj obraz z dysku</label>
+                <div class="image-preview-box">
+                  <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
+                </div>
+                <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
+              </div>
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Skala</label>
+                  <span class="tc-value">{{ activeOverlay.scale.toFixed(2) }}×</span>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.25).toFixed(2)); redrawPreviewOverlay()" title="−0.25">−</button>
+                  <input type="range" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.25" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.25).toFixed(2)); redrawPreviewOverlay()" title="+0.25">+</button>
+                </div>
+              </div>
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Obrót</label>
+                  <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                  <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
+                  <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
+                </div>
+              </div>
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Przezroczystość</label>
+                  <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
+                  <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <!-- UNIFIED PREVIEW CANVAS -->
+      <div class="preview-section">
+        <p class="preview-label" v-if="previewFrame">
+          Podgląd — przeciągnij tekst/obrazek lub ramkę kadru palcem/myszą
+          <span v-if="previewNaturalWidth" class="preview-dims">({{ previewNaturalWidth }}×{{ previewNaturalHeight }}px)</span>
+        </p>
+        <div
+          v-if="previewFrame"
+          class="unified-preview-wrapper"
+          ref="previewWrapper"
+        >
+          <img
+            ref="previewImg"
+            :src="previewFrame"
+            alt=""
+            style="display:none"
+            @load="onPreviewLoaded"
+          />
+          <canvas
+            ref="unifiedCanvas"
+            class="unified-canvas"
+            :class="{ 'crop-dragging': isCropDraggingActive }"
+            @mousedown.prevent="onCanvasMouseDown"
+            @mousemove.prevent="onCanvasMouseMove"
+            @mouseup.prevent="onCanvasMouseUp"
+            @mouseleave.prevent="onCanvasMouseUp"
+            @touchstart.prevent="onCanvasTouchStart"
+            @touchmove.prevent="onCanvasTouchMove"
+            @touchend.prevent="onCanvasTouchEnd"
+          ></canvas>
+        </div>
+        <p v-else-if="isLoadingPreview" class="preview-loading">⏳ Ładowanie podglądu…</p>
+        <p v-else class="preview-loading">Podgląd pojawi się po załadowaniu wideo.</p>
+      </div>
+    </div>
   </div>
+
+  <button class="convert-btn" @click="convert" :disabled="isConverting || !videoUrl">
+    {{ isConverting ? 'Konwertowanie…' : (inputExt === 'webp' ? 'Zastosuj zmiany i wygeneruj ' + outputFormat.toUpperCase() : 'Konwertuj do ' + outputFormat.toUpperCase()) }}
+  </button>
+
+  <div v-if="isConverting" class="loader-container">
+    <div class="spinner"></div>
+    <p class="loader-text">Trwa przetwarzanie...</p>
+  </div>
+  <div v-if="error" class="error">{{ error }}</div>
+
+  <!-- ===== WYNIK KONWERSJI ===== -->
+  <div v-if="resultUrl" class="result-area">
+    <h3>Wynik:</h3>
+    <img :src="resultUrl" :alt="'Wynikowy ' + outputFormat.toUpperCase()" />
+    <div class="result-meta-row">
+      <div class="result-meta-box">
+        <h4>📁 Źródło</h4>
+        <div class="meta-grid">
+          <div><span>Format:</span> {{ inputExt.toUpperCase() }}</div>
+          <div><span>Rozmiar:</span> {{ formatFileSize(originalSize) }}</div>
+          <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
+          <div><span>FPS:</span> {{ originalFps }}</div>
+          <div><span>Czas trwania:</span> {{ originalDuration?.toFixed(2) }} s</div>
+        </div>
+      </div>
+      <div class="result-meta-box">
+        <h4>🎞️ Konwersja</h4>
+        <div class="meta-grid">
+          <div><span>Format:</span> {{ outputFormat.toUpperCase() }}</div>
+          <div><span>Rozmiar:</span> {{ formatFileSize(resultBlob?.size || 0) }}</div>
+          <div><span>Wymiary:</span> {{ resultWidth }}×{{ resultHeight }} px</div>
+          <div><span>FPS:</span> {{ fps }}</div>
+          <div><span>Czas trwania:</span> {{ resultDuration?.toFixed(2) }} s</div>
+        </div>
+      </div>
+    </div>
+    <button class="download-btn" @click="downloadResult">⬇ Pobierz {{ outputFormat.toUpperCase() }}</button>
+  </div>
+
+  <p class="note">
+    Uwaga: pierwsze uruchomienie FFmpeg.wasm ładuje ~30 MB plików. Kolejne konwersje będą szybsze.<br>
+    Edycja plików WebP (crop / zmiana FPS / jakości) wymaga przeglądarki z ImageDecoder (Chrome/Edge).
+  </p>
+</div>
 </template>
 
 <script setup>
@@ -522,6 +554,11 @@ const originalHeight   = ref(null);
 const originalFps      = ref(null);
 const originalDuration = ref(null);
 
+// Wynik konwersji – metadane
+const resultWidth    = ref(0);
+const resultHeight   = ref(0);
+const resultDuration = ref(0);
+
 // Crop
 const cropEnabled = ref(false);
 const cropTop     = ref(0);
@@ -531,16 +568,32 @@ const cropRight   = ref(0);
 const syncVertical   = ref(true);
 const syncHorizontal = ref(true);
 
+// Flip / Transform
+const flipHorizontal = ref(false);
+const flipVertical   = ref(false);
+const rotate90       = ref(0);
+
 // Panel open states
-const editPanelOpen = ref(false);
-const textPanelOpen = ref(false);
-const cropPanelOpen = ref(true);
+const editPanelOpen     = ref(false);
+const textPanelOpen     = ref(false);
+const cropPanelOpen     = ref(true);
+const transformPanelOpen = ref(false);
 
 // Podgląd klatki
 const previewFrame         = ref(null);
 const previewNaturalWidth  = ref(0);
 const previewNaturalHeight = ref(0);
 const isLoadingPreview     = ref(false);
+
+// Crop dragging state
+const isCropDraggingActive = ref(false);
+let cropDragStartX = 0;
+let cropDragStartY = 0;
+let cropDragStartLeft = 0;
+let cropDragStartTop = 0;
+let cropDragStartRight = 0;
+let cropDragStartBottom = 0;
+let suppressCropSync = false;
 
 // Template refs
 const previewImg     = ref(null);
@@ -553,8 +606,6 @@ let ffmpeg = null;
 
 // ---- TEXT EDITOR STATE ----
 const textInputRef = ref(null);
-
-// Emoji picker state
 const showEmojiPicker = ref(false);
 const activeCat = ref('Popularne');
 
@@ -562,7 +613,7 @@ const emojiCategories = [
   { name: 'Popularne', icon: '⭐', emojis: ['😂','😍','🔥','❤️','👍','😭','🙏','😊','🤣','💀','😎','🤔','💯','🎉','👀','😅','🥺','😩','😤','🤩','😇','🥰','😆','😋','🤗','😏','😒','😞','😠','🤬','😱','😨','😰','😥','😓','🤯','😳','🥵','🥶','😴','🤤','🤮','🤧','🥸','🤡','🤠'] },
   { name: 'Gest', icon: '👋', emojis: ['👋','🤚','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','🤲','🙏','✍️','💅','🤳','💪','🦾','🖕','👐','🫶','🫂'] },
   { name: 'Natura', icon: '🌿', emojis: ['🌸','🌺','🌻','🌹','🌷','🌼','🌵','🎋','🎍','🍀','🌿','☘️','🍃','🍂','🍁','🍄','🌾','🌱','🌲','🌳','🌴','🪴','🌊','🌈','⭐','🌟','✨','💫','❄️','🔥','💧','🌙','☀️','⛅','🌤️','🌦️','⛈️','🌪️','🌫️'] },
-  { name: 'Jedzenie', icon: '🍕', emojis: ['🍕','🍔','🌮','🌯','🍜','🍣','🍱','🍩','🍪','🎂','🍰','🍫','🍬','🍭','🍦','🥤','☕','🧋','🍺','🥂','🍷','🥃','🫖','🍵','🧃','🥛','🍶','🍾','🍸','🍹','🧉','🥃','🍻','🍮','🍯','🧇','🥞','🧈','🥓','🥚'] },
+  { name: 'Jedzenie', icon: '🍕', emojis: ['🍕','🍔','🌮','🌯','🍜','🍣','🍱','🍩','🍪','🎂','🍰','🍫','🍬','🍭','🍦','🥤','☕','🧋','🍺','🥂','🍷','🥃','🫖','🍵','🧃','🥛','🍶','🍾','🍸','🍹','🧉','🥃','🍻','🍮','🍯','🥞','🧈','🥓','🥚'] },
   { name: 'Aktywność', icon: '⚽', emojis: ['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🥏','🎱','🏓','🏸','🏒','🥅','⛳','🏹','🎣','🤿','🎽','🎿','🛷','🥌','🎯','🪃','🏋️','🤸','⛹️','🤺','🏇','🧘','🏊','🚴','🏄','🤽','🧗','🚵','🤼','🤾','🏌️','🏂'] },
   { name: 'Obiekty', icon: '💡', emojis: ['💡','📱','💻','🖥️','⌨️','🖱️','🖨️','📷','📸','🎥','📽️','🎬','📺','📻','📡','🔊','🎵','🎶','🎸','🎹','🥁','🎺','🎻','🪗','🎷','🎤','🎧','📝','✏️','🖊️','🖋️','✒️','📚','📖','🔍','🔎','🔬','🔭','💊','💉'] },
   { name: 'Symbole', icon: '❤️', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','❤️‍🔥','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☯️','🕉️','✡️','🔯','🕎','☸️','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑'] },
@@ -735,7 +786,7 @@ function handleImageFileUpload(event) {
   event.target.value = '';
 }
 
-// ---- DRAG STATE ----
+// ---- DRAG STATE (overlays + crop) ----
 let dragTextIdx = null;
 let dragStartClientX = 0;
 let dragStartClientY = 0;
@@ -774,6 +825,27 @@ function hitTestOverlay(clientX, clientY) {
   return -1;
 }
 
+function hitTestCrop(clientX, clientY) {
+  const c = unifiedCanvas.value;
+  const img = previewImg.value;
+  if (!c || !img || !img.complete) return false;
+  const hasCrop = (cropTop.value || cropBottom.value || cropLeft.value || cropRight.value);
+  if (!hasCrop) return false;
+
+  const bounds = c.getBoundingClientRect();
+  const px = clientX - bounds.left;
+  const py = clientY - bounds.top;
+
+  const scaleX = c.width / img.naturalWidth;
+  const scaleY = c.height / img.naturalHeight;
+  const x = cropLeft.value * scaleX;
+  const y = cropTop.value * scaleY;
+  const w = c.width - (cropLeft.value + cropRight.value) * scaleX;
+  const h = c.height - (cropTop.value + cropBottom.value) * scaleY;
+
+  return px >= x && px <= x + w && py >= y && py <= y + h;
+}
+
 function onCanvasMouseDown(e) {
   const idx = hitTestOverlay(e.clientX, e.clientY);
   if (idx >= 0) {
@@ -783,23 +855,65 @@ function onCanvasMouseDown(e) {
     dragStartClientY = e.clientY;
     dragStartXPct = overlays.value[idx].xPct;
     dragStartYPct = overlays.value[idx].yPct;
+    return;
+  }
+  // Check crop drag
+  if (hitTestCrop(e.clientX, e.clientY)) {
+    isCropDraggingActive.value = true;
+    cropDragStartX = e.clientX;
+    cropDragStartY = e.clientY;
+    cropDragStartLeft = cropLeft.value;
+    cropDragStartTop = cropTop.value;
+    cropDragStartRight = cropRight.value;
+    cropDragStartBottom = cropBottom.value;
   }
 }
 
 function onCanvasMouseMove(e) {
-  if (dragTextIdx === null) return;
-  const c = unifiedCanvas.value;
-  if (!c) return;
-  const bounds = c.getBoundingClientRect();
-  const dx = (e.clientX - dragStartClientX) / bounds.width;
-  const dy = (e.clientY - dragStartClientY) / bounds.height;
-  overlays.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
-  overlays.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
-  redrawPreviewOverlay();
+  if (dragTextIdx !== null) {
+    const c = unifiedCanvas.value;
+    if (!c) return;
+    const bounds = c.getBoundingClientRect();
+    const dx = (e.clientX - dragStartClientX) / bounds.width;
+    const dy = (e.clientY - dragStartClientY) / bounds.height;
+    overlays.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
+    overlays.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
+    redrawPreviewOverlay();
+    return;
+  }
+  if (isCropDraggingActive.value) {
+    const c = unifiedCanvas.value;
+    const img = previewImg.value;
+    if (!c || !img) return;
+    const bounds = c.getBoundingClientRect();
+    const scaleX = img.naturalWidth / bounds.width;
+    const scaleY = img.naturalHeight / bounds.height;
+    const dxNative = (e.clientX - cropDragStartX) * scaleX;
+    const dyNative = (e.clientY - cropDragStartY) * scaleY;
+
+    const cropW = cropDragStartLeft + cropDragStartRight;
+    const cropH = cropDragStartTop + cropDragStartBottom;
+    const maxDx = cropDragStartRight;
+    const minDx = -cropDragStartLeft;
+    const maxDy = cropDragStartBottom;
+    const minDy = -cropDragStartTop;
+
+    const clampedDx = Math.max(minDx, Math.min(maxDx, dxNative));
+    const clampedDy = Math.max(minDy, Math.min(maxDy, dyNative));
+
+    suppressCropSync = true;
+    cropLeft.value = Math.round(cropDragStartLeft + clampedDx);
+    cropTop.value = Math.round(cropDragStartTop + clampedDy);
+    cropRight.value = Math.round(cropDragStartRight - clampedDx);
+    cropBottom.value = Math.round(cropDragStartBottom - clampedDy);
+    suppressCropSync = false;
+    nextTick(redrawPreviewOverlay);
+  }
 }
 
 function onCanvasMouseUp() {
   dragTextIdx = null;
+  isCropDraggingActive.value = false;
 }
 
 function onCanvasTouchStart(e) {
@@ -812,24 +926,63 @@ function onCanvasTouchStart(e) {
     dragStartClientY = touch.clientY;
     dragStartXPct = overlays.value[idx].xPct;
     dragStartYPct = overlays.value[idx].yPct;
+    return;
+  }
+  if (hitTestCrop(touch.clientX, touch.clientY)) {
+    isCropDraggingActive.value = true;
+    cropDragStartX = touch.clientX;
+    cropDragStartY = touch.clientY;
+    cropDragStartLeft = cropLeft.value;
+    cropDragStartTop = cropTop.value;
+    cropDragStartRight = cropRight.value;
+    cropDragStartBottom = cropBottom.value;
   }
 }
 
 function onCanvasTouchMove(e) {
-  if (dragTextIdx === null) return;
   const touch = e.touches[0];
-  const c = unifiedCanvas.value;
-  if (!c) return;
-  const bounds = c.getBoundingClientRect();
-  const dx = (touch.clientX - dragStartClientX) / bounds.width;
-  const dy = (touch.clientY - dragStartClientY) / bounds.height;
-  overlays.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
-  overlays.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
-  redrawPreviewOverlay();
+  if (dragTextIdx !== null) {
+    const c = unifiedCanvas.value;
+    if (!c) return;
+    const bounds = c.getBoundingClientRect();
+    const dx = (touch.clientX - dragStartClientX) / bounds.width;
+    const dy = (touch.clientY - dragStartClientY) / bounds.height;
+    overlays.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
+    overlays.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
+    redrawPreviewOverlay();
+    return;
+  }
+  if (isCropDraggingActive.value) {
+    const c = unifiedCanvas.value;
+    const img = previewImg.value;
+    if (!c || !img) return;
+    const bounds = c.getBoundingClientRect();
+    const scaleX = img.naturalWidth / bounds.width;
+    const scaleY = img.naturalHeight / bounds.height;
+    const dxNative = (touch.clientX - cropDragStartX) * scaleX;
+    const dyNative = (touch.clientY - cropDragStartY) * scaleY;
+
+    const maxDx = cropDragStartRight;
+    const minDx = -cropDragStartLeft;
+    const maxDy = cropDragStartBottom;
+    const minDy = -cropDragStartTop;
+
+    const clampedDx = Math.max(minDx, Math.min(maxDx, dxNative));
+    const clampedDy = Math.max(minDy, Math.min(maxDy, dyNative));
+
+    suppressCropSync = true;
+    cropLeft.value = Math.round(cropDragStartLeft + clampedDx);
+    cropTop.value = Math.round(cropDragStartTop + clampedDy);
+    cropRight.value = Math.round(cropDragStartRight - clampedDx);
+    cropBottom.value = Math.round(cropDragStartBottom - clampedDy);
+    suppressCropSync = false;
+    nextTick(redrawPreviewOverlay);
+  }
 }
 
 function onCanvasTouchEnd() {
   dragTextIdx = null;
+  isCropDraggingActive.value = false;
 }
 
 // ---- UNIFIED CANVAS DRAW ----
@@ -847,7 +1000,19 @@ function redrawPreviewOverlay() {
 
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, dw, dh);
+
+  // Apply flip/rotate to preview
+  ctx.save();
+  if (flipHorizontal.value || flipVertical.value || rotate90.value !== 0) {
+    ctx.translate(dw / 2, dh / 2);
+    if (rotate90.value === 90) ctx.rotate(Math.PI / 2);
+    else if (rotate90.value === 180) ctx.rotate(Math.PI);
+    else if (rotate90.value === 270) ctx.rotate(-Math.PI / 2);
+    ctx.scale(flipHorizontal.value ? -1 : 1, flipVertical.value ? -1 : 1);
+    ctx.translate(-dw / 2, -dh / 2);
+  }
   ctx.drawImage(img, 0, 0, dw, dh);
+  ctx.restore();
 
   const hasCrop = (cropTop.value || cropBottom.value || cropLeft.value || cropRight.value);
   if (hasCrop) {
@@ -880,6 +1045,14 @@ function redrawPreviewOverlay() {
     ];
     for (const [ax, ay, mx, my, bx, by] of corners) {
       ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(mx,my); ctx.lineTo(bx,by); ctx.stroke();
+    }
+
+    // Move indicator
+    if (isCropDraggingActive.value) {
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('✥', x + w/2, y + h/2);
     }
   }
 
@@ -947,11 +1120,11 @@ function redrawPreviewOverlay() {
         ctx.setLineDash([]);
       }
     } else if (item.type === 'image') {
-      const img = getOrLoadImageEl(item.imageSrc, redrawPreviewOverlay);
-      if (img) {
+      const imgEl = getOrLoadImageEl(item.imageSrc, redrawPreviewOverlay);
+      if (imgEl) {
         const scaledW = item.imageNaturalWidth * item.scale;
         const scaledH = item.imageNaturalHeight * item.scale;
-        ctx.drawImage(img, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
+        ctx.drawImage(imgEl, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
         if (i === activeOverlayIdx.value) {
           ctx.strokeStyle = 'rgba(255,255,100,0.9)';
           ctx.lineWidth = 1.5;
@@ -1017,11 +1190,11 @@ function drawOverlaysOnCanvas(ctx, canvasWidth, canvasHeight) {
         ctx.beginPath(); ctx.moveTo(-tw/2, uy); ctx.lineTo(tw/2, uy); ctx.stroke();
       }
     } else if (item.type === 'image') {
-      const img = getOrLoadImageEl(item.imageSrc, null);
-      if (img) {
+      const imgEl = getOrLoadImageEl(item.imageSrc, null);
+      if (imgEl) {
         const scaledW = item.imageNaturalWidth * item.scale;
         const scaledH = item.imageNaturalHeight * item.scale;
-        ctx.drawImage(img, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
+        ctx.drawImage(imgEl, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
       }
     }
     ctx.restore();
@@ -1081,6 +1254,7 @@ function resetConversionState() {
   cropEnabled.value = false;
   cropTop.value = 0; cropBottom.value = 0; cropLeft.value = 0; cropRight.value = 0;
   syncVertical.value = true; syncHorizontal.value = true;
+  flipHorizontal.value = false; flipVertical.value = false; rotate90.value = 0;
   editPanelOpen.value = false;
   overlays.value = [createTextOverlay(0.5)];
   activeOverlayIdx.value = 0;
@@ -1091,6 +1265,7 @@ function resetConversionState() {
   inputExt.value = 'mp4';
   originalSize.value = null; originalWidth.value = null; originalHeight.value = null;
   originalFps.value = null; originalDuration.value = null;
+  resultWidth.value = 0; resultHeight.value = 0; resultDuration.value = 0;
 }
 
 async function handleFileUpload(event) {
@@ -1152,6 +1327,11 @@ function buildVfFilter() {
   const parts = [];
   const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
   if (cropEnabled.value && (cl+cr+ct+cb > 0)) parts.push(`crop=iw-${cl+cr}:ih-${ct+cb}:${cl}:${ct}`);
+  if (flipHorizontal.value) parts.push('hflip');
+  if (flipVertical.value) parts.push('vflip');
+  if (rotate90.value === 90) parts.push('transpose=1');
+  else if (rotate90.value === 180) parts.push('transpose=1,transpose=1');
+  else if (rotate90.value === 270) parts.push('transpose=2');
   parts.push(`fps=${fps.value}`);
   parts.push(`scale=${width.value}:trunc(ow/a/2)*2`);
   return parts.join(',');
@@ -1185,7 +1365,7 @@ onMounted(async () => {
     if (savedTheme) {
       isDarkMode.value = savedTheme === 'dark';
     } else {
-      isDarkMode.value = false; // domyślnie jasny tryb
+      isDarkMode.value = false;
     }
   } catch (e) {}
   applyDarkModeClass();
@@ -1259,7 +1439,7 @@ async function fetchAndSetDuration() {
     originalHeight.value = metadata.height; originalDuration.value = metadata.duration;
     if (inputExt.value === 'webp') {
       const meta = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset+fileData.byteLength));
-      originalFps.value = (meta && meta.duration>0) ? Math.round((meta.frameCount/meta.duration)*10)/10 : (meta ? meta.frameCount : null);
+      originalFps.value = (meta && meta.duration >0) ? Math.round((meta.frameCount/meta.duration)*10)/10 : (meta ? meta.frameCount : null);
     } else { originalFps.value = metadata.fps; }
     if (metadata.duration) endTime.value = metadata.duration;
     if (useOriginalWidth.value && metadata.width) width.value = metadata.width;
@@ -1359,6 +1539,7 @@ async function convertViaCanvas(fileData, srcExt) {
 
   const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
   const hasCrop = cropEnabled.value && (cl+cr+ct+cb > 0);
+  const hasFlip = flipHorizontal.value || flipVertical.value || rotate90.value !== 0;
   const hasOverlays = overlays.value.some(item =>
     (item.type === 'text' && item.text.trim() !== '') ||
     (item.type === 'image' && !!item.imageSrc)
@@ -1387,6 +1568,11 @@ async function convertViaCanvas(fileData, srcExt) {
   let outH = Math.round(outW * cropH / cropW);
   outH = Math.max(2, outH % 2 === 0 ? outH : outH + 1);
 
+  // Store result dimensions
+  resultWidth.value = outW;
+  resultHeight.value = outH;
+  resultDuration.value = targetDuration;
+
   const canvas = document.createElement('canvas');
   canvas.width = outW; canvas.height = outH;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -1402,11 +1588,23 @@ async function convertViaCanvas(fileData, srcExt) {
       const result = await decoder.decode({ frameIndex: srcIndex });
       const frame = result.image;
       ctx.clearRect(0, 0, outW, outH);
+
+      ctx.save();
+      if (hasFlip) {
+        ctx.translate(outW/2, outH/2);
+        if (rotate90.value === 90) ctx.rotate(Math.PI/2);
+        else if (rotate90.value === 180) ctx.rotate(Math.PI);
+        else if (rotate90.value === 270) ctx.rotate(-Math.PI/2);
+        ctx.scale(flipHorizontal.value ? -1 : 1, flipVertical.value ? -1 : 1);
+        ctx.translate(-outW/2, -outH/2);
+      }
       if (hasCrop) {
         ctx.drawImage(frame, cl, ct, cropW, cropH, 0, 0, outW, outH);
       } else {
         ctx.drawImage(frame, 0, 0, outW, outH);
       }
+      ctx.restore();
+
       if (hasOverlays) drawOverlaysOnCanvas(ctx, outW, outH);
       frame.close();
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -1436,7 +1634,19 @@ async function convertViaCanvas(fileData, srcExt) {
       const imgBlob = new Blob([rawData.buffer], { type: 'image/png' });
       const imgBitmap = await createImageBitmap(imgBlob);
       ctx.clearRect(0, 0, outW, outH);
+
+      ctx.save();
+      if (hasFlip) {
+        ctx.translate(outW/2, outH/2);
+        if (rotate90.value === 90) ctx.rotate(Math.PI/2);
+        else if (rotate90.value === 180) ctx.rotate(Math.PI);
+        else if (rotate90.value === 270) ctx.rotate(-Math.PI/2);
+        ctx.scale(flipHorizontal.value ? -1 : 1, flipVertical.value ? -1 : 1);
+        ctx.translate(-outW/2, -outH/2);
+      }
       ctx.drawImage(imgBitmap, 0, 0, outW, outH);
+      ctx.restore();
+
       imgBitmap.close();
       if (hasOverlays) drawOverlaysOnCanvas(ctx, outW, outH);
       const outBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -1484,14 +1694,25 @@ async function convert() {
   try {
     const fileData = await fetchVideo(videoUrl.value);
     const hasCrop = cropEnabled.value && (cropLeft.value+cropRight.value+cropTop.value+cropBottom.value > 0);
+    const hasFlip = flipHorizontal.value || flipVertical.value || rotate90.value !== 0;
     const hasOverlays = overlays.value.some(item =>
       (item.type === 'text' && item.text.trim() !== '') ||
       (item.type === 'image' && !!item.imageSrc)
     );
 
+    // Calculate result dimensions
+    const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
+    const srcW = originalWidth.value || width.value;
+    const srcH = originalHeight.value || Math.round(width.value * 9 / 16);
+    const cropW = Math.max(1, srcW - cl - cr);
+    const cropH = Math.max(1, srcH - ct - cb);
+    resultWidth.value = width.value;
+    resultHeight.value = Math.round(width.value * cropH / cropW);
+    resultDuration.value = Math.max(0.1, endTime.value - startTime.value);
+
     if (inputExt.value === 'webp') {
       await convertViaCanvas(fileData, 'webp');
-    } else if (hasCrop || hasOverlays) {
+    } else if (hasCrop || hasOverlays || hasFlip) {
       await convertViaCanvas(fileData, 'mp4');
     } else {
       await ffmpeg.writeFile('input.mp4', new Uint8Array(fileData.slice().buffer));
@@ -1527,14 +1748,15 @@ watch(videoUrl, (newUrl) => {
     sizeConfidence.value = null; inputExt.value = 'mp4';
     originalSize.value = null; originalWidth.value = null; originalHeight.value = null;
     originalFps.value = null; originalDuration.value = null;
+    resultWidth.value = 0; resultHeight.value = 0; resultDuration.value = 0;
     clearPreview();
   }
 });
 
-watch(cropTop,    (val) => { if (syncVertical.value)   cropBottom.value = val; nextTick(redrawPreviewOverlay); });
-watch(cropBottom, (val) => { if (syncVertical.value)   cropTop.value    = val; nextTick(redrawPreviewOverlay); });
-watch(cropLeft,   (val) => { if (syncHorizontal.value) cropRight.value  = val; nextTick(redrawPreviewOverlay); });
-watch(cropRight,  (val) => { if (syncHorizontal.value) cropLeft.value   = val; nextTick(redrawPreviewOverlay); });
+watch(cropTop,    (val) => { if (syncVertical.value && !suppressCropSync)   cropBottom.value = val; nextTick(redrawPreviewOverlay); });
+watch(cropBottom, (val) => { if (syncVertical.value && !suppressCropSync)   cropTop.value    = val; nextTick(redrawPreviewOverlay); });
+watch(cropLeft,   (val) => { if (syncHorizontal.value && !suppressCropSync) cropRight.value  = val; nextTick(redrawPreviewOverlay); });
+watch(cropRight,  (val) => { if (syncHorizontal.value && !suppressCropSync) cropLeft.value   = val; nextTick(redrawPreviewOverlay); });
 
 watch(activeOverlayIdx, () => nextTick(redrawPreviewOverlay));
 
@@ -1600,7 +1822,7 @@ watch(useOriginalWidth, async (enabled) => {
   font-size: 0.8rem;
   color: #888;
 }
-  
+
 .section-label {
   font-weight: 700;
   font-size: 0.9rem;
@@ -1627,11 +1849,60 @@ watch(useOriginalWidth, async (enabled) => {
   margin-top: 0.5rem;
 }
 
+.crop-drag-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  color: #888;
+  font-style: italic;
+}
+
 .wide-btn {
   min-width: 2.8rem;
   padding: 0 0.8rem;
 }
-  
+
+/* ===== TRANSFORM CONTROLS ===== */
+.transform-controls {
+  padding: 0.75rem;
+  background: #f9f9f9;
+  border-radius: 10px;
+  border: 1px solid #e0e0e0;
+}
+
+.transform-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.transform-btn {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  color: #444;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  touch-action: manipulation;
+  text-align: center;
+}
+.transform-btn:hover:not(:disabled) {
+  background: #e3f2fd;
+  border-color: #1da1f2;
+  color: #0c63e4;
+}
+.transform-btn.active {
+  background: #1da1f2;
+  border-color: #1da1f2;
+  color: white;
+}
+.transform-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ===== TEXT CONTROLS ===== */
 .text-controls {
   padding: 0.75rem;
@@ -1751,7 +2022,6 @@ watch(useOriginalWidth, async (enabled) => {
   font-weight: 600;
 }
 
-/* Controls box */
 .textbox-controls {
   background: white;
   border-radius: 8px;
@@ -1762,7 +2032,6 @@ watch(useOriginalWidth, async (enabled) => {
   gap: 0.65rem;
 }
 
-/* Field groups */
 .tc-field-group {
   display: flex;
   flex-direction: column;
@@ -2087,6 +2356,9 @@ watch(useOriginalWidth, async (enabled) => {
   cursor: crosshair;
   touch-action: none;
 }
+.unified-canvas.crop-dragging {
+  cursor: move;
+}
 
 .preview-label {
   font-weight: 600;
@@ -2127,6 +2399,38 @@ watch(useOriginalWidth, async (enabled) => {
 .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; font-size: 0.85rem; color: #555; }
 .meta-grid div span { font-weight: 600; color: #213547; }
 
+/* ===== RESULT AREA ===== */
+.result-area {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+.result-area img {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.result-meta-row {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0;
+  text-align: left;
+}
+
+.result-meta-box {
+  flex: 1;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+}
+.result-meta-box h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: #213547;
+  font-weight: 700;
+}
+
 /* ===== IMAGE PREVIEW ===== */
 .image-preview-box {
   background: #eee;
@@ -2161,6 +2465,12 @@ watch(useOriginalWidth, async (enabled) => {
   .unified-preview-wrapper {
     width: 100%;
   }
+  .result-meta-row {
+    flex-direction: column;
+  }
+  .transform-grid {
+    grid-template-columns: 1fr;
+  }
 
   .textbox-tabs-row {
     flex-wrap: nowrap;
@@ -2180,7 +2490,6 @@ watch(useOriginalWidth, async (enabled) => {
     width: 100%;
   }
 
-  /* "Styl", "Kolor tekstu" i "Obrys / cień" pozostają w jednym wierszu na mobile */
   .style-color-row {
     flex-direction: row;
     flex-wrap: nowrap;
@@ -2287,7 +2596,8 @@ watch(useOriginalWidth, async (enabled) => {
 }
 .dark-mode .section-label { color: #e8e8e8; border-bottom-color: #3a3d44; }
 .dark-mode .crop-controls,
-.dark-mode .text-controls { background: #23262c; border-color: #3a3d44; }
+.dark-mode .text-controls,
+.dark-mode .transform-controls { background: #23262c; border-color: #3a3d44; }
 
 .dark-mode .tb-tab { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
 .dark-mode .tb-tab:hover:not(:disabled) { background: #1f3a26; border-color: #4caf50; color: #8fd99f; }
@@ -2319,7 +2629,6 @@ watch(useOriginalWidth, async (enabled) => {
 }
 .dark-mode .text-input:focus { border-color: #1da1f2; }
 
-/* Wszystkie pozostałe pola tekstowe/numeryczne (bez własnej klasy) – ten sam ciemny kolor co w ramce "Tekst na obrazie" */
 .dark-mode input[type="text"],
 .dark-mode input[type="number"] {
   background-color: #2a2d34;
@@ -2367,6 +2676,7 @@ watch(useOriginalWidth, async (enabled) => {
 .dark-mode .preview-label { color: #e8e8e8; }
 .dark-mode .preview-dims,
 .dark-mode .preview-loading { color: #999; }
+.dark-mode .crop-drag-hint { color: #777; }
 
 .dark-mode .format-selector { background: #23262c; border-color: #3a3d44; }
 .dark-mode .format-label { color: #e8e8e8; }
@@ -2374,8 +2684,10 @@ watch(useOriginalWidth, async (enabled) => {
 .dark-mode .format-btn:hover:not(:disabled) { background: #3a3d44; border-color: #555; }
 .dark-mode .format-btn.active { background: #16415e; border-color: #1da1f2; color: #8fd0ff; }
 
-.dark-mode .original-meta { background: #23262c; border-color: #3a3d44; }
-.dark-mode .original-meta h4 { color: #e8e8e8; }
+.dark-mode .original-meta,
+.dark-mode .result-meta-box { background: #23262c; border-color: #3a3d44; }
+.dark-mode .original-meta h4,
+.dark-mode .result-meta-box h4 { color: #e8e8e8; }
 .dark-mode .meta-grid { color: #b0b0b0; }
 .dark-mode .meta-grid div span { color: #e8e8e8; }
 .dark-mode .size-estimate label { color: #b0b0b0; }
@@ -2390,10 +2702,14 @@ watch(useOriginalWidth, async (enabled) => {
 
 .dark-mode .theme-toggle-btn { background-color: #2a2d34; color: #e8e8e8; }
 .dark-mode .theme-toggle-btn:hover { background-color: #3a3d44; }
+
+.dark-mode .transform-btn { background: #2a2d34; border-color: #3a3d44; color: #cfcfcf; }
+.dark-mode .transform-btn:hover:not(:disabled) { background: #16415e; border-color: #1da1f2; color: #8fd0ff; }
+.dark-mode .transform-btn.active { background: #1da1f2; border-color: #1da1f2; color: #fff; }
+.dark-mode .transform-btn:disabled { background: #2a2d34; color: #6a6d74; }
 </style>
 
 <style>
-/* Globalny styl dla całego dokumentu w trybie ciemnym */
 html.dark-mode,
 html.dark-mode body,
 html.dark-mode #app {
