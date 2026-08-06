@@ -499,6 +499,7 @@
           <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
           <div><span>FPS:</span> {{ originalFps }}</div>
           <div><span>Czas trwania:</span> {{ originalDuration?.toFixed(2) }} s</div>
+          <div><span>% Kompresji:</span> 100%</div>
         </div>
       </div>
       <div class="result-meta-box">
@@ -509,6 +510,7 @@
           <div><span>Wymiary:</span> {{ resultWidth }}×{{ resultHeight }} px</div>
           <div><span>FPS:</span> {{ fps }}</div>
           <div><span>Czas trwania:</span> {{ resultDuration?.toFixed(2) }} s</div>
+          <div><span>% Kompresji:</span> {{ 100 - quality }}%</div>
         </div>
       </div>
     </div>
@@ -1753,6 +1755,7 @@ async function copyResultInfo() {
     `Wymiary: ${originalWidth.value}×${originalHeight.value} px`,
     `FPS: ${originalFps.value}`,
     `Czas trwania: ${originalDuration.value?.toFixed(2)} s`,
+    `% Kompresji: 100%`,
     '',
     '🎞️ Konwersja',
     `Format: ${outputFormat.value.toUpperCase()}`,
@@ -1760,6 +1763,7 @@ async function copyResultInfo() {
     `Wymiary: ${resultWidth.value}×${resultHeight.value} px`,
     `FPS: ${fps.value}`,
     `Czas trwania: ${resultDuration.value?.toFixed(2)} s`,
+    `% Kompresji: ${100 - quality.value}%`,
   ];
   const text = lines.map(l => '!' + l).join('\n');
 
