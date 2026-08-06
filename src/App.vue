@@ -1746,20 +1746,22 @@ function downloadResult() {
 
 const infoCopied = ref(false);
 async function copyResultInfo() {
-  const text =
-`📁 Źródło
-Format: ${inputExt.value.toUpperCase()}
-Rozmiar: ${formatFileSize(originalSize.value)}
-Wymiary: ${originalWidth.value}×${originalHeight.value} px
-FPS: ${originalFps.value}
-Czas trwania: ${originalDuration.value?.toFixed(2)} s
-
-🎞️ Konwersja
-Format: ${outputFormat.value.toUpperCase()}
-Rozmiar: ${formatFileSize(resultBlob.value?.size || 0)}
-Wymiary: ${resultWidth.value}×${resultHeight.value} px
-FPS: ${fps.value}
-Czas trwania: ${resultDuration.value?.toFixed(2)} s`;
+  const lines = [
+    '📁 Źródło',
+    `Format: ${inputExt.value.toUpperCase()}`,
+    `Rozmiar: ${formatFileSize(originalSize.value)}`,
+    `Wymiary: ${originalWidth.value}×${originalHeight.value} px`,
+    `FPS: ${originalFps.value}`,
+    `Czas trwania: ${originalDuration.value?.toFixed(2)} s`,
+    '',
+    '🎞️ Konwersja',
+    `Format: ${outputFormat.value.toUpperCase()}`,
+    `Rozmiar: ${formatFileSize(resultBlob.value?.size || 0)}`,
+    `Wymiary: ${resultWidth.value}×${resultHeight.value} px`,
+    `FPS: ${fps.value}`,
+    `Czas trwania: ${resultDuration.value?.toFixed(2)} s`,
+  ];
+  const text = lines.map(l => '!' + l).join('\n');
 
   try {
     await navigator.clipboard.writeText(text);
@@ -2434,7 +2436,7 @@ watch(useOriginalWidth, async (enabled) => {
 }
 .original-meta h4 { margin: 0 0 0.5rem; font-size: 0.9rem; color: #213547; font-weight: 700; }
 .meta-grid { display: grid; grid-template-columns: 1fr; gap: 0.35rem; font-size: 0.85rem; color: #555; }
-.meta-grid div { display: flex; justify-content: space-between; gap: 0.75rem; }
+.meta-grid div { display: flex; gap: 0.35rem; }
 .meta-grid div span { font-weight: 600; color: #213547; }
 
 /* ===== RESULT AREA ===== */
