@@ -512,7 +512,10 @@
         </div>
       </div>
     </div>
-    <button class="download-btn" @click="downloadResult">⬇ Pobierz {{ outputFormat.toUpperCase() }}</button>
+    <div class="result-actions">
+      <button class="download-btn" @click="downloadResult">⬇ Pobierz {{ outputFormat.toUpperCase() }}</button>
+      <button class="copy-info-btn" @click="copyResultInfo">{{ infoCopied ? '✅ Skopiowano!' : '📋 Skopiuj informacje' }}</button>
+    </div>
   </div>
 
   <p class="note">
@@ -1741,6 +1744,40 @@ function downloadResult() {
   link.click();
 }
 
+const infoCopied = ref(false);
+async function copyResultInfo() {
+  const text =
+`📁 Źródło
+Format: ${inputExt.value.toUpperCase()}
+Rozmiar: ${formatFileSize(originalSize.value)}
+Wymiary: ${originalWidth.value}×${originalHeight.value} px
+FPS: ${originalFps.value}
+Czas trwania: ${originalDuration.value?.toFixed(2)} s
+
+🎞️ Konwersja
+Format: ${outputFormat.value.toUpperCase()}
+Rozmiar: ${formatFileSize(resultBlob.value?.size || 0)}
+Wymiary: ${resultWidth.value}×${resultHeight.value} px
+FPS: ${fps.value}
+Czas trwania: ${resultDuration.value?.toFixed(2)} s`;
+
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    // Fallback dla przeglądarek/kontekstów bez dostępu do Clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  infoCopied.value = true;
+  setTimeout(() => { infoCopied.value = false; }, 2000);
+}
+
 // ---- WATCHERY ----
 watch(videoUrl, (newUrl) => {
   if (newUrl.trim() !== cachedUrl.value) {
@@ -2396,7 +2433,8 @@ watch(useOriginalWidth, async (enabled) => {
   padding: 0.75rem 1rem; border: 1px solid #e0e0e0;
 }
 .original-meta h4 { margin: 0 0 0.5rem; font-size: 0.9rem; color: #213547; font-weight: 700; }
-.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; font-size: 0.85rem; color: #555; }
+.meta-grid { display: grid; grid-template-columns: 1fr; gap: 0.35rem; font-size: 0.85rem; color: #555; }
+.meta-grid div { display: flex; justify-content: space-between; gap: 0.75rem; }
 .meta-grid div span { font-weight: 600; color: #213547; }
 
 /* ===== RESULT AREA ===== */
@@ -2431,6 +2469,38 @@ watch(useOriginalWidth, async (enabled) => {
   font-weight: 700;
 }
 
+.result-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+.download-btn {
+  padding: 0.65rem 1.4rem;
+  border: none;
+  border-radius: 8px;
+  background-color: #1da1f2;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.download-btn:hover { background-color: #1a91da; }
+.copy-info-btn {
+  padding: 0.65rem 1.4rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: white;
+  color: #213547;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.copy-info-btn:hover { background: #f0f0f0; border-color: #bbb; }
+
 /* ===== IMAGE PREVIEW ===== */
 .image-preview-box {
   background: #eee;
@@ -2456,9 +2526,6 @@ watch(useOriginalWidth, async (enabled) => {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
-  .meta-grid {
-    grid-template-columns: 1fr;
-  }
   .format-options {
     flex-direction: column;
   }
@@ -2690,6 +2757,11 @@ watch(useOriginalWidth, async (enabled) => {
 .dark-mode .result-meta-box h4 { color: #e8e8e8; }
 .dark-mode .meta-grid { color: #b0b0b0; }
 .dark-mode .meta-grid div span { color: #e8e8e8; }
+
+.dark-mode .download-btn { background-color: #1da1f2; color: #fff; }
+.dark-mode .download-btn:hover { background-color: #1a91da; }
+.dark-mode .copy-info-btn { background: #2a2d34; border-color: #3a3d44; color: #e8e8e8; }
+.dark-mode .copy-info-btn:hover { background: #3a3d44; border-color: #555; }
 .dark-mode .size-estimate label { color: #b0b0b0; }
 .dark-mode .estimate-display { color: #e8e8e8; }
 .dark-mode .estimate-value { color: #5ec1f7; }
