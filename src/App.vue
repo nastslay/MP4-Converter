@@ -499,7 +499,7 @@
           <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
           <div><span>FPS:</span> {{ originalFps }}</div>
           <div><span>Czas trwania:</span> {{ originalDuration?.toFixed(2) }} s</div>
-          <div><span>% Kompresji:</span> 100%</div>
+          <div><span>% Kompresji:</span> 0%</div>
         </div>
       </div>
       <div class="result-meta-box">
@@ -1788,7 +1788,7 @@ async function copyResultInfo() {
     `Wymiary: ${originalWidth.value}×${originalHeight.value} px`,
     `FPS: ${originalFps.value}`,
     `Czas trwania: ${originalDuration.value?.toFixed(2)} s`,
-    `% Kompresji: 100%`,
+    `% Kompresji: 0%`,
     '',
     '🎞️ Konwersja',
     `Format: ${outputFormat.value.toUpperCase()}`,
