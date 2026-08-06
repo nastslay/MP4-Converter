@@ -1746,6 +1746,18 @@ function downloadResult() {
   link.click();
 }
 
+const GIF_RANT_LINES = [
+  'No i właśnie dlatego w 2026 nadal wrzucanie GIF-ów jako "formatu wideo" jest piękną tradycją marnowania zasobów.',
+  '',
+  'Czyli po "optymalizacji" dostajemy materiał o znacznie gorszej jakości, niższej płynności i krótszym czasie trwania... który zajmuje ponad 4,5 raza więcej miejsca.',
+  '',
+  'Gratulacje. Serwer musi przesłać ponad cztery razy więcej danych, użytkownik pobiera ponad cztery razy więcej danych, a w nagrodę dostaje animację wyglądającą jak relikt z 1998 roku.',
+  '',
+  'GIF świetnie nadaje się do pokazywania logo obracającego się w PowerPoincie. Do hostowania filmów MP4 wygrywa praktycznie pod każdym względem.',
+  '',
+  'Dlatego Wykop.pl trzeba upaństwowić, Białka zwolnić a moderację Wypi...',
+];
+
 const infoCopied = ref(false);
 async function copyResultInfo() {
   const lines = [
@@ -1756,7 +1768,7 @@ async function copyResultInfo() {
     `Wymiary: ${originalWidth.value}×${originalHeight.value} px`,
     `FPS: ${originalFps.value}`,
     `Czas trwania: ${originalDuration.value?.toFixed(2)} s`,
-    `% Kompresji: 0%`,
+    `% Kompresji: 100%`,
     '',
     '🎞️ Konwersja',
     `Format: ${outputFormat.value.toUpperCase()}`,
@@ -1765,6 +1777,8 @@ async function copyResultInfo() {
     `FPS: ${fps.value}`,
     `Czas trwania: ${resultDuration.value?.toFixed(2)} s`,
     `% Kompresji: ${100 - quality.value}%`,
+    '',
+    ...GIF_RANT_LINES,
   ];
   const text = lines.map(l => '!' + l).join('\n');
 
