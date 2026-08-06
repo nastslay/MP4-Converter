@@ -1753,10 +1753,10 @@ watch(videoUrl, (newUrl) => {
   }
 });
 
-watch(cropTop,    (val) => { if (syncVertical.value && !suppressCropSync)   cropBottom.value = val; nextTick(redrawPreviewOverlay); });
-watch(cropBottom, (val) => { if (syncVertical.value && !suppressCropSync)   cropTop.value    = val; nextTick(redrawPreviewOverlay); });
-watch(cropLeft,   (val) => { if (syncHorizontal.value && !suppressCropSync) cropRight.value  = val; nextTick(redrawPreviewOverlay); });
-watch(cropRight,  (val) => { if (syncHorizontal.value && !suppressCropSync) cropLeft.value   = val; nextTick(redrawPreviewOverlay); });
+watch(cropTop,    (val) => { if (syncVertical.value && !suppressCropSync)   cropBottom.value = val; nextTick(redrawPreviewOverlay); }, { flush: 'sync' });
+watch(cropBottom, (val) => { if (syncVertical.value && !suppressCropSync)   cropTop.value    = val; nextTick(redrawPreviewOverlay); }, { flush: 'sync' });
+watch(cropLeft,   (val) => { if (syncHorizontal.value && !suppressCropSync) cropRight.value  = val; nextTick(redrawPreviewOverlay); }, { flush: 'sync' });
+watch(cropRight,  (val) => { if (syncHorizontal.value && !suppressCropSync) cropLeft.value   = val; nextTick(redrawPreviewOverlay); }, { flush: 'sync' });
 
 watch(activeOverlayIdx, () => nextTick(redrawPreviewOverlay));
 
