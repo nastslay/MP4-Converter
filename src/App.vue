@@ -1750,6 +1750,7 @@ const infoCopied = ref(false);
 async function copyResultInfo() {
   const lines = [
     '📁 Źródło',
+    `[Link do źródła](${videoUrl.value.trim()})`,
     `Format: ${inputExt.value.toUpperCase()}`,
     `Rozmiar: ${formatFileSize(originalSize.value)}`,
     `Wymiary: ${originalWidth.value}×${originalHeight.value} px`,
