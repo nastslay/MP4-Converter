@@ -1756,7 +1756,7 @@ async function copyResultInfo() {
     `Wymiary: ${originalWidth.value}×${originalHeight.value} px`,
     `FPS: ${originalFps.value}`,
     `Czas trwania: ${originalDuration.value?.toFixed(2)} s`,
-    `% Kompresji: 100%`,
+    `% Kompresji: 0%`,
     '',
     '🎞️ Konwersja',
     `Format: ${outputFormat.value.toUpperCase()}`,
