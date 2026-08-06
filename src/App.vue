@@ -1762,13 +1762,15 @@ function downloadResult() {
 
 function buildGifRantLines(sizeRatioStr) {
   return [
+    'MÓJ MANIFEST!!!!!!!!',
+    '',
     'No i właśnie dlatego w 2026 nadal wrzucanie GIF-ów jako "formatu wideo" jest piękną tradycją marnowania zasobów.',
     '',
     `Czyli po "optymalizacji" dostajemy materiał o znacznie gorszej jakości, niższej płynności i krótszym czasie trwania... który zajmuje ponad ${sizeRatioStr} raza więcej miejsca.`,
     '',
     `Gratulacje. Serwer musi przesłać ponad ${sizeRatioStr} raza więcej danych, użytkownik pobiera ponad ${sizeRatioStr} raza więcej danych, a w nagrodę dostaje animację wyglądającą jak relikt z 1998 roku.`,
     '',
-    'GIF świetnie nadaje się do pokazywania logo obracającego się w PowerPoincie. Do hostowania filmów MP4 wygrywa praktycznie pod każdym względem.',
+    'GIF świetnie nadaje się do pokazywania logo obracającego się w PowerPoincie. Do hostowania filmów MP4/WebP wygrywa praktycznie pod każdym względem.',
     '',
     'Dlatego Wykop.pl trzeba upaństwowić, Białka zwolnić a moderację Wypi...',
   ];
