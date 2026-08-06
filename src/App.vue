@@ -120,7 +120,6 @@
     <div v-if="originalWidth" class="original-meta">
       <h4>📁 Informacje o źródle</h4>
       <div class="meta-grid">
-        <div><span>Format:</span> {{ inputExt.toUpperCase() }}</div>
         <div><span>Rozmiar:</span> {{ formatFileSize(originalSize) }}</div>
         <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
         <div><span>FPS:</span> {{ originalFps }}</div>
@@ -205,51 +204,6 @@
               <span v-else>(oryg. − {{ cropLeft + cropRight }}px szer., − {{ cropTop + cropBottom }}px wys.)</span>
             </div>
           </div>
-          </template>
-        </div>
-
-        <!-- TOOLS / SZYBKA EDYCJA -->
-        <div class="tools-controls">
-          <div
-            class="section-label clickable-section-label"
-            @click="toolsPanelOpen = !toolsPanelOpen"
-            role="button"
-            tabindex="0"
-            :aria-expanded="toolsPanelOpen"
-          >
-            🔧 Szybka edycja
-            <span class="toggle-arrow">{{ toolsPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
-          </div>
-          <template v-if="toolsPanelOpen">
-            <!-- Odbicie lustrzane -->
-            <div class="tools-group">
-              <label class="tools-group-label">🪞 Odbicie lustrzane</label>
-              <div class="tools-btn-row">
-                <button class="tool-btn" :class="{ active: flipH }" @click="flipH = !flipH; nextTick(redrawPreviewOverlay)" :disabled="isConverting">↔ Poziome</button>
-                <button class="tool-btn" :class="{ active: flipV }" @click="flipV = !flipV; nextTick(redrawPreviewOverlay)" :disabled="isConverting">↕ Pionowe</button>
-              </div>
-            </div>
-            <!-- Obrót -->
-            <div class="tools-group">
-              <label class="tools-group-label">🔄 Obrót</label>
-              <div class="tools-btn-row">
-                <button class="tool-btn" :class="{ active: videoRotation === 0 }" @click="videoRotation = 0; nextTick(redrawPreviewOverlay)" :disabled="isConverting">0°</button>
-                <button class="tool-btn" :class="{ active: videoRotation === 90 }" @click="videoRotation = 90; nextTick(redrawPreviewOverlay)" :disabled="isConverting">↻ 90° CW</button>
-                <button class="tool-btn" :class="{ active: videoRotation === 180 }" @click="videoRotation = 180; nextTick(redrawPreviewOverlay)" :disabled="isConverting">180°</button>
-                <button class="tool-btn" :class="{ active: videoRotation === 270 }" @click="videoRotation = 270; nextTick(redrawPreviewOverlay)" :disabled="isConverting">↺ 270° CCW</button>
-              </div>
-            </div>
-            <!-- Prędkość -->
-            <div class="tools-group">
-              <label class="tools-group-label">⚡ Prędkość odtwarzania</label>
-              <div class="tools-btn-row">
-                <button class="tool-btn" :class="{ active: speedFactor === 0.25 }" @click="speedFactor = 0.25" :disabled="isConverting">0.25×</button>
-                <button class="tool-btn" :class="{ active: speedFactor === 0.5 }" @click="speedFactor = 0.5" :disabled="isConverting">0.5×</button>
-                <button class="tool-btn" :class="{ active: speedFactor === 1 }" @click="speedFactor = 1" :disabled="isConverting">1× (normalna)</button>
-                <button class="tool-btn" :class="{ active: speedFactor === 1.5 }" @click="speedFactor = 1.5" :disabled="isConverting">1.5×</button>
-                <button class="tool-btn" :class="{ active: speedFactor === 2 }" @click="speedFactor = 2" :disabled="isConverting">2×</button>
-              </div>
-            </div>
           </template>
         </div>
 
@@ -473,7 +427,7 @@
         <!-- UNIFIED PREVIEW CANVAS -->
         <div class="preview-section">
           <p class="preview-label" v-if="previewFrame">
-            Podgląd — przeciągnij kadr lub tekst palcem/myszą
+            Podgląd — przeciągnij tekst palcem/myszą, kadrowanie rysuje się automatycznie
             <span v-if="previewNaturalWidth" class="preview-dims">({{ previewNaturalWidth }}×{{ previewNaturalHeight }}px)</span>
           </p>
           <div
@@ -493,11 +447,10 @@
             <canvas
               ref="unifiedCanvas"
               class="unified-canvas"
-              :style="{ cursor: cropDragData ? 'grabbing' : (cropHover ? 'grab' : 'crosshair') }"
               @mousedown.prevent="onCanvasMouseDown"
               @mousemove.prevent="onCanvasMouseMove"
               @mouseup.prevent="onCanvasMouseUp"
-              @mouseleave.prevent="onCanvasMouseLeave"
+              @mouseleave.prevent="onCanvasMouseUp"
               @touchstart.prevent="onCanvasTouchStart"
               @touchmove.prevent="onCanvasTouchMove"
               @touchend.prevent="onCanvasTouchEnd"
@@ -524,27 +477,8 @@
     <div v-if="resultUrl" class="result-area">
       <h3>Wynik:</h3>
       <img :src="resultUrl" :alt="'Wynikowy ' + outputFormat.toUpperCase()" />
-      <div class="result-info-cards">
-        <div class="result-info-card">
-          <h4>📁 Źródło</h4>
-          <div class="result-meta-grid">
-            <div><span>Format:</span> {{ inputExt.toUpperCase() }}</div>
-            <div><span>Rozmiar:</span> {{ formatFileSize(originalSize) }}</div>
-            <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
-            <div><span>FPS:</span> {{ originalFps }}</div>
-            <div><span>Czas:</span> {{ originalDuration?.toFixed(2) }} s</div>
-          </div>
-        </div>
-        <div class="result-info-card result-info-card--output">
-          <h4>✅ Po konwersji</h4>
-          <div class="result-meta-grid">
-            <div><span>Format:</span> {{ resultFormat?.toUpperCase() ?? '—' }}</div>
-            <div><span>Rozmiar:</span> {{ formatFileSize(resultBlob?.size || 0) }}</div>
-            <div><span>Wymiary:</span> {{ resultWidth ? resultWidth + '×' + resultHeight + ' px' : '—' }}</div>
-            <div><span>FPS:</span> {{ resultFps ?? '—' }}</div>
-            <div><span>Czas:</span> {{ resultDuration != null ? resultDuration.toFixed(2) + ' s' : '—' }}</div>
-          </div>
-        </div>
+      <div class="result-info">
+        <p>Rzeczywisty rozmiar: {{ formatFileSize(resultBlob?.size || 0) }}</p>
       </div>
       <button class="download-btn" @click="downloadResult">⬇ Pobierz {{ outputFormat.toUpperCase() }}</button>
     </div>
@@ -808,145 +742,6 @@ let dragStartClientY = 0;
 let dragStartXPct = 0;
 let dragStartYPct = 0;
 
-// ---- CROP DRAG ----
-function hitTestCropBox(clientX, clientY) {
-  const c = unifiedCanvas.value;
-  if (!c || !previewNaturalWidth.value) return false;
-  const hasCrop = (cropTop.value || cropBottom.value || cropLeft.value || cropRight.value);
-  if (!hasCrop) return false;
-  const bounds = c.getBoundingClientRect();
-  const mouseX = (clientX - bounds.left) * (c.width / bounds.width);
-  const mouseY = (clientY - bounds.top) * (c.height / bounds.height);
-  const scaleX = c.width / previewNaturalWidth.value;
-  const scaleY = c.height / previewNaturalHeight.value;
-  const cropX = cropLeft.value * scaleX;
-  const cropY = cropTop.value * scaleY;
-  const cropW = (previewNaturalWidth.value - cropLeft.value - cropRight.value) * scaleX;
-  const cropH = (previewNaturalHeight.value - cropTop.value - cropBottom.value) * scaleY;
-  return mouseX >= cropX && mouseX <= cropX + cropW && mouseY >= cropY && mouseY <= cropY + cropH;
-}
-
-function applyCropDrag(clientX, clientY) {
-  const c = unifiedCanvas.value;
-  const d = cropDragData.value;
-  if (!c || !d || !previewNaturalWidth.value) return;
-  const bounds = c.getBoundingClientRect();
-  const dx = (clientX - d.startClientX) / bounds.width  * previewNaturalWidth.value;
-  const dy = (clientY - d.startClientY) / bounds.height * previewNaturalHeight.value;
-  const boxW = previewNaturalWidth.value  - d.origLeft - d.origRight;
-  const boxH = previewNaturalHeight.value - d.origTop  - d.origBottom;
-  const newLeft   = Math.max(0, Math.min(previewNaturalWidth.value  - boxW, Math.round(d.origLeft + dx)));
-  const newTop    = Math.max(0, Math.min(previewNaturalHeight.value - boxH, Math.round(d.origTop  + dy)));
-  const newRight  = Math.round(previewNaturalWidth.value  - boxW - newLeft);
-  const newBottom = Math.round(previewNaturalHeight.value - boxH - newTop);
-  // Temporarily suppress sync-watchers so drag moves the box as a unit
-  const savedV = syncVertical.value;
-  const savedH = syncHorizontal.value;
-  syncVertical.value   = false;
-  syncHorizontal.value = false;
-  cropLeft.value   = newLeft;
-  cropRight.value  = newRight;
-  cropTop.value    = newTop;
-  cropBottom.value = newBottom;
-  nextTick(() => {
-    syncVertical.value   = savedV;
-    syncHorizontal.value = savedH;
-    redrawPreviewOverlay();
-  });
-}
-
-function onCanvasMouseDown(e) {
-  if (cropPanelOpen.value && hitTestCropBox(e.clientX, e.clientY)) {
-    cropDragData.value = {
-      startClientX: e.clientX, startClientY: e.clientY,
-      origLeft: cropLeft.value, origRight: cropRight.value,
-      origTop:  cropTop.value,  origBottom: cropBottom.value,
-    };
-    return;
-  }
-  const idx = hitTestOverlay(e.clientX, e.clientY);
-  if (idx >= 0) {
-    dragTextIdx = idx;
-    activeOverlayIdx.value = idx;
-    dragStartClientX = e.clientX;
-    dragStartClientY = e.clientY;
-    dragStartXPct = overlays.value[idx].xPct;
-    dragStartYPct = overlays.value[idx].yPct;
-  }
-}
-
-function onCanvasMouseMove(e) {
-  if (cropDragData.value !== null) {
-    applyCropDrag(e.clientX, e.clientY);
-    return;
-  }
-  // Update hover cursor for crop box
-  cropHover.value = cropPanelOpen.value && hitTestCropBox(e.clientX, e.clientY);
-  if (dragTextIdx === null) return;
-  const c = unifiedCanvas.value;
-  if (!c) return;
-  const bounds = c.getBoundingClientRect();
-  const dx = (e.clientX - dragStartClientX) / bounds.width;
-  const dy = (e.clientY - dragStartClientY) / bounds.height;
-  overlays.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
-  overlays.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
-  redrawPreviewOverlay();
-}
-
-function onCanvasMouseUp() {
-  dragTextIdx = null;
-  cropDragData.value = null;
-}
-
-function onCanvasMouseLeave() {
-  dragTextIdx = null;
-  cropDragData.value = null;
-  cropHover.value = false;
-}
-
-function onCanvasTouchStart(e) {
-  const touch = e.touches[0];
-  if (cropPanelOpen.value && hitTestCropBox(touch.clientX, touch.clientY)) {
-    cropDragData.value = {
-      startClientX: touch.clientX, startClientY: touch.clientY,
-      origLeft: cropLeft.value, origRight: cropRight.value,
-      origTop:  cropTop.value,  origBottom: cropBottom.value,
-    };
-    return;
-  }
-  const idx = hitTestOverlay(touch.clientX, touch.clientY);
-  if (idx >= 0) {
-    dragTextIdx = idx;
-    activeOverlayIdx.value = idx;
-    dragStartClientX = touch.clientX;
-    dragStartClientY = touch.clientY;
-    dragStartXPct = overlays.value[idx].xPct;
-    dragStartYPct = overlays.value[idx].yPct;
-  }
-}
-
-function onCanvasTouchMove(e) {
-  const touch = e.touches[0];
-  if (cropDragData.value !== null) {
-    applyCropDrag(touch.clientX, touch.clientY);
-    return;
-  }
-  if (dragTextIdx === null) return;
-  const c = unifiedCanvas.value;
-  if (!c) return;
-  const bounds = c.getBoundingClientRect();
-  const dx = (touch.clientX - dragStartClientX) / bounds.width;
-  const dy = (touch.clientY - dragStartClientY) / bounds.height;
-  overlays.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
-  overlays.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
-  redrawPreviewOverlay();
-}
-
-function onCanvasTouchEnd() {
-  dragTextIdx = null;
-  cropDragData.value = null;
-}
-
 function hitTestOverlay(clientX, clientY) {
   const c = unifiedCanvas.value;
   if (!c) return -1;
@@ -979,6 +774,63 @@ function hitTestOverlay(clientX, clientY) {
   return -1;
 }
 
+function onCanvasMouseDown(e) {
+  const idx = hitTestOverlay(e.clientX, e.clientY);
+  if (idx >= 0) {
+    dragTextIdx = idx;
+    activeOverlayIdx.value = idx;
+    dragStartClientX = e.clientX;
+    dragStartClientY = e.clientY;
+    dragStartXPct = overlays.value[idx].xPct;
+    dragStartYPct = overlays.value[idx].yPct;
+  }
+}
+
+function onCanvasMouseMove(e) {
+  if (dragTextIdx === null) return;
+  const c = unifiedCanvas.value;
+  if (!c) return;
+  const bounds = c.getBoundingClientRect();
+  const dx = (e.clientX - dragStartClientX) / bounds.width;
+  const dy = (e.clientY - dragStartClientY) / bounds.height;
+  overlays.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
+  overlays.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
+  redrawPreviewOverlay();
+}
+
+function onCanvasMouseUp() {
+  dragTextIdx = null;
+}
+
+function onCanvasTouchStart(e) {
+  const touch = e.touches[0];
+  const idx = hitTestOverlay(touch.clientX, touch.clientY);
+  if (idx >= 0) {
+    dragTextIdx = idx;
+    activeOverlayIdx.value = idx;
+    dragStartClientX = touch.clientX;
+    dragStartClientY = touch.clientY;
+    dragStartXPct = overlays.value[idx].xPct;
+    dragStartYPct = overlays.value[idx].yPct;
+  }
+}
+
+function onCanvasTouchMove(e) {
+  if (dragTextIdx === null) return;
+  const touch = e.touches[0];
+  const c = unifiedCanvas.value;
+  if (!c) return;
+  const bounds = c.getBoundingClientRect();
+  const dx = (touch.clientX - dragStartClientX) / bounds.width;
+  const dy = (touch.clientY - dragStartClientY) / bounds.height;
+  overlays.value[dragTextIdx].xPct = Math.max(0, Math.min(1, dragStartXPct + dx));
+  overlays.value[dragTextIdx].yPct = Math.max(0, Math.min(1, dragStartYPct + dy));
+  redrawPreviewOverlay();
+}
+
+function onCanvasTouchEnd() {
+  dragTextIdx = null;
+}
 
 // ---- UNIFIED CANVAS DRAW ----
 function redrawPreviewOverlay() {
@@ -995,17 +847,7 @@ function redrawPreviewOverlay() {
 
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, dw, dh);
-
-  // Draw image with optional flip
-  if (flipH.value || flipV.value) {
-    ctx.save();
-    ctx.translate(flipH.value ? dw : 0, flipV.value ? dh : 0);
-    ctx.scale(flipH.value ? -1 : 1, flipV.value ? -1 : 1);
-    ctx.drawImage(img, 0, 0, dw, dh);
-    ctx.restore();
-  } else {
-    ctx.drawImage(img, 0, 0, dw, dh);
-  }
+  ctx.drawImage(img, 0, 0, dw, dh);
 
   const hasCrop = (cropTop.value || cropBottom.value || cropLeft.value || cropRight.value);
   if (hasCrop) {
@@ -1039,19 +881,7 @@ function redrawPreviewOverlay() {
     for (const [ax, ay, mx, my, bx, by] of corners) {
       ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(mx,my); ctx.lineTo(bx,by); ctx.stroke();
     }
-
-    // Drag-hint icon in center of crop box
-    const iconSize = Math.max(14, Math.min(28, Math.min(w, h) * 0.12));
-    ctx.save();
-    ctx.globalAlpha = 0.75;
-    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 3;
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${iconSize}px sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('✥', x + w / 2, y + h / 2);
-    ctx.restore();
   }
-
 
   for (let i = 0; i < overlays.value.length; i++) {
     const item = overlays.value[i];
@@ -1252,7 +1082,6 @@ function resetConversionState() {
   cropTop.value = 0; cropBottom.value = 0; cropLeft.value = 0; cropRight.value = 0;
   syncVertical.value = true; syncHorizontal.value = true;
   editPanelOpen.value = false;
-  flipH.value = false; flipV.value = false; videoRotation.value = 0; speedFactor.value = 1;
   overlays.value = [createTextOverlay(0.5)];
   activeOverlayIdx.value = 0;
   showEmojiPicker.value = false;
@@ -1262,8 +1091,6 @@ function resetConversionState() {
   inputExt.value = 'mp4';
   originalSize.value = null; originalWidth.value = null; originalHeight.value = null;
   originalFps.value = null; originalDuration.value = null;
-  resultWidth.value = null; resultHeight.value = null; resultFps.value = null;
-  resultDuration.value = null; resultFormat.value = null;
 }
 
 async function handleFileUpload(event) {
@@ -1325,13 +1152,7 @@ function buildVfFilter() {
   const parts = [];
   const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
   if (cropEnabled.value && (cl+cr+ct+cb > 0)) parts.push(`crop=iw-${cl+cr}:ih-${ct+cb}:${cl}:${ct}`);
-  if (flipH.value) parts.push('hflip');
-  if (flipV.value) parts.push('vflip');
-  if (videoRotation.value === 90)  parts.push('transpose=1');
-  else if (videoRotation.value === 180) { parts.push('vflip'); parts.push('hflip'); }
-  else if (videoRotation.value === 270) parts.push('transpose=2');
-  const effectiveFps = Math.round(fps.value * speedFactor.value);
-  parts.push(`fps=${effectiveFps}`);
+  parts.push(`fps=${fps.value}`);
   parts.push(`scale=${width.value}:trunc(ow/a/2)*2`);
   return parts.join(',');
 }
