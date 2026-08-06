@@ -1489,7 +1489,7 @@ function onPreviewLoaded() {
 }
 
 // ---- ANALIZA ROZMIARU ----
-async function analyzeAndEstimate() {
+async function analyzeAndEstimate(attempt = 0) {
   if (!videoUrl.value.trim() || inputExt.value === 'webp') {
     if (inputExt.value === 'webp') error.value = 'Analiza rozmiaru dla WebP nie jest obsługiwana.';
     return;
@@ -1521,12 +1521,26 @@ async function analyzeAndEstimate() {
       estimatedSize.value = Math.round((sampleSize/testDuration)*duration*1.02);
       sizeConfidence.value = 0.95;
     }
-    if (limitSizeEnabled.value) {
+    if (limitSizeEnabled.value && attempt < 6) {
       const targetBytes = targetSizeMB.value * 1024 * 1024;
       if (estimatedSize.value > targetBytes) {
-        if (outputFormat.value === 'gif') { width.value = Math.max(100, Math.floor(width.value * Math.sqrt(targetBytes/estimatedSize.value) / 10) * 10); }
-        else { quality.value = Math.max(1, Math.min(100, Math.floor(quality.value * Math.sqrt(targetBytes/estimatedSize.value)))); }
-        await analyzeAndEstimate();
+        // Rozdzielamy potrzebną redukcję na 3 niezależne "dźwignie" (jakość, szerokość, FPS)
+        // zamiast obciążać nią tylko jeden parametr — stąd pierwiastek sześcienny zamiast kwadratowego.
+        const ratio  = targetBytes / estimatedSize.value;
+        const factor = Math.cbrt(ratio);
+
+        const newWidth   = Math.max(100, Math.floor((width.value * factor) / 10) * 10);
+        const newFps     = Math.max(1, Math.floor(fps.value * factor));
+        const newQuality = Math.max(1, Math.min(100, Math.floor(quality.value * factor)));
+
+        const changed = newWidth !== width.value || newFps !== fps.value || newQuality !== quality.value;
+        width.value   = newWidth;
+        fps.value     = newFps;
+        quality.value = newQuality;
+
+        // Jeśli parametry utknęły na dolnych limitach i nic się już nie zmienia, przerywamy,
+        // żeby uniknąć nieskończonej pętli rekurencji.
+        if (changed) await analyzeAndEstimate(attempt + 1);
       }
     }
   } catch(e) { error.value = `Błąd analizy: ${e.message}`; console.error(e); }
