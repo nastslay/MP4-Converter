@@ -1,11 +1,11 @@
 // api/download.js
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const isWindows = os.platform() === 'win32';
 const YT_DLP_FILENAME = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
@@ -17,7 +17,6 @@ const YT_DLP_DOWNLOAD_URL = isWindows
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-// Sprawdza, czy plik istnieje i jest młodszy niż 24 h
 function isYtDlpFresh() {
   if (!fs.existsSync(YT_DLP_PATH)) return false;
   const stats = fs.statSync(YT_DLP_PATH);
@@ -28,7 +27,7 @@ function isYtDlpFresh() {
 async function ensureYtDlp() {
   if (isYtDlpFresh()) return;
 
-  console.log(`Pobieranie/aktualizacja ${YT_DLP_FILENAME} (starszy niż 24h lub brak)...`);
+  console.log(`Pobieranie/aktualizacja ${YT_DLP_FILENAME}...`);
   const response = await fetch(YT_DLP_DOWNLOAD_URL);
   if (!response.ok) throw new Error(`Błąd pobierania yt-dlp: ${response.status}`);
   const buffer = await response.arrayBuffer();
@@ -60,26 +59,38 @@ export default async function handler(req, res) {
         '--user-agent', USER_AGENT,
         '--extractor-retries', '5',
         '--retries', '5',
+        '--geo-bypass',                   // obejście geoblokad
         '--no-playlist',
         '--format', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         url,
       ];
 
-      // Specyficzne nagłówki dla TikToka (wymagane zarówno przy ekstrakcji, jak i przy pobieraniu)
+      // Rozszerzone nagłówki dla TikToka
       if (url.includes('tiktok.com')) {
         args.push(
           '--add-header', 'Referer:https://www.tiktok.com/',
-          '--add-header', 'Origin:https://www.tiktok.com'
+          '--add-header', 'Origin:https://www.tiktok.com',
+          '--add-header', 'Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          '--add-header', 'Accept-Language:pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
+          '--add-header', 'Sec-Fetch-Dest:document',
+          '--add-header', 'Sec-Fetch-Mode:navigate',
+          '--add-header', 'Sec-Fetch-Site:none',
+          '--add-header', 'Sec-Fetch-User:?1',
+          '--add-header', 'Upgrade-Insecure-Requests:1'
         );
       }
 
-      // Bezpieczne złożenie komendy – każdy argument osobno w cudzysłowie
-      const command = `${YT_DLP_PATH} ${args.map(a => `"${a}"`).join(' ')}`;
-      console.log('Wykonuję:', command);
+      console.log('Wykonuję yt-dlp z args:', args);
 
       let stdout = '', stderr = '';
       try {
-        ({ stdout, stderr } = await execAsync(command, { timeout: 30000 }));
+        // Używamy execFile zamiast exec — bez shella, bezpieczniejsze i niezawodniejsze
+        const result = await execFileAsync(YT_DLP_PATH, args, {
+          timeout: 60000,           // 60 s (zobacz uwagę o maxDuration poniżej)
+          killSignal: 'SIGKILL',
+        });
+        stdout = result.stdout;
+        stderr = result.stderr;
       } catch (execErr) {
         console.error('yt-dlp błąd:', execErr.stderr || execErr.message);
         throw new Error(
@@ -89,7 +100,6 @@ export default async function handler(req, res) {
 
       if (stderr) console.warn('yt-dlp stderr:', stderr);
 
-      // Wyciągamy pierwszą linię z http
       const lines = stdout.split('\n').map(l => l.trim());
       videoUrl = lines.find(l => l.startsWith('http'));
       if (!videoUrl) {
@@ -122,7 +132,6 @@ export default async function handler(req, res) {
       return res.send(Buffer.from(buffer));
     }
 
-    // Zwracanie samego linku
     res.status(200).json({ videoUrl });
   } catch (error) {
     console.error('Całkowity błąd:', error);
