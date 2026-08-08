@@ -45,12 +45,23 @@ export default async function handler(req, res) {
       // ZMIANA: Bardziej elastyczny wybór formatu
       // Próbuje znaleźć najlepsze mp4, a jeśli nie ma, bierze cokolwiek najlepszego
       const formatSelection = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best";
-      
+      const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
       // Dodajemy flagi --no-check-certificate i --user-agent dla lepszej stabilności
-      const command = `${YT_DLP_PATH} -g --no-check-certificate -f "${formatSelection}" "${url}"`;
-      
-      const { stdout, stderr } = await execAsync(command);
-      
+      // --user-agent jest szczególnie istotny dla TikToka, który częściej blokuje
+      // domyślny user-agent yt-dlp niż np. Twitter/X.
+      const command = `${YT_DLP_PATH} -g --no-check-certificate --user-agent "${BROWSER_UA}" -f "${formatSelection}" "${url}"`;
+
+      let stdout = '', stderr = '';
+      try {
+        ({ stdout, stderr } = await execAsync(command));
+      } catch (execErr) {
+        // Gdy yt-dlp zwraca kod błędu, promisify(exec) odrzuca obietnicę i realny,
+        // szczegółowy komunikat trafia do execErr.stderr — a nie do execErr.message.
+        // Bez tego traciliśmy prawdziwy powód niepowodzenia (np. konkretny błąd ekstraktora TikToka).
+        console.error('yt-dlp exec błąd, stderr:', execErr.stderr || execErr.message);
+        throw new Error(`yt-dlp nie znalazło linku: ${(execErr.stderr || execErr.message || '').trim().slice(0, 300)}`);
+      }
       if (stderr && !stdout) {
         console.error('yt-dlp stderr:', stderr);
         throw new Error('yt-dlp nie znalazło linku');
@@ -66,6 +77,10 @@ export default async function handler(req, res) {
       
       if (videoUrl.includes('twimg.com') || videoUrl.includes('twitter.com')) {
         headers['Referer'] = 'https://x.com/';
+      } else if (videoUrl.includes('tiktok')) {
+        // CDN TikToka (tiktokcdn.com / tiktokv.com i pochodne) zwykle wymaga Referer
+        // wskazującego na tiktok.com, inaczej odrzuca żądanie (403).
+        headers['Referer'] = 'https://www.tiktok.com/';
       }
       
       const videoResponse = await fetch(videoUrl, { headers });
