@@ -1760,15 +1760,29 @@ function downloadResult() {
   link.click();
 }
 
-function buildGifRantLines(sizeRatioStr) {
+function buildGifRantLines({ sizeRatioStr, sourceSmaller, dimText, fpsText, durText }) {
+  // Case 1: źródło mniejsze niż konwersja (GIF/WebP "spuchł") — oryginalny tekst o marnowaniu miejsca.
+  // Case 2: źródło większe niż konwersja (realna kompresja) — zamiast "X razy więcej miejsca"
+  // opisujemy KONKRETNIE co poświęcono (rozdzielczość / FPS / czas trwania), żeby kontrastowało
+  // to z "w nagrodę animacja jak z 1998 roku".
+  const qualityParagraph = sourceSmaller
+    ? [
+        `Czyli po „optymalizacji” dostajemy materiał o znacznie gorszej jakości, niższej płynności i krótszym czasie trwania... który zajmuje ponad ${sizeRatioStr} raza więcej miejsca.`,
+        '',
+        `Gratulacje. Serwer musi przesłać ponad ${sizeRatioStr} raza więcej danych, użytkownik pobiera ponad ${sizeRatioStr} raza więcej danych, a w nagrodę dostaje animację wyglądającą jak relikt z 1998 roku.`,
+      ]
+    : [
+        `Czyli po „optymalizacji” dostajemy materiał o znacznie gorszej jakości (${dimText}), niższej płynności (${fpsText}) i krótszym czasie trwania (${durText}).`,
+        '',
+        `A w nagrodę dostaje animację wyglądającą jak relikt z 1998 roku.`,
+      ];
+
   return [
     'MÓJ MANIFEST!!!!!!!!',
     '',
     'No i właśnie dlatego w 2026 nadal wrzucanie GIF-ów jako „formatu wideo” jest piękną tradycją marnowania zasobów.',
     '',
-    `Czyli po „optymalizacji” dostajemy materiał o znacznie gorszej jakości, niższej płynności i krótszym czasie trwania... który zajmuje ponad ${sizeRatioStr} raza więcej miejsca.`,
-    '',
-    `Gratulacje. Serwer musi przesłać ponad ${sizeRatioStr} raza więcej danych, użytkownik pobiera ponad ${sizeRatioStr} raza więcej danych, a w nagrodę dostaje animację wyglądającą jak relikt z 1998 roku.`,
+    ...qualityParagraph,
     '',
     'I to nie wszystko.',
     'MP4 ma dźwięk.',
@@ -1793,7 +1807,25 @@ const infoCopied = ref(false);
 async function copyResultInfo() {
   const srcSize = originalSize.value || 0;
   const outSize = resultBlob.value?.size || 0;
+  const sourceSmaller = srcSize > 0 && outSize > 0 && srcSize < outSize;
   const sizeRatioStr = srcSize > 0 ? (outSize / srcSize).toFixed(1) : '—';
+
+  // Statystyki potrzebne tylko w przypadku, gdy źródło jest większe (case 2) —
+  // liczymy je zawsze, bo są tanie, a używane są warunkowo wewnątrz buildGifRantLines.
+  const origW = originalWidth.value || 0, origH = originalHeight.value || 0;
+  const resW  = resultWidth.value || 0,   resH  = resultHeight.value || 0;
+  const origPixels = origW * origH;
+  const resPixels  = resW * resH;
+  const dimReductionPct = origPixels > 0 ? Math.max(0, Math.round((1 - resPixels / origPixels) * 100)) : 0;
+  const dimText = `wymiary mniejsze o ${dimReductionPct}%, z ${origW}×${origH} do ${resW}×${resH} px`;
+
+  const origFps = originalFps.value || 0, resFps = fps.value || 0;
+  const fpsReductionPct = origFps > 0 ? Math.max(0, Math.round((1 - resFps / origFps) * 100)) : 0;
+  const fpsText = `${fpsReductionPct}% mniej klatek, z ${origFps} do ${resFps} FPS`;
+
+  const origDur = originalDuration.value || 0, resDur = resultDuration.value || 0;
+  const durDiff = Math.max(0, origDur - resDur);
+  const durText = `krócej o ${durDiff.toFixed(2)} s, z ${origDur.toFixed(2)} s do ${resDur.toFixed(2)} s`;
 
   const lines = [
     '📁 Źródło',
@@ -1813,7 +1845,7 @@ async function copyResultInfo() {
     `Czas trwania: ${resultDuration.value?.toFixed(2)} s`,
     `% Kompresji: ${100 - quality.value}%`,
     '',
-    ...buildGifRantLines(sizeRatioStr),
+    ...buildGifRantLines({ sizeRatioStr, sourceSmaller, dimText, fpsText, durText }),
   ];
   const text = lines.map(l => '!' + l).join('\n');
 
