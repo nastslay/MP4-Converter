@@ -499,7 +499,7 @@
           <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
           <div><span>FPS:</span> {{ originalFps }}</div>
           <div><span>Czas trwania:</span> {{ originalDuration?.toFixed(2) }} s</div>
-          <div><span>% Kompresji:</span> 100%</div>
+          <div><span>% Kompresji:</span> 0%</div>
         </div>
       </div>
       <div class="result-meta-box">
@@ -1762,15 +1762,30 @@ function downloadResult() {
 
 function buildGifRantLines(sizeRatioStr) {
   return [
-    'No i właśnie dlatego w 2026 nadal wrzucanie GIF-ów jako "formatu wideo" jest piękną tradycją marnowania zasobów.',
+    'MÓJ MANIFEST!!!!!!!!',
     '',
-    `Czyli po "optymalizacji" dostajemy materiał o znacznie gorszej jakości, niższej płynności i krótszym czasie trwania... który zajmuje ponad ${sizeRatioStr} raza więcej miejsca.`,
+    'No i właśnie dlatego w 2026 nadal wrzucanie GIF-ów jako „formatu wideo” jest piękną tradycją marnowania zasobów.',
+    '',
+    `Czyli po „optymalizacji” dostajemy materiał o znacznie gorszej jakości, niższej płynności i krótszym czasie trwania... który zajmuje ponad ${sizeRatioStr} raza więcej miejsca.`,
     '',
     `Gratulacje. Serwer musi przesłać ponad ${sizeRatioStr} raza więcej danych, użytkownik pobiera ponad ${sizeRatioStr} raza więcej danych, a w nagrodę dostaje animację wyglądającą jak relikt z 1998 roku.`,
     '',
-    'GIF świetnie nadaje się do pokazywania logo obracającego się w PowerPoincie. Do hostowania filmów MP4 wygrywa praktycznie pod każdym względem.',
+    'I to nie wszystko.',
+    'MP4 ma dźwięk.',
+    'MP4 można normalnie pauzować.',
+    'MP4 można przewijać.',
+    'MP4 zachowuje znacznie lepszą jakość przy dużo mniejszym rozmiarze.',
+    'GIF? Zapętla się i tyle. 🗿',
     '',
-    'Dlatego Wykop.pl trzeba upaństwowić, Białka zwolnić a moderację Wypi...',
+    'GIF świetnie nadaje się do pokazywania logo obracającego się w PowerPoincie. Do hostowania materiałów wideo MP4/WebP wygrywa praktycznie pod każdym względem.',
+    '',
+    'Dlatego Wykop.pl trzeba upaństwowić, Białka zwolnić, a moderację Wypi...',
+    '',
+    '...a tak całkiem serio — czas coś z tym zrobić.',
+    'Jeżeli też uważacie, że w 2026 roku portal społecznościowy powinien pozwalać użytkownikom korzystać z normalnych, współczesnych formatów wideo zamiast bezsensownie konwertować je do GIF-ów, dołączcie do protestu.',
+    'Niech administracja zobaczy, że to nie jest problem jednej osoby.',
+    'Plusujcie post, komentujcie i nagłaśniajcie temat.',
+    'Im więcej użytkowników zwróci na to uwagę, tym większa presja na administrację, żeby w końcu coś z tym zrobić.',
   ];
 }
 
@@ -1788,7 +1803,7 @@ async function copyResultInfo() {
     `Wymiary: ${originalWidth.value}×${originalHeight.value} px`,
     `FPS: ${originalFps.value}`,
     `Czas trwania: ${originalDuration.value?.toFixed(2)} s`,
-    `% Kompresji: 100%`,
+    `% Kompresji: 0%`,
     '',
     '🎞️ Konwersja',
     `Format: ${outputFormat.value.toUpperCase()}`,
