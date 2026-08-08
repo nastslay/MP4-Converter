@@ -14,19 +14,27 @@ const YT_DLP_DOWNLOAD_URL = isWindows
   ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
   : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
 
-// Wspólny User-Agent (przeglądarka desktop + mobile fallback)
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-async function ensureYtDlp() {
-  if (fs.existsSync(YT_DLP_PATH)) return;
+// Sprawdza, czy plik istnieje i jest młodszy niż 24 h
+function isYtDlpFresh() {
+  if (!fs.existsSync(YT_DLP_PATH)) return false;
+  const stats = fs.statSync(YT_DLP_PATH);
+  const ageHours = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60);
+  return ageHours < 24;
+}
 
-  console.log(`Pobieranie najnowszej wersji ${YT_DLP_FILENAME}...`);
+async function ensureYtDlp() {
+  if (isYtDlpFresh()) return;
+
+  console.log(`Pobieranie/aktualizacja ${YT_DLP_FILENAME} (starszy niż 24h lub brak)...`);
   const response = await fetch(YT_DLP_DOWNLOAD_URL);
   if (!response.ok) throw new Error(`Błąd pobierania yt-dlp: ${response.status}`);
   const buffer = await response.arrayBuffer();
   fs.writeFileSync(YT_DLP_PATH, Buffer.from(buffer));
   if (!isWindows) fs.chmodSync(YT_DLP_PATH, 0o755);
+  console.log('yt-dlp gotowy.');
 }
 
 export default async function handler(req, res) {
@@ -45,14 +53,11 @@ export default async function handler(req, res) {
     if (!isDirectMp4) {
       await ensureYtDlp();
 
-      // Przygotowujemy rozszerzoną listę argumentów, by zwiększyć skuteczność na TikToku
-      // i innych platformach wymagających Referer / dodatkowych nagłówków.
       const args = [
-        '-g',                          // wypisz tylko bezpośredni URL
+        '-g',                             // tylko URL
         '--no-check-certificate',
         '--no-warnings',
         '--user-agent', USER_AGENT,
-        '--add-header', `Referer:https://www.tiktok.com/`,  // kluczowe dla TikTok CDN
         '--extractor-retries', '5',
         '--retries', '5',
         '--no-playlist',
@@ -60,47 +65,42 @@ export default async function handler(req, res) {
         url,
       ];
 
-      // Tik Tok często potrzebuje także dodatkowego nagłówka Origin (w niektórych wersjach CDN)
-      // oraz mobilnego User-Agent w samym yt-dlp – dla bezpieczeństwa wrzucamy osobny wariant.
+      // Specyficzne nagłówki dla TikToka (wymagane zarówno przy ekstrakcji, jak i przy pobieraniu)
       if (url.includes('tiktok.com')) {
-        args.push('--add-header', 'Origin:https://www.tiktok.com');
-        // Opcjonalnie: wymuszenie konkretnej wersji API (obejście blokad regionalnych)
-        // args.push('--extractor-args', 'tiktok:api_hostname=api16-normal-c-useast1a.tiktokv.com');
-      }
-
-      const command = `${YT_DLP_PATH} ${args.map(a => `"${a}"`).join(' ')}`;
-
-      let stdout = '', stderr = '';
-      try {
-        ({ stdout, stderr } = await execAsync(command, { timeout: 30000 })); // 30s timeout
-      } catch (execErr) {
-        console.error('yt-dlp exec błąd, stderr:', execErr.stderr || execErr.message);
-        throw new Error(
-          `yt-dlp nie znalazło linku: ${(execErr.stderr || execErr.message || '').trim().slice(0, 300)}`
+        args.push(
+          '--add-header', 'Referer:https://www.tiktok.com/',
+          '--add-header', 'Origin:https://www.tiktok.com'
         );
       }
 
-      if (stderr && !stdout) {
-        console.error('yt-dlp stderr:', stderr);
-        throw new Error('yt-dlp nie znalazło linku (pusty stdout)');
+      // Bezpieczne złożenie komendy – każdy argument osobno w cudzysłowie
+      const command = `${YT_DLP_PATH} ${args.map(a => `"${a}"`).join(' ')}`;
+      console.log('Wykonuję:', command);
+
+      let stdout = '', stderr = '';
+      try {
+        ({ stdout, stderr } = await execAsync(command, { timeout: 30000 }));
+      } catch (execErr) {
+        console.error('yt-dlp błąd:', execErr.stderr || execErr.message);
+        throw new Error(
+          `yt-dlp nie znalazł linku: ${(execErr.stderr || execErr.message || '').trim().slice(0, 500)}`
+        );
       }
 
-      // Czasem yt-dlp zwraca kilka linii – bierzemy pierwszą niepustą
-      videoUrl = stdout
-        .trim()
-        .split('\n')
-        .map(l => l.trim())
-        .find(l => l.startsWith('http'));
-      if (!videoUrl) throw new Error('Nie udało się wyodrębnić adresu wideo');
+      if (stderr) console.warn('yt-dlp stderr:', stderr);
+
+      // Wyciągamy pierwszą linię z http
+      const lines = stdout.split('\n').map(l => l.trim());
+      videoUrl = lines.find(l => l.startsWith('http'));
+      if (!videoUrl) {
+        throw new Error(`yt-dlp nie zwrócił poprawnego URL. Stdout: ${stdout.slice(0, 300)}`);
+      }
     }
 
-    // Zwracanie surowego pliku wideo (raw=true)
+    // Zwracanie surowego pliku wideo
     if (raw === 'true') {
-      const headers = {
-        'User-Agent': USER_AGENT,
-      };
+      const headers = { 'User-Agent': USER_AGENT };
 
-      // Referer dostosowany do platformy (CDN często tego wymaga)
       if (videoUrl.includes('twimg.com') || videoUrl.includes('twitter.com')) {
         headers['Referer'] = 'https://x.com/';
       } else if (
@@ -114,7 +114,7 @@ export default async function handler(req, res) {
 
       const videoResponse = await fetch(videoUrl, { headers });
       if (!videoResponse.ok) {
-        throw new Error(`Błąd pobierania wideo: ${videoResponse.status} ${videoResponse.statusText}`);
+        throw new Error(`Pobranie wideo nie powiodło się: ${videoResponse.status}`);
       }
 
       const buffer = await videoResponse.arrayBuffer();
@@ -122,12 +122,12 @@ export default async function handler(req, res) {
       return res.send(Buffer.from(buffer));
     }
 
-    // Zwracanie samego linku (raw=false / domyślnie)
+    // Zwracanie samego linku
     res.status(200).json({ videoUrl });
   } catch (error) {
-    console.error('Błąd szczegółowy:', error);
+    console.error('Całkowity błąd:', error);
     res.status(500).json({
-      error: 'Nie udało się pobrać wideo. Upewnij się, że wpis ma publiczne wideo.',
+      error: 'Nie udało się pobrać wideo. Sprawdź, czy link jest publiczny i poprawny.',
       details: error.message,
     });
   }
