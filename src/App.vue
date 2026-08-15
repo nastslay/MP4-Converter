@@ -1,604 +1,606 @@
 <template>
-  <div class="container">
-    <button
-      class="theme-toggle-btn"
-      @click="toggleDarkMode"
-      :title="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
-      :aria-label="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
-    >
-      <span class="theme-icon">{{ isDarkMode ? '☀️' : '🌙' }}</span>
-      <span class="theme-label">{{ isDarkMode ? 'Tryb Jasny' : 'Tryb Ciemny' }}</span>
-    </button>
-    <h1>🎬 MP4 / WebP → WebP / GIF</h1>
-    <p class="subtitle">Wklej link do X.com, TikTok, MP4 lub wgraj plik MP4 / animowany WebP</p>
+<div class="container">
+  <button
+    class="theme-toggle-btn"
+    @click="toggleDarkMode"
+    :title="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
+    :aria-label="isDarkMode ? 'Przełącz na jasny tryb' : 'Przełącz na ciemny tryb'"
+  >
+    <span class="theme-icon">{{ isDarkMode ? '☀️' : '🌙' }}</span>
+    <span class="theme-label">{{ isDarkMode ? 'Tryb Jasny' : 'Tryb Ciemny' }}</span>
+  </button>
+  <h1>🎬 MP4 / WebP → WebP / GIF</h1>
+  <p class="subtitle">Wklej link do X.com, TikTok, MP4 lub wgraj plik MP4 / animowany WebP</p>
 
-    <div class="input-group">
-      <label>Wideo (Link lub plik MP4 / WebP):</label>
-      <div class="input-row">
-        <input type="text" v-model="videoUrl" placeholder="Wklej link do wideo..." :disabled="isConverting" />
-        <button class="clear-btn" @click="videoUrl = ''" :disabled="isConverting || !videoUrl">Wyczyść</button>
-      </div>
-      <div class="fetch-row">
-        <button class="fetch-btn" @click="fetchAndSetDuration" :disabled="isConverting || !videoUrl || isFetching">
-          {{ isFetching ? 'Pobieranie…' : '⬇ Pobierz z linku' }}
-        </button>
-        <input type="file" ref="fileInput" accept="video/mp4,video/x-m4v,video/*,image/webp" style="display:none" @change="handleFileUpload" />
-        <input type="file" ref="imageFileInput" accept="image/*" style="display:none" @change="handleImageFileUpload" />
-        <button class="upload-btn" @click="$refs.fileInput.click()" :disabled="isConverting || isFetching">📁 Wgraj z dysku</button>
-      </div>
+  <div class="input-group">
+    <label>Wideo (Link lub plik MP4 / WebP):</label>
+    <div class="input-row">
+      <input type="text" v-model="videoUrl" placeholder="Wklej link do wideo..." :disabled="isConverting" />
+      <button class="clear-btn" @click="videoUrl = ''" :disabled="isConverting || !videoUrl">Wyczyść</button>
     </div>
-
-    <div class="params-grid">
-      <div class="param-field">
-        <label>Czas startu (s):</label>
-        <input type="number" v-model.number="startTime" min="0" step="0.5" :disabled="isConverting" />
-        <div class="btn-row">
-          <button class="num-btn" @click="adjust('startTime', -0.5)" :disabled="isConverting">−</button>
-          <button class="num-btn" @click="adjust('startTime', 0.5)" :disabled="isConverting">+</button>
-        </div>
-      </div>
-      <div class="param-field">
-        <label>Czas końca (s):</label>
-        <input type="number" v-model.number="endTime" min="0.5" step="0.5" :disabled="isConverting" />
-        <div class="btn-row">
-          <button class="num-btn" @click="adjust('endTime', -0.5)" :disabled="isConverting">−</button>
-          <button class="num-btn" @click="adjust('endTime', 0.5)" :disabled="isConverting">+</button>
-        </div>
-      </div>
-      <div class="param-field">
-        <label>FPS (klatki/s):</label>
-        <input type="number" v-model.number="fps" min="1" max="30" step="1" :disabled="isConverting" />
-        <div class="btn-row">
-          <button class="num-btn" @click="adjust('fps', -1)" :disabled="isConverting">−</button>
-          <button class="num-btn" @click="adjust('fps', 1)" :disabled="isConverting">+</button>
-        </div>
-      </div>
-      <div class="param-field">
-        <div class="label-row">
-          <label>Szerokość (px):</label>
-          <label class="checkbox-label">
-            <input type="checkbox" v-model="useOriginalWidth" :disabled="isConverting" />
-            Oryginalny rozmiar
-          </label>
-        </div>
-        <input type="number" v-model.number="width" min="100" max="1280" step="10" :disabled="isConverting || useOriginalWidth" />
-        <div class="btn-row">
-          <button class="num-btn" @click="adjust('width', -10)" :disabled="isConverting || useOriginalWidth">−</button>
-          <button class="num-btn" @click="adjust('width', 10)" :disabled="isConverting || useOriginalWidth">+</button>
-        </div>
-      </div>
-      <div class="param-field quality-field">
-        <div class="quality-header">
-          <label>Jakość (0-100):</label>
-          <span class="quality-value">{{ quality }}</span>
-        </div>
-        <div class="quality-controls">
-          <button class="num-btn" @click="quality = Math.max(0, quality - 5)" :disabled="isConverting || quality <= 0">−5</button>
-          <button class="num-btn" @click="quality = Math.max(0, quality - 1)" :disabled="isConverting || quality <= 0">−1</button>
-          <input type="range" v-model.number="quality" min="0" max="100" :disabled="isConverting" />
-          <button class="num-btn" @click="quality = Math.min(100, quality + 1)" :disabled="isConverting || quality >= 100">+1</button>
-          <button class="num-btn" @click="quality = Math.min(100, quality + 5)" :disabled="isConverting || quality >= 100">+5</button>
-        </div>
-      </div>
-      <div class="param-field size-estimate">
-        <label>📏 Prognozowany rozmiar {{ outputFormat.toUpperCase() }}:</label>
-        <div class="estimate-display">
-          <span class="estimate-value">{{ estimatedSize !== null ? formatFileSize(estimatedSize) : '—' }}</span>
-          <span class="estimate-note">(po analizie)</span>
-        </div>
-        <p v-if="sizeConfidence" class="estimate-confidence">Dokładność: ok. {{ Math.round(sizeConfidence * 100) }}%</p>
-      </div>
-      <div class="param-field size-limit">
-        <label>
-          <input type="checkbox" v-model="limitSizeEnabled" :disabled="isConverting" />
-          Ogranicz rozmiar maksymalny
-        </label>
-        <div v-if="limitSizeEnabled" class="limit-control">
-          <input type="number" v-model.number="targetSizeMB" min="0.1" max="50" step="0.5" :disabled="isConverting" />
-          <span>MB</span>
-        </div>
-        <button class="analyze-btn" @click="analyzeAndEstimate" :disabled="isConverting || !videoUrl || inputExt === 'webp'">
-          🔍 Analizuj rozmiar
-        </button>
-      </div>
-    </div>
-
-    <!-- Format wyjściowy -->
-    <div class="format-selector">
-      <label class="format-label">Format wyjściowy:</label>
-      <div class="format-options">
-        <button class="format-btn" :class="{ active: outputFormat === 'webp' }" @click="outputFormat = 'webp'" :disabled="isConverting">
-          <span class="format-icon">🖼️</span><span>WebP</span>
-        </button>
-        <button class="format-btn" :class="{ active: outputFormat === 'gif' }" @click="outputFormat = 'gif'" :disabled="isConverting">
-          <span class="format-icon">🎞️</span><span>GIF</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Metadane źródła -->
-    <div v-if="originalWidth" class="original-meta">
-      <h4>📁 Informacje o źródle</h4>
-      <div class="meta-grid">
-        <div><span>Format:</span> {{ inputExt.toUpperCase() }}</div>
-        <div><span>Rozmiar:</span> {{ formatFileSize(originalSize) }}</div>
-        <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
-        <div><span>FPS:</span> {{ originalFps }}</div>
-        <div><span>Czas trwania:</span> {{ originalDuration?.toFixed(2) }} s</div>
-      </div>
-    </div>
-
-    <!-- ===== SEKCJA CROP + EDYTOR TEKSTU ===== -->
-    <div class="crop-section">
-      <button
-        class="crop-toggle-btn"
-        :class="{ active: editPanelOpen }"
-        @click="toggleEditPanel"
-        :disabled="isConverting"
-      >
-        ✂️✏️ {{ editPanelOpen ? 'Wyłącz przycinanie i edycję' : 'Przytnij i edytuj' }}
+    <div class="fetch-row">
+      <button class="fetch-btn" @click="fetchAndSetDuration" :disabled="isConverting || !videoUrl || isFetching">
+        {{ isFetching ? 'Pobieranie…' : '⬇ Pobierz z linku' }}
       </button>
-
-      <div v-if="editPanelOpen" class="edit-panel">
-        <!-- CROP CONTROLS -->
-        <div class="crop-controls">
-          <div
-            class="section-label clickable-section-label"
-            @click="cropPanelOpen = !cropPanelOpen"
-            role="button"
-            tabindex="0"
-            :aria-expanded="cropPanelOpen"
-          >
-            ✂️ Kadrowanie
-            <span class="toggle-arrow">{{ cropPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
-          </div>
-          <template v-if="cropPanelOpen">
-            <div class="sync-row">
-              <label><input type="checkbox" v-model="syncVertical" :disabled="isConverting" /> Synchronizuj (Góra/Dół)</label>
-            </div>
-            <div class="crop-grid">
-              <div class="crop-field">
-                <label>⬆ Góra (px):</label>
-                <input type="number" v-model.number="cropTop" min="0" step="5" :disabled="isConverting" />
-                <div class="btn-row">
-                  <button class="num-btn" @click="adjustCrop('cropTop', -5)" :disabled="isConverting">−</button>
-                  <button class="num-btn" @click="adjustCrop('cropTop', 5)" :disabled="isConverting">+</button>
-                </div>
-              </div>
-              <div class="crop-field">
-                <label>⬇ Dół (px):</label>
-                <input type="number" v-model.number="cropBottom" min="0" step="5" :disabled="isConverting" />
-                <div class="btn-row">
-                  <button class="num-btn" @click="adjustCrop('cropBottom', -5)" :disabled="isConverting">−</button>
-                  <button class="num-btn" @click="adjustCrop('cropBottom', 5)" :disabled="isConverting">+</button>
-                </div>
-              </div>
-            </div>
-            <div class="sync-row">
-              <label><input type="checkbox" v-model="syncHorizontal" :disabled="isConverting" /> Synchronizuj (Lewo/Prawo)</label>
-            </div>
-            <div class="crop-grid">
-              <div class="crop-field">
-                <label>⬅ Lewo (px):</label>
-                <input type="number" v-model.number="cropLeft" min="0" step="5" :disabled="isConverting" />
-                <div class="btn-row">
-                  <button class="num-btn" @click="adjustCrop('cropLeft', -5)" :disabled="isConverting">−</button>
-                  <button class="num-btn" @click="adjustCrop('cropLeft', 5)" :disabled="isConverting">+</button>
-                </div>
-              </div>
-              <div class="crop-field">
-                <label>➡ Prawo (px):</label>
-                <input type="number" v-model.number="cropRight" min="0" step="5" :disabled="isConverting" />
-                <div class="btn-row">
-                  <button class="num-btn" @click="adjustCrop('cropRight', -5)" :disabled="isConverting">−</button>
-                  <button class="num-btn" @click="adjustCrop('cropRight', 5)" :disabled="isConverting">+</button>
-                </div>
-              </div>
-            </div>
-            <div class="crop-row-btns">
-              <button class="reset-crop-btn" @click="resetCrop" :disabled="isConverting">🔄 Resetuj kadrowanie</button>
-              <div v-if="cropTop || cropBottom || cropLeft || cropRight" class="crop-summary">
-                Wynikowy kadr:
-                <strong v-if="previewNaturalWidth">{{ previewNaturalWidth - cropLeft - cropRight }} × {{ previewNaturalHeight - cropTop - cropBottom }} px</strong>
-                <span v-else>(oryg. − {{ cropLeft + cropRight }}px szer., − {{ cropTop + cropBottom }}px wys.)</span>
-              </div>
-            </div>
-            <p class="crop-drag-hint">💡 Możesz przeciągać ramkę kadru bezpośrednio na podglądzie.</p>
-          </template>
-        </div>
-
-        <!-- FLIP / TRANSFORM CONTROLS -->
-        <div class="transform-controls">
-          <div
-            class="section-label clickable-section-label"
-            @click="transformPanelOpen = !transformPanelOpen"
-            role="button"
-            tabindex="0"
-            :aria-expanded="transformPanelOpen"
-          >
-            🪞 Przekształcenia
-            <span class="toggle-arrow">{{ transformPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
-          </div>
-          <template v-if="transformPanelOpen">
-            <div class="transform-grid">
-              <button class="transform-btn" :class="{ active: flipHorizontal }" @click="flipHorizontal = !flipHorizontal; redrawPreviewOverlay()" :disabled="isConverting">
-                ↔️ Odbij poziomo
-              </button>
-              <button class="transform-btn" :class="{ active: flipVertical }" @click="flipVertical = !flipVertical; redrawPreviewOverlay()" :disabled="isConverting">
-                ↕️ Odbij pionowo
-              </button>
-              <button class="transform-btn" :class="{ active: rotate90 !== 0 }" @click="rotate90 = (rotate90 + 90) % 360; redrawPreviewOverlay()" :disabled="isConverting">
-                🔄 Obróć 90° ({{ rotate90 }}°)
-              </button>
-              <button class="transform-btn" @click="flipHorizontal = false; flipVertical = false; rotate90 = 0; redrawPreviewOverlay()" :disabled="isConverting">
-                ♻️ Resetuj przekształcenia
-              </button>
-            </div>
-          </template>
-        </div>
-
-        <!-- TEXT EDITOR CONTROLS -->
-        <div class="text-controls">
-          <div
-            class="section-label clickable-section-label"
-            @click="textPanelOpen = !textPanelOpen"
-            role="button"
-            tabindex="0"
-            :aria-expanded="textPanelOpen"
-          >
-            ✏️ Tekst na obrazie
-            <span class="toggle-arrow">{{ textPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
-          </div>
-          <template v-if="textPanelOpen">
-            <div class="textbox-tabs-row">
-              <div class="textbox-tabs">
-                <button
-                  v-for="(item, idx) in overlays"
-                  :key="idx"
-                  class="tb-tab"
-                  :class="{ active: activeOverlayIdx === idx }"
-                  @click="activeOverlayIdx = idx"
-                >
-                  <span class="tb-tab-num">{{ idx + 1 }}</span>
-                  <span v-if="item.type === 'text'" class="tb-tab-preview">{{ item.text ? item.text.slice(0, 8) + (item.text.length > 8 ? '…' : '') : '(pusty)' }}</span>
-                  <span v-else class="tb-tab-preview">🖼️ obrazek</span>
-                </button>
-              </div>
-              <div class="textbox-tab-actions">
-                <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">
-                  <span class="tab-action-icon">＋</span>
-                  <span class="tab-action-label">Dodaj tekst</span>
-                </button>
-                <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Wgraj obraz z dysku">
-                  <span class="tab-action-icon">🖼️</span>
-                  <span class="tab-action-label">Wgraj obraz z dysku</span>
-                </button>
-                <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
-              </div>
-            </div>
-            <div v-if="activeOverlay" class="textbox-controls">
-              <template v-if="activeOverlay.type === 'text'">
-                <div class="tc-field-group">
-                  <label class="tc-label">Tekst</label>
-                  <div class="text-input-row">
-                    <input
-                      type="text"
-                      v-model="activeOverlay.text"
-                      placeholder="Wpisz tekst lub emoji…"
-                      class="text-input"
-                      ref="textInputRef"
-                      @input="redrawPreviewOverlay"
-                    />
-                    <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
-                  </div>
-                  <div v-if="showEmojiPicker" class="emoji-picker">
-                    <div class="emoji-cats">
-                      <button
-                        v-for="cat in emojiCategories"
-                        :key="cat.name"
-                        class="emoji-cat-btn"
-                        :class="{ active: activeCat === cat.name }"
-                        @click="activeCat = cat.name"
-                      >{{ cat.icon }}</button>
-                    </div>
-                    <div class="emoji-grid">
-                      <button
-                        v-for="em in currentEmojis"
-                        :key="em"
-                        class="emoji-btn"
-                        @click="insertEmoji(em)"
-                      >{{ em }}</button>
-                    </div>
-                  </div>
-                </div>
-                <div class="tc-field-row style-font-row">
-                  <div class="tc-field-group tc-field-grow">
-                    <label class="tc-label">Czcionka</label>
-                    <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
-                      <option value="Impact">Impact</option>
-                      <option value="Arial">Arial</option>
-                      <option value="Arial Black">Arial Black</option>
-                      <option value="Georgia">Georgia</option>
-                      <option value="Times New Roman">Times New Roman</option>
-                      <option value="Courier New">Courier New</option>
-                      <option value="Verdana">Verdana</option>
-                      <option value="Trebuchet MS">Trebuchet MS</option>
-                      <option value="Comic Sans MS">Comic Sans MS</option>
-                    </select>
-                  </div>
-                  <div class="tc-field-group fontsize-field">
-                    <label class="tc-label">Rozmiar (px)</label>
-                    <div class="btn-row">
-                      <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 2); redrawPreviewOverlay()">−</button>
-                      <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
-                      <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 2); redrawPreviewOverlay()">+</button>
-                    </div>
-                  </div>
-                  <div class="tc-field-group strokewidth-field">
-                    <label class="tc-label">Grub. obrysu</label>
-                    <div class="btn-row">
-                      <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
-                      <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
-                      <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
-                    </div>
-                  </div>
-                </div>
-                <div class="tc-field-row style-color-row">
-                  <div class="tc-field-group style-field">
-                    <label class="tc-label">Styl</label>
-                    <div class="style-toggles">
-                      <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
-                      <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
-                    </div>
-                  </div>
-                  <div class="tc-field-group">
-                    <label class="tc-label">Kolor tekstu</label>
-                    <div class="color-row">
-                      <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
-                      <span class="color-hex">{{ activeOverlay.color }}</span>
-                    </div>
-                  </div>
-                  <div class="tc-field-group">
-                    <label class="tc-label">Obrys / cień</label>
-                    <div class="color-row">
-                      <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
-                      <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="tc-field-group">
-                  <div class="tc-label-row">
-                    <label class="tc-label">Obrót</label>
-                    <span class="tc-value">{{ activeOverlay.rotation }}°</span>
-                    <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
-                  </div>
-                  <div class="slider-edge-row">
-                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
-                    <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
-                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
-                  </div>
-                </div>
-                <div class="tc-field-group">
-                  <div class="tc-label-row">
-                    <label class="tc-label">Przezroczystość</label>
-                    <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
-                  </div>
-                  <div class="slider-edge-row">
-                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
-                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
-                  </div>
-                </div>
-              </template>
-              <template v-else-if="activeOverlay.type === 'image'">
-                <div class="tc-field-group">
-                  <label class="tc-label">Wgraj obraz z dysku</label>
-                  <div class="image-preview-box">
-                    <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
-                  </div>
-                  <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
-                </div>
-                <div class="tc-field-group">
-                  <div class="tc-label-row">
-                    <label class="tc-label">Skala</label>
-                    <span class="tc-value">{{ activeOverlay.scale.toFixed(2) }}×</span>
-                  </div>
-                  <div class="slider-edge-row">
-                    <button class="slider-edge-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.25).toFixed(2)); redrawPreviewOverlay()" title="−0.25">−</button>
-                    <input type="range" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.25" class="tc-range" @input="redrawPreviewOverlay" />
-                    <button class="slider-edge-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.25).toFixed(2)); redrawPreviewOverlay()" title="+0.25">+</button>
-                  </div>
-                </div>
-                <div class="tc-field-group">
-                  <div class="tc-label-row">
-                    <label class="tc-label">Obrót</label>
-                    <span class="tc-value">{{ activeOverlay.rotation }}°</span>
-                    <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
-                  </div>
-                  <div class="slider-edge-row">
-                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
-                    <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
-                    <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
-                  </div>
-                </div>
-                <div class="tc-field-group">
-                  <div class="tc-label-row">
-                    <label class="tc-label">Przezroczystość</label>
-                    <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
-                  </div>
-                  <div class="slider-edge-row">
-                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
-                    <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
-                    <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </template>
-        </div>
-
-        <!-- UNIFIED PREVIEW CANVAS -->
-        <div class="preview-section">
-          <p class="preview-label" v-if="previewFrame">
-            Podgląd — przeciągnij tekst/obrazek lub ramkę kadru palcem/myszą
-            <span v-if="previewNaturalWidth" class="preview-dims">({{ previewNaturalWidth }}×{{ previewNaturalHeight }}px)</span>
-          </p>
-          <div
-            v-if="previewFrame"
-            class="unified-preview-wrapper"
-            ref="previewWrapper"
-          >
-            <img
-              ref="previewImg"
-              :src="previewFrame"
-              alt=""
-              style="display:none"
-              @load="onPreviewLoaded"
-            />
-            <canvas
-              ref="unifiedCanvas"
-              class="unified-canvas"
-              :class="{ 'crop-dragging': isCropDraggingActive }"
-              @mousedown.prevent="onCanvasMouseDown"
-              @mousemove.prevent="onCanvasMouseMove"
-              @mouseup.prevent="onCanvasMouseUp"
-              @mouseleave.prevent="onCanvasMouseUp"
-              @touchstart.prevent="onCanvasTouchStart"
-              @touchmove.prevent="onCanvasTouchMove"
-              @touchend.prevent="onCanvasTouchEnd"
-            ></canvas>
-          </div>
-          <p v-else-if="isLoadingPreview" class="preview-loading">⏳ Ładowanie podglądu…</p>
-          <p v-else class="preview-loading">Podgląd pojawi się po załadowaniu wideo.</p>
-        </div>
-      </div>
+      <input type="file" ref="fileInput" accept="video/mp4,video/x-m4v,video/*,image/webp" style="display:none" @change="handleFileUpload" />
+      <input type="file" ref="imageFileInput" accept="image/*" style="display:none" @change="handleImageFileUpload" />
+      <button class="upload-btn" @click="$refs.fileInput.click()" :disabled="isConverting || isFetching">📁 Wgraj z dysku</button>
     </div>
-
-    <button class="convert-btn" @click="convert" :disabled="isConverting || !videoUrl">
-      {{ isConverting ? 'Konwertowanie…' : (inputExt === 'webp' ? 'Zastosuj zmiany i wygeneruj ' + outputFormat.toUpperCase() : 'Konwertuj do ' + outputFormat.toUpperCase()) }}
-    </button>
-
-    <!-- ===== SCHOWEK - KLIPBOARD ===== -->
-    <div class="clipboard-section">
-      <button
-        class="clipboard-toggle-btn"
-        :class="{ active: clipboardOpen }"
-        @click="clipboardOpen = !clipboardOpen"
-      >
-        📋 {{ clipboardOpen ? 'Zwiń schowek' : 'Rozwiń schowek' }}
-      </button>
-
-      <div v-if="clipboardOpen" class="clipboard-panel">
-        <div class="clipboard-info">
-          <p><strong>📌 Instrukcja:</strong> Schowek służy do tworzenia własnego tekstu, który zostanie skopiowany po kliknięciu "Skopiuj informacje". Użyj przycisków poniżej, aby wstawić dynamiczne parametry z konwersji.</p>
-          <p><strong>💡 Przykład:</strong> <code>Po konwersji plik ma {conv_size} i {conv_fps} FPS</code> → <code>Po konwersji plik ma 2.45 MB i 20 FPS</code></p>
-          <p><strong>💾 Zapisywanie:</strong> Twoja treść jest automatycznie zapisywana w przeglądarce i będzie dostępna przy następnej wizycie.</p>
-        </div>
-
-        <div class="clipboard-editor">
-          <label class="clipboard-label">Twoja treść:</label>
-          <textarea
-            ref="clipboardTextarea"
-            v-model="clipboardText"
-            class="clipboard-textarea"
-            placeholder="Wpisz tutaj swój tekst, używając przycisków poniżej do wstawiania parametrów..."
-            @focus="saveSelection"
-            @click="saveSelection"
-            @keyup="saveSelection"
-          ></textarea>
-          <button class="clipboard-clear-btn" @click="clipboardText = ''" :disabled="!clipboardText">🗑 Wyczyść</button>
-        </div>
-
-        <div class="clipboard-insert-section">
-          <label class="clipboard-label">Wstaw parametry:</label>
-          
-          <div class="insert-group">
-            <div class="insert-group-label">📁 Źródło - pełne bloki:</div>
-            <div class="insert-buttons">
-              <button class="insert-btn" @click="insertToken('src_full')" title="Wstaw wszystkie informacje o źródle">Wszystko o źródle</button>
-            </div>
-          </div>
-
-          <div class="insert-group">
-            <div class="insert-group-label">📁 Źródło - pojedyncze:</div>
-            <div class="insert-buttons">
-              <button class="insert-btn" @click="insertToken('src_format')">Format</button>
-              <button class="insert-btn" @click="insertToken('src_size')">Rozmiar</button>
-              <button class="insert-btn" @click="insertToken('src_dimensions')">Wymiary</button>
-              <button class="insert-btn" @click="insertToken('src_fps')">FPS</button>
-              <button class="insert-btn" @click="insertToken('src_duration')">Czas trwania</button>
-              <button class="insert-btn" @click="insertToken('src_link')">Link</button>
-            </div>
-          </div>
-
-          <div class="insert-group">
-            <div class="insert-group-label">🎞️ Konwersja - pełne bloki:</div>
-            <div class="insert-buttons">
-              <button class="insert-btn" @click="insertToken('conv_full')" title="Wstaw wszystkie informacje o konwersji">Wszystko o konwersji</button>
-            </div>
-          </div>
-
-          <div class="insert-group">
-            <div class="insert-group-label">🎞️ Konwersja - pojedyncze:</div>
-            <div class="insert-buttons">
-              <button class="insert-btn" @click="insertToken('conv_format')">Format</button>
-              <button class="insert-btn" @click="insertToken('conv_size')">Rozmiar</button>
-              <button class="insert-btn" @click="insertToken('conv_dimensions')">Wymiary</button>
-              <button class="insert-btn" @click="insertToken('conv_fps')">FPS</button>
-              <button class="insert-btn" @click="insertToken('conv_duration')">Czas trwania</button>
-              <button class="insert-btn" @click="insertToken('conv_compression')">% Kompresji</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="isConverting" class="loader-container">
-      <div class="spinner"></div>
-      <p class="loader-text">Trwa przetwarzanie...</p>
-    </div>
-    <div v-if="error" class="error">{{ error }}</div>
-
-    <!-- ===== WYNIK KONWERSJI ===== -->
-    <div v-if="resultUrl" class="result-area">
-      <h3>Wynik:</h3>
-      <img :src="resultUrl" :alt="'Wynikowy ' + outputFormat.toUpperCase()" />
-      <div class="result-meta-row">
-        <div class="result-meta-box">
-          <h4>📁 Źródło</h4>
-          <div class="meta-grid">
-            <div><span>Format:</span> {{ inputExt.toUpperCase() }}</div>
-            <div><span>Rozmiar:</span> {{ formatFileSize(originalSize) }}</div>
-            <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
-            <div><span>FPS:</span> {{ originalFps }}</div>
-            <div><span>Czas trwania:</span> {{ originalDuration?.toFixed(2) }} s</div>
-          </div>
-        </div>
-        <div class="result-meta-box">
-          <h4>🎞️ Konwersja</h4>
-          <div class="meta-grid">
-            <div><span>Format:</span> {{ outputFormat.toUpperCase() }}</div>
-            <div><span>Rozmiar:</span> {{ formatFileSize(resultBlob?.size || 0) }}</div>
-            <div><span>Wymiary:</span> {{ resultWidth }}×{{ resultHeight }} px</div>
-            <div><span>FPS:</span> {{ fps }}</div>
-            <div><span>Czas trwania:</span> {{ resultDuration?.toFixed(2) }} s</div>
-            <div><span>% Kompresji:</span> {{ 100 - quality }}%</div>
-          </div>
-        </div>
-      </div>
-      <div class="result-actions">
-        <button class="download-btn" @click="downloadResult">⬇ Pobierz {{ outputFormat.toUpperCase() }}</button>
-        <button class="copy-info-btn" @click="copyClipboard">{{ infoCopied ? '✅ Skopiowano!' : '📋 Skopiuj informacje' }}</button>
-      </div>
-    </div>
-
-    <p class="note">
-      Uwaga: pierwsze uruchomienie FFmpeg.wasm ładuje ~30 MB plików. Kolejne konwersje będą szybsze.<br>
-      Edycja plików WebP (crop / zmiana FPS / jakości) wymaga przeglądarki z ImageDecoder (Chrome/Edge).
-    </p>
   </div>
+
+  <div class="params-grid">
+    <div class="param-field">
+      <label>Czas startu (s):</label>
+      <input type="number" v-model.number="startTime" min="0" step="0.5" :disabled="isConverting" />
+      <div class="btn-row">
+        <button class="num-btn" @click="adjust('startTime', -0.5)" :disabled="isConverting">−</button>
+        <button class="num-btn" @click="adjust('startTime', 0.5)" :disabled="isConverting">+</button>
+      </div>
+    </div>
+    <div class="param-field">
+      <label>Czas końca (s):</label>
+      <input type="number" v-model.number="endTime" min="0.5" step="0.5" :disabled="isConverting" />
+      <div class="btn-row">
+        <button class="num-btn" @click="adjust('endTime', -0.5)" :disabled="isConverting">−</button>
+        <button class="num-btn" @click="adjust('endTime', 0.5)" :disabled="isConverting">+</button>
+      </div>
+    </div>
+    <div class="param-field">
+      <label>FPS (klatki/s):</label>
+      <input type="number" v-model.number="fps" min="1" max="30" step="1" :disabled="isConverting" />
+      <div class="btn-row">
+        <button class="num-btn" @click="adjust('fps', -1)" :disabled="isConverting">−</button>
+        <button class="num-btn" @click="adjust('fps', 1)" :disabled="isConverting">+</button>
+      </div>
+    </div>
+    <div class="param-field">
+      <div class="label-row">
+        <label>Szerokość (px):</label>
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="useOriginalWidth" :disabled="isConverting" />
+          Oryginalny rozmiar
+        </label>
+      </div>
+      <input type="number" v-model.number="width" min="100" max="1280" step="10" :disabled="isConverting || useOriginalWidth" />
+      <div class="btn-row">
+        <button class="num-btn" @click="adjust('width', -10)" :disabled="isConverting || useOriginalWidth">−</button>
+        <button class="num-btn" @click="adjust('width', 10)" :disabled="isConverting || useOriginalWidth">+</button>
+      </div>
+    </div>
+    <div class="param-field quality-field">
+      <div class="quality-header">
+        <label>Jakość (0-100):</label>
+        <span class="quality-value">{{ quality }}</span>
+      </div>
+      <div class="quality-controls">
+        <button class="num-btn" @click="quality = Math.max(0, quality - 5)" :disabled="isConverting || quality <= 0">−5</button>
+        <button class="num-btn" @click="quality = Math.max(0, quality - 1)" :disabled="isConverting || quality <= 0">−1</button>
+        <input type="range" v-model.number="quality" min="0" max="100" :disabled="isConverting" />
+        <button class="num-btn" @click="quality = Math.min(100, quality + 1)" :disabled="isConverting || quality >= 100">+1</button>
+        <button class="num-btn" @click="quality = Math.min(100, quality + 5)" :disabled="isConverting || quality >= 100">+5</button>
+      </div>
+    </div>
+    <div class="param-field size-estimate">
+      <label>📏 Prognozowany rozmiar {{ outputFormat.toUpperCase() }}:</label>
+      <div class="estimate-display">
+        <span class="estimate-value">{{ estimatedSize !== null ? formatFileSize(estimatedSize) : '—' }}</span>
+        <span class="estimate-note">(po analizie)</span>
+      </div>
+      <p v-if="sizeConfidence" class="estimate-confidence">Dokładność: ok. {{ Math.round(sizeConfidence * 100) }}%</p>
+    </div>
+    <div class="param-field size-limit">
+      <label>
+        <input type="checkbox" v-model="limitSizeEnabled" :disabled="isConverting" />
+        Ogranicz rozmiar maksymalny
+      </label>
+      <div v-if="limitSizeEnabled" class="limit-control">
+        <input type="number" v-model.number="targetSizeMB" min="0.1" max="50" step="0.5" :disabled="isConverting" />
+        <span>MB</span>
+      </div>
+      <button class="analyze-btn" @click="analyzeAndEstimate" :disabled="isConverting || !videoUrl || inputExt === 'webp'">
+        🔍 Analizuj rozmiar
+      </button>
+    </div>
+  </div>
+
+  <!-- Format wyjściowy -->
+  <div class="format-selector">
+    <label class="format-label">Format wyjściowy:</label>
+    <div class="format-options">
+      <button class="format-btn" :class="{ active: outputFormat === 'webp' }" @click="outputFormat = 'webp'" :disabled="isConverting">
+        <span class="format-icon">🖼️</span><span>WebP</span>
+      </button>
+      <button class="format-btn" :class="{ active: outputFormat === 'gif' }" @click="outputFormat = 'gif'" :disabled="isConverting">
+        <span class="format-icon">🎞️</span><span>GIF</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Metadane źródła -->
+  <div v-if="originalWidth" class="original-meta">
+    <h4>📁 Informacje o źródle</h4>
+    <div class="meta-grid">
+      <div><span>Format:</span> {{ inputExt.toUpperCase() }}</div>
+      <div><span>Rozmiar:</span> {{ formatFileSize(originalSize) }}</div>
+      <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
+      <div><span>FPS:</span> {{ originalFps }}</div>
+      <div><span>Czas trwania:</span> {{ originalDuration?.toFixed(2) }} s</div>
+    </div>
+  </div>
+
+  <!-- ===== SEKCJA CROP + EDYTOR TEKSTU ===== -->
+  <div class="crop-section">
+    <button
+      class="crop-toggle-btn"
+      :class="{ active: editPanelOpen }"
+      @click="toggleEditPanel"
+      :disabled="isConverting"
+    >
+      ✂️✏️ {{ editPanelOpen ? 'Wyłącz przycinanie i edycję' : 'Przytnij i edytuj' }}
+    </button>
+
+    <div v-if="editPanelOpen" class="edit-panel">
+      <!-- CROP CONTROLS -->
+      <div class="crop-controls">
+        <div
+          class="section-label clickable-section-label"
+          @click="cropPanelOpen = !cropPanelOpen"
+          role="button"
+          tabindex="0"
+          :aria-expanded="cropPanelOpen"
+        >
+          ✂️ Kadrowanie
+          <span class="toggle-arrow">{{ cropPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
+        </div>
+        <template v-if="cropPanelOpen">
+          <div class="sync-row">
+            <label><input type="checkbox" v-model="syncVertical" :disabled="isConverting" /> Synchronizuj (Góra/Dół)</label>
+          </div>
+          <div class="crop-grid">
+            <div class="crop-field">
+              <label>⬆ Góra (px):</label>
+              <input type="number" v-model.number="cropTop" min="0" step="5" :disabled="isConverting" />
+              <div class="btn-row">
+                <button class="num-btn" @click="adjustCrop('cropTop', -5)" :disabled="isConverting">−</button>
+                <button class="num-btn" @click="adjustCrop('cropTop', 5)" :disabled="isConverting">+</button>
+              </div>
+            </div>
+            <div class="crop-field">
+              <label>⬇ Dół (px):</label>
+              <input type="number" v-model.number="cropBottom" min="0" step="5" :disabled="isConverting" />
+              <div class="btn-row">
+                <button class="num-btn" @click="adjustCrop('cropBottom', -5)" :disabled="isConverting">−</button>
+                <button class="num-btn" @click="adjustCrop('cropBottom', 5)" :disabled="isConverting">+</button>
+              </div>
+            </div>
+          </div>
+          <div class="sync-row">
+            <label><input type="checkbox" v-model="syncHorizontal" :disabled="isConverting" /> Synchronizuj (Lewo/Prawo)</label>
+          </div>
+          <div class="crop-grid">
+            <div class="crop-field">
+              <label>⬅ Lewo (px):</label>
+              <input type="number" v-model.number="cropLeft" min="0" step="5" :disabled="isConverting" />
+              <div class="btn-row">
+                <button class="num-btn" @click="adjustCrop('cropLeft', -5)" :disabled="isConverting">−</button>
+                <button class="num-btn" @click="adjustCrop('cropLeft', 5)" :disabled="isConverting">+</button>
+              </div>
+            </div>
+            <div class="crop-field">
+              <label>➡ Prawo (px):</label>
+              <input type="number" v-model.number="cropRight" min="0" step="5" :disabled="isConverting" />
+              <div class="btn-row">
+                <button class="num-btn" @click="adjustCrop('cropRight', -5)" :disabled="isConverting">−</button>
+                <button class="num-btn" @click="adjustCrop('cropRight', 5)" :disabled="isConverting">+</button>
+              </div>
+            </div>
+          </div>
+          <div class="crop-row-btns">
+            <button class="reset-crop-btn" @click="resetCrop" :disabled="isConverting">🔄 Resetuj kadrowanie</button>
+            <div v-if="cropTop || cropBottom || cropLeft || cropRight" class="crop-summary">
+              Wynikowy kadr:
+              <strong v-if="previewNaturalWidth">{{ previewNaturalWidth - cropLeft - cropRight }} × {{ previewNaturalHeight - cropTop - cropBottom }} px</strong>
+              <span v-else>(oryg. − {{ cropLeft + cropRight }}px szer., − {{ cropTop + cropBottom }}px wys.)</span>
+            </div>
+          </div>
+          <p class="crop-drag-hint">💡 Możesz przeciągać ramkę kadru bezpośrednio na podglądzie.</p>
+        </template>
+      </div>
+
+      <!-- FLIP / TRANSFORM CONTROLS -->
+      <div class="transform-controls">
+        <div
+          class="section-label clickable-section-label"
+          @click="transformPanelOpen = !transformPanelOpen"
+          role="button"
+          tabindex="0"
+          :aria-expanded="transformPanelOpen"
+        >
+          🪞 Przekształcenia
+          <span class="toggle-arrow">{{ transformPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
+        </div>
+        <template v-if="transformPanelOpen">
+          <div class="transform-grid">
+            <button class="transform-btn" :class="{ active: flipHorizontal }" @click="flipHorizontal = !flipHorizontal; redrawPreviewOverlay()" :disabled="isConverting">
+              ↔️ Odbij poziomo
+            </button>
+            <button class="transform-btn" :class="{ active: flipVertical }" @click="flipVertical = !flipVertical; redrawPreviewOverlay()" :disabled="isConverting">
+              ↕️ Odbij pionowo
+            </button>
+            <button class="transform-btn" :class="{ active: rotate90 !== 0 }" @click="rotate90 = (rotate90 + 90) % 360; redrawPreviewOverlay()" :disabled="isConverting">
+              🔄 Obróć 90° ({{ rotate90 }}°)
+            </button>
+            <button class="transform-btn" @click="flipHorizontal = false; flipVertical = false; rotate90 = 0; redrawPreviewOverlay()" :disabled="isConverting">
+              ♻️ Resetuj przekształcenia
+            </button>
+          </div>
+        </template>
+      </div>
+
+      <!-- TEXT EDITOR CONTROLS -->
+      <div class="text-controls">
+        <div
+          class="section-label clickable-section-label"
+          @click="textPanelOpen = !textPanelOpen"
+          role="button"
+          tabindex="0"
+          :aria-expanded="textPanelOpen"
+        >
+          ✏️ Tekst na obrazie
+          <span class="toggle-arrow">{{ textPanelOpen ? '▼ (zwiń)' : '▶ (rozwiń)' }}</span>
+        </div>
+        <template v-if="textPanelOpen">
+          <div class="textbox-tabs-row">
+            <div class="textbox-tabs">
+              <button
+                v-for="(item, idx) in overlays"
+                :key="idx"
+                class="tb-tab"
+                :class="{ active: activeOverlayIdx === idx }"
+                @click="activeOverlayIdx = idx"
+              >
+                <span class="tb-tab-num">{{ idx + 1 }}</span>
+                <span v-if="item.type === 'text'" class="tb-tab-preview">{{ item.text ? item.text.slice(0, 8) + (item.text.length > 8 ? '…' : '') : '(pusty)' }}</span>
+                <span v-else class="tb-tab-preview">🖼️ obrazek</span>
+              </button>
+            </div>
+            <div class="textbox-tab-actions">
+              <button class="tab-action-btn tab-add" @click="addTextOverlay" :disabled="overlays.length >= 10" title="Dodaj tekst">
+                <span class="tab-action-icon">＋</span>
+                <span class="tab-action-label">Dodaj tekst</span>
+              </button>
+              <button class="tab-action-btn tab-add-img" @click="openAddImagePicker" :disabled="overlays.length >= 10" title="Wgraj obraz z dysku">
+                <span class="tab-action-icon">🖼️</span>
+                <span class="tab-action-label">Wgraj obraz z dysku</span>
+              </button>
+              <button class="tab-action-btn tab-remove" @click="removeOverlay" :disabled="overlays.length <= 1" title="Usuń aktywną nakładkę">🗑</button>
+            </div>
+          </div>
+          <div v-if="activeOverlay" class="textbox-controls">
+            <template v-if="activeOverlay.type === 'text'">
+              <div class="tc-field-group">
+                <label class="tc-label">Tekst</label>
+                <div class="text-input-row">
+                  <input
+                    type="text"
+                    v-model="activeOverlay.text"
+                    placeholder="Wpisz tekst lub emoji…"
+                    class="text-input"
+                    ref="textInputRef"
+                    @input="redrawPreviewOverlay"
+                  />
+                  <button class="emoji-toggle-btn" @click="toggleEmojiPicker" title="Wstaw emoji">😀</button>
+                </div>
+                <div v-if="showEmojiPicker" class="emoji-picker">
+                  <div class="emoji-cats">
+                    <button
+                      v-for="cat in emojiCategories"
+                      :key="cat.name"
+                      class="emoji-cat-btn"
+                      :class="{ active: activeCat === cat.name }"
+                      @click="activeCat = cat.name"
+                    >{{ cat.icon }}</button>
+                  </div>
+                  <div class="emoji-grid">
+                    <button
+                      v-for="em in currentEmojis"
+                      :key="em"
+                      class="emoji-btn"
+                      @click="insertEmoji(em)"
+                    >{{ em }}</button>
+                  </div>
+                </div>
+              </div>
+              <div class="tc-field-row style-font-row">
+                <div class="tc-field-group tc-field-grow">
+                  <label class="tc-label">Czcionka</label>
+                  <select class="tc-select" v-model="activeOverlay.fontFamily" @change="redrawPreviewOverlay">
+                    <option value="Impact">Impact</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Arial Black">Arial Black</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                    <option value="Comic Sans MS">Comic Sans MS</option>
+                  </select>
+                </div>
+                <div class="tc-field-group fontsize-field">
+                  <label class="tc-label">Rozmiar (px)</label>
+                  <div class="btn-row">
+                    <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.max(8, activeOverlay.fontSize - 2); redrawPreviewOverlay()">−</button>
+                    <input type="number" v-model.number="activeOverlay.fontSize" min="8" max="500" class="tc-num-input" @change="redrawPreviewOverlay" />
+                    <button class="num-btn wide-btn" @click="activeOverlay.fontSize = Math.min(500, activeOverlay.fontSize + 2); redrawPreviewOverlay()">+</button>
+                  </div>
+                </div>
+                <div class="tc-field-group strokewidth-field">
+                  <label class="tc-label">Grub. obrysu</label>
+                  <div class="btn-row">
+                    <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.max(0, activeOverlay.strokeWidth - 1); redrawPreviewOverlay()">−</button>
+                    <input type="number" v-model.number="activeOverlay.strokeWidth" min="0" max="20" class="tc-num-input-sm" @change="redrawPreviewOverlay" />
+                    <button class="num-btn wide-btn" @click="activeOverlay.strokeWidth = Math.min(20, activeOverlay.strokeWidth + 1); redrawPreviewOverlay()">+</button>
+                  </div>
+                </div>
+              </div>
+              <div class="tc-field-row style-color-row">
+                <div class="tc-field-group style-field">
+                  <label class="tc-label">Styl</label>
+                  <div class="style-toggles">
+                    <button class="style-btn" :class="{ active: activeOverlay.bold }" @click="activeOverlay.bold = !activeOverlay.bold; redrawPreviewOverlay()"><strong>B</strong></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.italic }" @click="activeOverlay.italic = !activeOverlay.italic; redrawPreviewOverlay()"><em>I</em></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.underline }" @click="activeOverlay.underline = !activeOverlay.underline; redrawPreviewOverlay()"><u>U</u></button>
+                    <button class="style-btn" :class="{ active: activeOverlay.shadow }" @click="activeOverlay.shadow = !activeOverlay.shadow; redrawPreviewOverlay()">Cień</button>
+                  </div>
+                </div>
+                <div class="tc-field-group">
+                  <label class="tc-label">Kolor tekstu</label>
+                  <div class="color-row">
+                    <input type="color" v-model="activeOverlay.color" class="color-pick" @input="redrawPreviewOverlay" />
+                    <span class="color-hex">{{ activeOverlay.color }}</span>
+                  </div>
+                </div>
+                <div class="tc-field-group">
+                  <label class="tc-label">Obrys / cień</label>
+                  <div class="color-row">
+                    <input type="color" v-model="activeOverlay.shadowColor" class="color-pick" @input="redrawPreviewOverlay" />
+                    <span class="color-hex">{{ activeOverlay.shadowColor }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Obrót</label>
+                  <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                  <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
+                  <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
+                </div>
+              </div>
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Przezroczystość</label>
+                  <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
+                  <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
+                </div>
+              </div>
+            </template>
+            <template v-else-if="activeOverlay.type === 'image'">
+              <div class="tc-field-group">
+                <label class="tc-label">Wgraj obraz z dysku</label>
+                <div class="image-preview-box">
+                  <img :src="activeOverlay.imageSrc" alt="" style="max-height:80px; max-width:100%;" />
+                </div>
+                <button class="change-img-btn" @click="openReplaceImagePicker">Zmień obraz</button>
+              </div>
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Skala</label>
+                  <span class="tc-value">{{ activeOverlay.scale.toFixed(2) }}×</span>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.scale = Math.max(0.1, +(activeOverlay.scale - 0.25).toFixed(2)); redrawPreviewOverlay()" title="−0.25">−</button>
+                  <input type="range" v-model.number="activeOverlay.scale" min="0.1" max="5" step="0.25" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.scale = Math.min(5, +(activeOverlay.scale + 0.25).toFixed(2)); redrawPreviewOverlay()" title="+0.25">+</button>
+                </div>
+              </div>
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Obrót</label>
+                  <span class="tc-value">{{ activeOverlay.rotation }}°</span>
+                  <button class="reset-small-btn" @click="activeOverlay.rotation = 0; redrawPreviewOverlay()">Reset</button>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.max(-180, activeOverlay.rotation - 1); redrawPreviewOverlay()" title="−1°">−</button>
+                  <input type="range" v-model.number="activeOverlay.rotation" min="-180" max="180" step="1" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.rotation = Math.min(180, activeOverlay.rotation + 1); redrawPreviewOverlay()" title="+1°">+</button>
+                </div>
+              </div>
+              <div class="tc-field-group">
+                <div class="tc-label-row">
+                  <label class="tc-label">Przezroczystość</label>
+                  <span class="tc-value">{{ Math.round(activeOverlay.opacity * 100) }}%</span>
+                </div>
+                <div class="slider-edge-row">
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.max(0.1, +(activeOverlay.opacity - 0.05).toFixed(2)); redrawPreviewOverlay()" title="−5%">−</button>
+                  <input type="range" v-model.number="activeOverlay.opacity" min="0.1" max="1" step="0.05" class="tc-range" @input="redrawPreviewOverlay" />
+                  <button class="slider-edge-btn" @click="activeOverlay.opacity = Math.min(1, +(activeOverlay.opacity + 0.05).toFixed(2)); redrawPreviewOverlay()" title="+5%">+</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <!-- UNIFIED PREVIEW CANVAS -->
+      <div class="preview-section">
+        <p class="preview-label" v-if="previewFrame">
+          Podgląd — przeciągnij tekst/obrazek lub ramkę kadru palcem/myszą
+          <span v-if="previewNaturalWidth" class="preview-dims">({{ previewNaturalWidth }}×{{ previewNaturalHeight }}px)</span>
+        </p>
+        <div
+          v-if="previewFrame"
+          class="unified-preview-wrapper"
+          ref="previewWrapper"
+        >
+          <img
+            ref="previewImg"
+            :src="previewFrame"
+            alt=""
+            style="display:none"
+            @load="onPreviewLoaded"
+          />
+          <canvas
+            ref="unifiedCanvas"
+            class="unified-canvas"
+            :class="{ 'crop-dragging': isCropDraggingActive }"
+            @mousedown.prevent="onCanvasMouseDown"
+            @mousemove.prevent="onCanvasMouseMove"
+            @mouseup.prevent="onCanvasMouseUp"
+            @mouseleave.prevent="onCanvasMouseUp"
+            @touchstart.prevent="onCanvasTouchStart"
+            @touchmove.prevent="onCanvasTouchMove"
+            @touchend.prevent="onCanvasTouchEnd"
+          ></canvas>
+        </div>
+        <p v-else-if="isLoadingPreview" class="preview-loading">⏳ Ładowanie podglądu…</p>
+        <p v-else class="preview-loading">Podgląd pojawi się po załadowaniu wideo.</p>
+      </div>
+    </div>
+  </div>
+
+  <button class="convert-btn" @click="convert" :disabled="isConverting || !videoUrl">
+    {{ isConverting ? 'Konwertowanie…' : (inputExt === 'webp' ? 'Zastosuj zmiany i wygeneruj ' + outputFormat.toUpperCase() : 'Konwertuj do ' + outputFormat.toUpperCase()) }}
+  </button>
+
+  <!-- ===== SCHOWEK - KLIPBOARD ===== -->
+  <div class="clipboard-section">
+    <button
+      class="clipboard-toggle-btn"
+      :class="{ active: clipboardOpen }"
+      @click="clipboardOpen = !clipboardOpen"
+    >
+      📋 {{ clipboardOpen ? 'Zwiń schowek' : 'Rozwiń schowek' }}
+    </button>
+
+    <div v-if="clipboardOpen" class="clipboard-panel">
+      <div class="clipboard-info">
+        <p><strong>📌 Instrukcja:</strong> Schowek służy do tworzenia własnego tekstu, który zostanie skopiowany po kliknięciu "Skopiuj informacje". Użyj przycisków poniżej, aby wstawić dynamiczne parametry z konwersji.</p>
+        <p><strong>💡 Przykład:</strong> <code>Po konwersji plik ma {conv_size} i {conv_fps} FPS</code> → <code>Po konwersji plik ma 2.45 MB i 20 FPS</code></p>
+        <p><strong>💾 Zapisywanie:</strong> Twoja treść jest automatycznie zapisywana w przeglądarce i będzie dostępna przy następnej wizycie.</p>
+      </div>
+
+      <div class="clipboard-editor">
+        <label class="clipboard-label">Twoja treść:</label>
+        <textarea
+          ref="clipboardTextarea"
+          v-model="clipboardText"
+          class="clipboard-textarea"
+          placeholder="Wpisz tutaj swój tekst, używając przycisków poniżej do wstawiania parametrów..."
+          @focus="saveSelection"
+          @click="saveSelection"
+          @keyup="saveSelection"
+        ></textarea>
+        <button class="clipboard-clear-btn" @click="clipboardText = ''" :disabled="!clipboardText">🗑 Wyczyść</button>
+      </div>
+
+      <div class="clipboard-insert-section">
+        <label class="clipboard-label">Wstaw parametry:</label>
+        
+        <div class="insert-group">
+          <div class="insert-group-label">📁 Źródło - pełne bloki:</div>
+          <div class="insert-buttons">
+            <button class="insert-btn" @click="insertToken('src_full')" title="Wstaw wszystkie informacje o źródle">Wszystko o źródle</button>
+          </div>
+        </div>
+
+        <div class="insert-group">
+          <div class="insert-group-label">📁 Źródło - pojedyncze:</div>
+          <div class="insert-buttons">
+            <button class="insert-btn" @click="insertToken('src_format')">Format</button>
+            <button class="insert-btn" @click="insertToken('src_size')">Rozmiar</button>
+            <button class="insert-btn" @click="insertToken('src_dimensions')">Wymiary</button>
+            <button class="insert-btn" @click="insertToken('src_fps')">FPS</button>
+            <button class="insert-btn" @click="insertToken('src_duration')">Czas trwania</button>
+            <button class="insert-btn" @click="insertToken('src_link')">Link</button>
+          </div>
+        </div>
+
+        <div class="insert-group">
+          <div class="insert-group-label">🎞️ Konwersja - pełne bloki:</div>
+          <div class="insert-buttons">
+            <button class="insert-btn" @click="insertToken('conv_full')" title="Wstaw wszystkie informacje o konwersji">Wszystko o konwersji</button>
+            <button class="insert-btn" @click="insertToken('conv_comparison')" title="Wstaw porównanie procentowe parametrów">% porównanie parametrów</button>
+          </div>
+        </div>
+
+        <div class="insert-group">
+          <div class="insert-group-label">🎞️ Konwersja - pojedyncze:</div>
+          <div class="insert-buttons">
+            <button class="insert-btn" @click="insertToken('conv_format')">Format</button>
+            <button class="insert-btn" @click="insertToken('conv_size')">Rozmiar</button>
+            <button class="insert-btn" @click="insertToken('conv_dimensions')">Wymiary</button>
+            <button class="insert-btn" @click="insertToken('conv_fps')">FPS</button>
+            <button class="insert-btn" @click="insertToken('conv_duration')">Czas trwania</button>
+            <button class="insert-btn" @click="insertToken('conv_compression')">% Kompresji</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="isConverting" class="loader-container">
+    <div class="spinner"></div>
+    <p class="loader-text">Trwa przetwarzanie...</p>
+  </div>
+  <div v-if="error" class="error">{{ error }}</div>
+
+  <!-- ===== WYNIK KONWERSJI ===== -->
+  <div v-if="resultUrl" class="result-area">
+    <h3>Wynik:</h3>
+    <img :src="resultUrl" :alt="'Wynikowy ' + outputFormat.toUpperCase()" />
+    <div class="result-meta-row">
+      <div class="result-meta-box">
+        <h4>📁 Źródło</h4>
+        <div class="meta-grid">
+          <div><span>Format:</span> {{ inputExt.toUpperCase() }}</div>
+          <div><span>Rozmiar:</span> {{ formatFileSize(originalSize) }}</div>
+          <div><span>Wymiary:</span> {{ originalWidth }}×{{ originalHeight }} px</div>
+          <div><span>FPS:</span> {{ originalFps }}</div>
+          <div><span>Czas trwania:</span> {{ originalDuration?.toFixed(2) }} s</div>
+          <div><span>% Kompresji:</span> 0%</div>
+        </div>
+      </div>
+      <div class="result-meta-box">
+        <h4>🎞️ Konwersja</h4>
+        <div class="meta-grid">
+          <div><span>Format:</span> {{ outputFormat.toUpperCase() }}</div>
+          <div><span>Rozmiar:</span> {{ formatFileSize(resultBlob?.size || 0) }}</div>
+          <div><span>Wymiary:</span> {{ resultWidth }}×{{ resultHeight }} px</div>
+          <div><span>FPS:</span> {{ fps }}</div>
+          <div><span>Czas trwania:</span> {{ resultDuration?.toFixed(2) }} s</div>
+          <div><span>% Kompresji:</span> {{ 100 - quality }}%</div>
+        </div>
+      </div>
+    </div>
+    <div class="result-actions">
+      <button class="download-btn" @click="downloadResult">⬇ Pobierz {{ outputFormat.toUpperCase() }}</button>
+      <button class="copy-info-btn" @click="copyClipboard">{{ infoCopied ? '✅ Skopiowano!' : '📋 Skopiuj informacje' }}</button>
+    </div>
+  </div>
+
+  <p class="note">
+    Uwaga: pierwsze uruchomienie FFmpeg.wasm ładuje ~30 MB plików. Kolejne konwersje będą szybsze.<br>
+    Edycja plików WebP (crop / zmiana FPS / jakości) wymaga przeglądarki z ImageDecoder (Chrome/Edge).
+  </p>
+</div>
 </template>
 
 <script setup>
@@ -719,10 +721,96 @@ function insertToken(token) {
   });
 }
 
+function generateComparisonText() {
+  const srcSize = originalSize.value || 0;
+  const convSize = resultBlob.value?.size || 0;
+  const srcW = originalWidth.value || 0;
+  const srcH = originalHeight.value || 0;
+  const convW = resultWidth.value || 0;
+  const convH = resultHeight.value || 0;
+  const srcFpsVal = originalFps.value || 0;
+  const convFpsVal = fps.value || 0;
+  const srcDur = originalDuration.value || 0;
+  const convDur = resultDuration.value || 0;
+
+  // Rozmiar
+  let sizeText = '';
+  if (srcSize > 0 && convSize > 0) {
+    const sizeDiffPct = Math.round(((convSize - srcSize) / srcSize) * 100);
+    if (sizeDiffPct > 0) {
+      sizeText = `${sizeDiffPct}% większy`;
+    } else if (sizeDiffPct < 0) {
+      sizeText = `${Math.abs(sizeDiffPct)}% mniejszy`;
+    } else {
+      sizeText = 'taki sam rozmiar';
+    }
+  } else {
+    sizeText = '—';
+  }
+
+  // Wymiary (piksele)
+  let dimText = '';
+  const srcPixels = srcW * srcH;
+  const convPixels = convW * convH;
+  if (srcPixels > 0 && convPixels > 0) {
+    const dimDiffPct = Math.round(((convPixels - srcPixels) / srcPixels) * 100);
+    if (dimDiffPct > 0) {
+      dimText = `${dimDiffPct}% większe`;
+    } else if (dimDiffPct < 0) {
+      dimText = `${Math.abs(dimDiffPct)}% mniejsze`;
+    } else {
+      dimText = 'takie same';
+    }
+  } else {
+    dimText = '—';
+  }
+
+  // FPS
+  let fpsText = '';
+  if (srcFpsVal > 0 && convFpsVal > 0) {
+    const fpsDiffPct = Math.round(((convFpsVal - srcFpsVal) / srcFpsVal) * 100);
+    if (fpsDiffPct > 0) {
+      fpsText = `${fpsDiffPct}% więcej`;
+    } else if (fpsDiffPct < 0) {
+      fpsText = `${Math.abs(fpsDiffPct)}% mniej`;
+    } else {
+      fpsText = 'tyle samo';
+    }
+  } else {
+    fpsText = '—';
+  }
+
+  // Czas trwania
+  let durText = '';
+  if (srcDur > 0 && convDur > 0) {
+    const durDiff = convDur - srcDur;
+    if (Math.abs(durDiff) < 0.01) {
+      durText = 'taki sam czas';
+    } else if (durDiff > 0) {
+      durText = `${durDiff.toFixed(2)} s dłużej`;
+    } else {
+      durText = `${Math.abs(durDiff).toFixed(2)} s krócej`;
+    }
+  } else {
+    durText = '—';
+  }
+
+  const lines = [
+    `Format: ${outputFormat.value.toUpperCase()}`,
+    `Rozmiar: ${formatFileSize(convSize)} (${sizeText})`,
+    `Wymiary: ${convW}×${convH} px (${dimText})`,
+    `FPS: ${convFpsVal} (${fpsText})`,
+    `Czas trwania: ${convDur.toFixed(2)} s (${durText})`,
+    `% Kompresji: ${100 - quality.value}%`,
+  ];
+  return lines.join('\n');
+}
+
 function replaceTokens(text) {
   const replacements = {
-    '{src_full}': `Format: ${inputExt.value.toUpperCase()}\nRozmiar: ${formatFileSize(originalSize.value)}\nWymiary: ${originalWidth.value}×${originalHeight.value} px\nFPS: ${originalFps.value}\nCzas trwania: ${originalDuration.value?.toFixed(2)} s`,
+    '{src_full}': `Format: ${inputExt.value.toUpperCase()}\nRozmiar: ${formatFileSize(originalSize.value)}\nWymiary: ${originalWidth.value}×${originalHeight.value} px\nFPS: ${originalFps.value}\nCzas trwania: ${originalDuration.value?.toFixed(2)} s\n% Kompresji: 0%`,
     '{conv_full}': `Format: ${outputFormat.value.toUpperCase()}\nRozmiar: ${formatFileSize(resultBlob.value?.size || 0)}\nWymiary: ${resultWidth.value}×${resultHeight.value} px\nFPS: ${fps.value}\nCzas trwania: ${resultDuration.value?.toFixed(2)} s\n% Kompresji: ${100 - quality.value}%`,
+    '{conv_comparison}': generateComparisonText(),
     '{src_format}': inputExt.value.toUpperCase(),
     '{src_size}': formatFileSize(originalSize.value),
     '{src_dimensions}': `${originalWidth.value}×${originalHeight.value} px`,
@@ -1057,8 +1145,6 @@ function onCanvasMouseMove(e) {
     const dxNative = (e.clientX - cropDragStartX) * scaleX;
     const dyNative = (e.clientY - cropDragStartY) * scaleY;
 
-    const cropW = cropDragStartLeft + cropDragStartRight;
-    const cropH = cropDragStartTop + cropDragStartBottom;
     const maxDx = cropDragStartRight;
     const minDx = -cropDragStartLeft;
     const maxDy = cropDragStartBottom;
@@ -2617,6 +2703,24 @@ watch(useOriginalWidth, async (enabled) => {
   font-weight: 700;
 }
 
+.result-meta-box .meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 1rem;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.result-meta-box .meta-grid div {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.result-meta-box .meta-grid div span {
+  font-weight: 600;
+  color: #213547;
+}
+
 .result-actions {
   display: flex;
   gap: 0.75rem;
@@ -2624,6 +2728,32 @@ watch(useOriginalWidth, async (enabled) => {
   flex-wrap: wrap;
   margin-top: 0.5rem;
 }
+
+.download-btn {
+  padding: 0.65rem 1.4rem;
+  border: none;
+  border-radius: 8px;
+  background-color: #1da1f2;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.download-btn:hover { background-color: #1a91da; }
+
+.copy-info-btn {
+  padding: 0.65rem 1.4rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: white;
+  color: #213547;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.copy-info-btn:hover { background: #f0f0f0; border-color: #bbb; }
 
 /* ===== CLIPBOARD / SCHOWEK ===== */
 .clipboard-section {
@@ -2799,7 +2929,8 @@ watch(useOriginalWidth, async (enabled) => {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
-  .meta-grid {
+  .meta-grid,
+  .result-meta-box .meta-grid {
     grid-template-columns: 1fr;
   }
   .format-options {
@@ -3031,13 +3162,20 @@ watch(useOriginalWidth, async (enabled) => {
 .dark-mode .result-meta-box { background: #23262c; border-color: #3a3d44; }
 .dark-mode .original-meta h4,
 .dark-mode .result-meta-box h4 { color: #e8e8e8; }
-.dark-mode .meta-grid { color: #b0b0b0; }
-.dark-mode .meta-grid div span { color: #e8e8e8; }
+.dark-mode .meta-grid,
+.dark-mode .result-meta-box .meta-grid { color: #b0b0b0; }
+.dark-mode .meta-grid div span,
+.dark-mode .result-meta-box .meta-grid div span { color: #e8e8e8; }
 .dark-mode .size-estimate label { color: #b0b0b0; }
 .dark-mode .estimate-display { color: #e8e8e8; }
 .dark-mode .estimate-value { color: #5ec1f7; }
 .dark-mode .estimate-note { color: #999; }
 .dark-mode .estimate-confidence { color: #aaa; }
+
+.dark-mode .download-btn { background-color: #1da1f2; color: #fff; }
+.dark-mode .download-btn:hover { background-color: #1a91da; }
+.dark-mode .copy-info-btn { background: #2a2d34; border-color: #3a3d44; color: #e8e8e8; }
+.dark-mode .copy-info-btn:hover { background: #3a3d44; border-color: #555; }
 
 .dark-mode .image-preview-box { background: #2a2d34; }
 .dark-mode .change-img-btn { background: #2a2d34; border-color: #3a3d44; color: #e8e8e8; }
