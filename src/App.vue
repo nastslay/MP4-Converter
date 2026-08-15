@@ -529,7 +529,7 @@
             <button class="insert-btn" @click="insertToken('src_dimensions')">Wymiary</button>
             <button class="insert-btn" @click="insertToken('src_fps')">FPS</button>
             <button class="insert-btn" @click="insertToken('src_duration')">Czas trwania</button>
-            <button class="insert-btn" @click="insertToken('src_link')">Link</button>
+            <button class="insert-btn" @click="insertToken('src_link')">Link do źródła</button>
           </div>
         </div>
 
@@ -2664,12 +2664,37 @@ watch(useOriginalWidth, async (enabled) => {
 
 /* ===== META ===== */
 .original-meta {
-  margin-bottom: 1.25rem; background: #f9f9f9; border-radius: 10px;
-  padding: 0.75rem 1rem; border: 1px solid #e0e0e0;
+  margin-bottom: 1.25rem;
+  background: #f9f9f9;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e0e0e0;
 }
-.original-meta h4 { margin: 0 0 0.5rem; font-size: 0.9rem; color: #213547; font-weight: 700; }
-.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; font-size: 0.85rem; color: #555; }
-.meta-grid div span { font-weight: 600; color: #213547; }
+.original-meta h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: #213547;
+  font-weight: 700;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #555;
+}
+.meta-grid div {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+.meta-grid div span {
+  font-weight: 600;
+  color: #213547;
+  white-space: nowrap;
+  min-width: 7.5rem;
+}
 
 /* ===== RESULT AREA ===== */
 .result-area {
@@ -2705,20 +2730,21 @@ watch(useOriginalWidth, async (enabled) => {
 
 .result-meta-box .meta-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.4rem 1rem;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
   font-size: 0.85rem;
   color: #555;
 }
-
 .result-meta-box .meta-grid div {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  align-items: baseline;
 }
-
 .result-meta-box .meta-grid div span {
   font-weight: 600;
   color: #213547;
+  white-space: nowrap;
+  min-width: 7.5rem;
 }
 
 .result-actions {
@@ -3165,7 +3191,7 @@ watch(useOriginalWidth, async (enabled) => {
 .dark-mode .meta-grid,
 .dark-mode .result-meta-box .meta-grid { color: #b0b0b0; }
 .dark-mode .meta-grid div span,
-.dark-mode .result-meta-box .meta-grid div span { color: #e8e8e8; }
+.dark-mode .result-meta-box .meta-grid div span {color: #e8e8e8; }
 .dark-mode .size-estimate label { color: #b0b0b0; }
 .dark-mode .estimate-display { color: #e8e8e8; }
 .dark-mode .estimate-value { color: #5ec1f7; }
