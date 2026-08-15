@@ -1550,7 +1550,7 @@ onMounted(async () => {
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm`),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
     });
   } catch (err) {
     console.error('Błąd ładowania FFmpeg:', err);
