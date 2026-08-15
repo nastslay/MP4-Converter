@@ -796,20 +796,20 @@ function generateComparisonText() {
   }
 
   const lines = [
-    `Format: ${outputFormat.value.toUpperCase()}`,
-    `Rozmiar: ${formatFileSize(convSize)} (${sizeText})`,
-    `Wymiary: ${convW}×${convH} px (${dimText})`,
-    `FPS: ${convFpsVal} (${fpsText})`,
-    `Czas trwania: ${convDur.toFixed(2)} s (${durText})`,
-    `% Kompresji: ${100 - quality.value}%`,
+    `!Format: ${outputFormat.value.toUpperCase()}`,
+    `!Rozmiar: ${formatFileSize(convSize)} (${sizeText})`,
+    `!Wymiary: ${convW}×${convH} px (${dimText})`,
+    `!FPS: ${convFpsVal} (${fpsText})`,
+    `!Czas trwania: ${convDur.toFixed(2)} s (${durText})`,
+    `!% Kompresji: ${100 - quality.value}%`,
   ];
   return lines.join('\n');
 }
 
 function replaceTokens(text) {
   const replacements = {
-    '{src_full}': `Format: ${inputExt.value.toUpperCase()}\nRozmiar: ${formatFileSize(originalSize.value)}\nWymiary: ${originalWidth.value}×${originalHeight.value} px\nFPS: ${originalFps.value}\nCzas trwania: ${originalDuration.value?.toFixed(2)} s\n% Kompresji: 0%`,
-    '{conv_full}': `Format: ${outputFormat.value.toUpperCase()}\nRozmiar: ${formatFileSize(resultBlob.value?.size || 0)}\nWymiary: ${resultWidth.value}×${resultHeight.value} px\nFPS: ${fps.value}\nCzas trwania: ${resultDuration.value?.toFixed(2)} s\n% Kompresji: ${100 - quality.value}%`,
+    '{src_full}': `!Format: ${inputExt.value.toUpperCase()}\n!Rozmiar: ${formatFileSize(originalSize.value)}\n!Wymiary: ${originalWidth.value}×${originalHeight.value} px\n!FPS: ${originalFps.value}\n!Czas trwania: ${originalDuration.value?.toFixed(2)} s\n!% Kompresji: 0%`,
+    '{conv_full}': `!Format: ${outputFormat.value.toUpperCase()}\n!Rozmiar: ${formatFileSize(resultBlob.value?.size || 0)}\n!Wymiary: ${resultWidth.value}×${resultHeight.value} px\n!FPS: ${fps.value}\n!Czas trwania: ${resultDuration.value?.toFixed(2)} s\n!% Kompresji: ${100 - quality.value}%`,
     '{conv_comparison}': generateComparisonText(),
     '{src_format}': inputExt.value.toUpperCase(),
     '{src_size}': formatFileSize(originalSize.value),
