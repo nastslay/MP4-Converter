@@ -97,7 +97,7 @@
         <input type="number" v-model.number="targetSizeMB" min="0.1" max="50" step="0.5" :disabled="isConverting" />
         <span>MB</span>
       </div>
-      <button class="analyze-btn" @click="analyzeAndEstimate" :disabled="isConverting || !videoUrl || inputExt === 'webp'">
+      <button class="analyze-btn" @click="analyzeAndEstimate" :disabled="isConverting || !videoUrl || inputExt === 'webp' || outputFormat === 'mp4'">
         🔍 Analizuj rozmiar
       </button>
     </div>
@@ -112,6 +112,9 @@
       </button>
       <button class="format-btn" :class="{ active: outputFormat === 'gif' }" @click="outputFormat = 'gif'" :disabled="isConverting">
         <span class="format-icon">🎞️</span><span>GIF</span>
+      </button>
+      <button class="format-btn" :class="{ active: outputFormat === 'mp4' }" @click="outputFormat = 'mp4'" :disabled="isConverting">
+        <span class="format-icon">🎬</span><span>MP4</span>
       </button>
     </div>
   </div>
@@ -565,7 +568,8 @@
   <!-- ===== WYNIK KONWERSJI ===== -->
   <div v-if="resultUrl" class="result-area">
     <h3>Wynik:</h3>
-    <img :src="resultUrl" :alt="'Wynikowy ' + outputFormat.toUpperCase()" />
+    <video v-if="outputFormat === 'mp4'" :src="resultUrl" controls playsinline></video>
+    <img v-else :src="resultUrl" :alt="'Wynikowy ' + outputFormat.toUpperCase()" />
     <div class="result-meta-row">
       <div class="result-meta-box">
         <h4>📁 Źródło</h4>
@@ -1589,6 +1593,18 @@ function buildVfFilter() {
   return parts.join(',');
 }
 
+function mimeForFormat(fmt) {
+  if (fmt === 'gif') return 'image/gif';
+  if (fmt === 'webp') return 'image/webp';
+  return 'video/mp4';
+}
+
+// Mapuje suwak Jakość (0-100, wyżej = lepiej) na CRF h264 (0-51, niżej = lepiej).
+// Zachowuje tę samą "logikę" co przy GIF/WebP: wyższa jakość = większy plik.
+function qualityToCrf() {
+  return Math.round(51 - (quality.value / 100) * 33);
+}
+
 function clearPreview() {
   if (previewFrame.value) { URL.revokeObjectURL(previewFrame.value); previewFrame.value = null; }
   previewNaturalWidth.value = 0; previewNaturalHeight.value = 0;
@@ -1942,10 +1958,18 @@ async function convertViaCanvas(fileData, srcExt) {
       '-vf',`split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,
       '-loop','0','output.gif',
     ]);
-  } else {
+  } else if (outputFormat.value === 'webp') {
     await ffmpeg.exec([
       '-f','image2','-framerate',userFps.toString(),'-i','frame_%05d.png',
       '-c:v','libwebp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','output.webp',
+    ]);
+  } else {
+    // MP4 z tej ścieżki (kadrowanie/nakładki/odbicie) powstaje wyłącznie z wyekstrahowanych
+    // klatek PNG, więc — tak jak dotychczasowy GIF/WebP z tego pipeline'u — wynik jest BEZ DŹWIĘKU.
+    await ffmpeg.exec([
+      '-f','image2','-framerate',userFps.toString(),'-i','frame_%05d.png',
+      '-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),
+      '-movflags','+faststart','-an','output.mp4',
     ]);
   }
 
@@ -1955,7 +1979,7 @@ async function convertViaCanvas(fileData, srcExt) {
 
   const outExt = outputFormat.value;
   const data = await ffmpeg.readFile('output.' + outExt);
-  resultBlob.value = new Blob([data.buffer], { type: outExt === 'gif' ? 'image/gif' : 'image/webp' });
+  resultBlob.value = new Blob([data.buffer], { type: mimeForFormat(outExt) });
   resultUrl.value = URL.createObjectURL(resultBlob.value);
   await ffmpeg.deleteFile('output.' + outExt);
 }
@@ -1991,12 +2015,16 @@ async function convert() {
       if (outputFormat.value === 'gif') {
         const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
         await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','output.gif']);
-      } else {
+      } else if (outputFormat.value === 'webp') {
         await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','output.webp']);
+      } else {
+        // MP4 z tej ścieżki (bez kadrowania/nakładek) koduje się bezpośrednio z oryginalnego
+        // pliku, więc — w odróżnieniu od ścieżki z canvasu — ZACHOWUJE dźwięk źródła.
+        await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','output.mp4']);
       }
       const outExt = outputFormat.value;
       const data = await ffmpeg.readFile('output.' + outExt);
-      resultBlob.value = new Blob([data.buffer], { type: outExt === 'gif' ? 'image/gif' : 'image/webp' });
+      resultBlob.value = new Blob([data.buffer], { type: mimeForFormat(outExt) });
       resultUrl.value = URL.createObjectURL(resultBlob.value);
       await ffmpeg.deleteFile('input.mp4');
       await ffmpeg.deleteFile('output.' + outExt);
@@ -2701,7 +2729,8 @@ watch(useOriginalWidth, async (enabled) => {
   margin-top: 1.5rem;
   text-align: center;
 }
-.result-area img {
+.result-area img,
+.result-area video {
   max-width: 100%;
   border-radius: 8px;
   border: 1px solid #ddd;
