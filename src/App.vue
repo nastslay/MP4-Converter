@@ -1620,8 +1620,28 @@ const SIZE_TOLERANCE = 0.95;
 // Zwraca true, jeśli którykolwiek parametr faktycznie się zmienił.
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   const ratio = targetBytes / actualBytes;
-  const rawFactor = Math.cbrt(ratio);
-  const factor = growing ? (1 + (rawFactor - 1) * 0.6) : (rawFactor * 0.95);
+  
+  // Adaptacyjny krok: im dalej od celu, tym mocniej zmieniamy parametry (większy exponent)
+  let errorDistance = Math.abs(ratio - 1);
+  if (!growing && ratio < 1) {
+    // W przypadku zmniejszania skalujemy odległość, by 1/2 była tak samo traktowana jak 2
+    errorDistance = Math.abs((1 / ratio) - 1);
+  }
+
+  // Płynne przejście potęgi (od ~0.33 gdy blisko do 0.85 gdy daleko)
+  const exponent = Math.min(0.85, 0.333 + (errorDistance * 0.15));
+  const rawFactor = Math.pow(ratio, exponent);
+
+  let factor;
+  if (growing) {
+    // Zwiększamy tłumienie (wolniejsze wzrosty) gdy jesteśmy blisko, 
+    // ale pozwalamy na szybkie wzrosty gdy daleko.
+    const damping = Math.min(0.9, 0.6 + (errorDistance * 0.1));
+    factor = 1 + (rawFactor - 1) * damping;
+  } else {
+    // Gdy zmniejszamy, zachowujemy drobny margines bezpieczeństwa
+    factor = rawFactor * 0.95;
+  }
 
   const newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
   const newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value * factor)));
