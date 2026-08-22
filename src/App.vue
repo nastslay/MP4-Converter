@@ -1619,51 +1619,95 @@ const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 // Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony.
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   const ratio = targetBytes / actualBytes;
-  const distance = Math.abs(1 - ratio);
-
-  // Adaptacyjny mnożnik:
-  // Gdy jesteśmy daleko (distance > 20%), używamy bezpiecznego pierwiastka sześciennego (0.33), 
-  // który zapobiega dzikim oscylacjom rozkładając mocno zmianę na 3 suwaki.
-  // Gdy jesteśmy blisko (distance < 20%), 0.33 daje tak małe różnice, że znikają 
-  // one przez matematyczne zaokrąglenia, dając kroczki rzędu 0.05MB. Dlatego 
-  // przy mniejszych dystansach zwiększamy potęgę (0.6), by skok był stanowczy.
-  const exponent = distance < 0.20 ? 0.6 : 0.333;
-  const rawFactor = Math.pow(ratio, exponent);
-
-  let factor;
-  if (growing) {
-    // Gdy plik za mały — zwiększamy odważnie, żeby nadgonić brakujące mb.
-    factor = 1 + (rawFactor - 1) * 0.85;
-  } else {
-    // Gdy plik za duży — tniemy agresywnie (90% skoku) + dodajemy 4% twardego 
-    // marginesu bezpieczeństwa, by na pewno spaść pod limit w kolejnej próbie.
-    factor = (1 + (rawFactor - 1) * 0.90) * 0.96;
-  }
-
-  let newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
-  let newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value * factor)));
-  let newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
-
-  // Gwarantowane przełamanie blokady: jeśli zaokrąglenia wyzerowały zmianę,
-  // wymuszamy ręczny krok na jakości (najbardziej płynny wpływ) lub FPS / szerokości.
-  if (newWidth === width.value && newFps === fps.value && newQuality === quality.value) {
-     if (growing) {
-         if (newQuality < 100) newQuality = Math.min(100, newQuality + 2);
-         else if (newFps < 30) newFps = Math.min(30, newFps + 1);
-         else if (newWidth < 1280) newWidth = Math.min(1280, newWidth + 10);
-     } else {
-         if (newQuality > 1) newQuality = Math.max(1, newQuality - 2);
-         else if (newFps > 1) newFps = Math.max(1, newFps - 1);
-         else if (newWidth > 100) newWidth = Math.max(100, newWidth - 10);
-     }
-  }
-
-  let changed = false;
-  if (newWidth !== width.value) { width.value = newWidth; changed = true; }
-  if (newFps !== fps.value) { fps.value = newFps; changed = true; }
-  if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
   
-  return changed;
+  // FAZA 1: Precyzyjne dostrajanie (gdy jesteśmy blisko celu, np. różnica < 25%)
+  // W tej fazie zmieniamy TYLKO JEDEN parametr naraz (głównie Jakość). 
+  // Próba zmiany 3 parametrów przy małej odległości prowadzi do oscylacji (bo ich wpływ się mnoży)
+  // albo do "utknięcia" (bo matematyczne zaokrąglenia wyzerują zmiany).
+  if (Math.abs(1 - ratio) < 0.25) {
+     // Ponieważ jakość wpływa nieliniowo (zwłaszcza w MP4), ucinamy ratio o połowę.
+     let fineRatio = 1 + (ratio - 1) * 0.5; 
+     
+     if (growing) {
+         let newQuality = Math.round(quality.value * fineRatio);
+         if (newQuality === quality.value && quality.value < 100) newQuality += 1;
+         
+         if (newQuality <= 100 && newQuality !== quality.value) { 
+             quality.value = newQuality; return true; 
+         }
+         
+         // Jakość wyczerpana (dobiła do 100) -> podnosimy FPS
+         let newFps = Math.round(fps.value * fineRatio);
+         if (newFps === fps.value && fps.value < 30) newFps += 1;
+         if (newFps <= 30 && newFps !== fps.value) {
+             fps.value = newFps; return true;
+         }
+         
+         // FPS wyczerpane -> podnosimy rozdzielczość
+         let newWidth = Math.round(width.value * (1 + (fineRatio - 1)*0.5) / 10) * 10;
+         if (newWidth === width.value && width.value < 1280) newWidth += 10;
+         if (newWidth <= 1280 && newWidth !== width.value) {
+             width.value = newWidth; return true;
+         }
+     } else {
+         // Jeśli plik za duży - docinamy odrobinę mocniej (margines 3%), żeby na pewno wejść pod limit
+         let cutRatio = fineRatio * 0.97;
+         let newQuality = Math.round(quality.value * cutRatio);
+         if (newQuality === quality.value && quality.value > 1) newQuality -= 1;
+         
+         if (newQuality >= 1 && newQuality !== quality.value) { 
+             quality.value = newQuality; return true; 
+         }
+         
+         let newFps = Math.round(fps.value * cutRatio);
+         if (newFps === fps.value && fps.value > 1) newFps -= 1;
+         if (newFps >= 1 && newFps !== fps.value) {
+             fps.value = newFps; return true;
+         }
+         
+         let newWidth = Math.round(width.value * cutRatio / 10) * 10;
+         if (newWidth === width.value && width.value > 100) newWidth -= 10;
+         if (newWidth >= 100 && newWidth !== width.value) {
+             width.value = newWidth; return true;
+         }
+     }
+  } 
+  // FAZA 2: Zgrubne zmiany (gdy jesteśmy daleko od celu)
+  else {
+      // Skalujemy wszystko naraz, ale używamy pierwiastka 4-tego stopnia (0.25).
+      // Wynika to z matematyki: pow(width, 2) * fps * quality = wpływ x^4 na finalny rozmiar.
+      const rawFactor = Math.pow(ratio, 0.25);
+      
+      let factor;
+      if (growing) {
+          factor = 1 + (rawFactor - 1) * 0.80; // lekko tłumione w górę
+      } else {
+          factor = (1 + (rawFactor - 1) * 0.85) * 0.95; // 5% margines w dół
+      }
+
+      let newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
+      let newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value * factor)));
+      let newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
+      
+      let changed = false;
+      if (newWidth !== width.value) { width.value = newWidth; changed = true; }
+      if (newFps !== fps.value) { fps.value = newFps; changed = true; }
+      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
+      
+      if (changed) return true;
+      
+      // Zabezpieczenie na wypadek dziwnych zaokrągleń
+      if (growing) {
+          if (quality.value < 100) { quality.value += 2; return true; }
+          if (fps.value < 30) { fps.value += 1; return true; }
+          if (width.value < 1280) { width.value += 10; return true; }
+      } else {
+          if (quality.value > 1) { quality.value -= 2; return true; }
+          if (fps.value > 1) { fps.value -= 1; return true; }
+          if (width.value > 100) { width.value -= 10; return true; }
+      }
+  }
+  return false;
 }
 
 function clearPreview() {
