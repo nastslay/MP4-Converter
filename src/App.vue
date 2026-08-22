@@ -1621,49 +1621,73 @@ const SIZE_TOLERANCE = 0.95;
 // ekstrapolację liniową — odejmujemy go przed skalowaniem, dodajemy raz na końcu.
 const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 
-// Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony.
-// Jedna spójna logika bez sztucznego podziału na "fazy" — wszystkie trzy parametry
-// zawsze zmieniane jednocześnie, krok proporcjonalny do odległości od celu i liczby
-// pozostałych prób (im mniej prób zostało, tym agresywniejszy krok).
-function adjustParamsToTarget(actualBytes, targetBytes, growing, remainingAttempts = 1) {
-  const ratio = targetBytes / actualBytes; // np. 9.75 / 7.75 = 1.258 (trzeba urosnąć o 26%)
-  const gap   = ratio - 1;                // signed: + = za mały, - = za duży
+// Bisekcja parametrów — eliminuje oscylacje.
+// Zamiast liczyć krok z gap, pamiętamy ostatni zestaw parametrów "za mały" i "za duży",
+// i celujemy w ich średnią geometryczną. Gwarantuje zbieżność bez oscylacji.
+//
+// state = { loW, loFps, loQ, hiW, hiFps, hiQ }
+//   lo* = najlepszy dotychczasowy zestaw który dał plik ZA MAŁY (lub null jeśli jeszcze nie było)
+//   hi* = najlepszy dotychczasowy zestaw który dał plik ZA DUŻY (lub null jeśli jeszcze nie było)
+//
+// Zwraca { changed, state } — state należy przekazać do następnego wywołania.
+function applyBisectionStep(actualBytes, targetBytes, state) {
+  const { loW, loFps, loQ, hiW, hiFps, hiQ } = state;
+  const tooSmall = actualBytes < targetBytes * SIZE_TOLERANCE;
+  const tooBig   = actualBytes > targetBytes;
 
-  // Ile procent drogi do celu pokrywamy w tym kroku.
-  // Przy wielu próbach możemy być ostrożniejsi (0.8), przy ostatniej bierzemy wszystko (1.0).
-  const stepShare = Math.min(1.0, Math.max(0.8, 1 / Math.max(1, remainingAttempts)));
-
-  // Docelowe ratio po tym kroku — np. gap=0.258, stepShare=0.8 → targetRatio = 1.206
-  const targetRatio = 1 + gap * stepShare;
-
-  // rozmiar ≈ width² × fps × quality → parametry rosną/maleją jak targetRatio^(1/4)
-  const rawFactor = Math.pow(Math.max(0.01, targetRatio), 0.25);
-
-  // Przy zmniejszaniu 3% marginesu, żeby nigdy nie wylądować tuż ponad limitem
-  const factor = growing ? rawFactor : rawFactor * 0.97;
-
-  // Minimalny gwarantowany krok jakości = max(1, round(|gap| × quality)).
-  // Kluczowe dla małych gap: np. gap=0.20, quality=80 → minQDelta=16
-  // Bez tego zaokrąglenie math.round(80 × 1.048) = 80 → brak zmiany.
-  const minQDelta = Math.max(1, Math.round(Math.abs(gap) * quality.value));
-
-  const newWidth   = Math.min(1280, Math.max(100, Math.round((width.value   * factor) / 10) * 10));
-  const newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value     * factor)));
-  let   newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
-
-  // Gwarancja minimalnej zmiany jakości gdy zaokrąglenie ją wyzerowało
-  if (newQuality === quality.value) {
-    newQuality = growing
-      ? Math.min(100, quality.value + minQDelta)
-      : Math.max(1,   quality.value - minQDelta);
+  // Aktualizujemy stan bisekcji na podstawie wyniku tej próby
+  let newState = { ...state };
+  if (tooSmall) {
+    // Ten zestaw dał za mały plik — zapamiętujemy jako nowe "lo"
+    newState.loW = width.value; newState.loFps = fps.value; newState.loQ = quality.value;
+  } else if (tooBig) {
+    // Ten zestaw dał za duży plik — zapamiętujemy jako nowe "hi"
+    newState.hiW = width.value; newState.hiFps = fps.value; newState.hiQ = quality.value;
   }
 
-  const changed = newWidth !== width.value || newFps !== fps.value || newQuality !== quality.value;
-  if (newWidth   !== width.value)   width.value   = newWidth;
-  if (newFps     !== fps.value)     fps.value     = newFps;
-  if (newQuality !== quality.value) quality.value = newQuality;
-  return changed;
+  let targetW, targetFps, targetQ;
+
+  if (newState.loW !== null && newState.hiW !== null) {
+    // Mamy oba boki — bisekcja: celujemy w średnią geometryczną między lo i hi.
+    // Średnia geometryczna jest lepsza niż arytmetyczna bo parametry wpływają MNOŻNIKOWO na rozmiar.
+    targetW   = Math.round(Math.sqrt(newState.loW   * newState.hiW)   / 10) * 10;
+    targetFps = Math.round(Math.sqrt(newState.loFps * newState.hiFps));
+    targetQ   = Math.round(Math.sqrt(newState.loQ   * newState.hiQ));
+  } else if (newState.loW !== null) {
+    // Tylko za małe wyniki — mocno skalujemy w górę (ratio^0.25 na wszystkich 3 parametrach)
+    const ratio  = targetBytes / actualBytes;
+    const factor = Math.pow(ratio, 0.25) * 0.95; // 0.95 = lekki margines żeby nie przeskoczyć
+    targetW   = Math.min(1280, Math.round((width.value * factor) / 10) * 10);
+    targetFps = Math.min(30,   Math.round(fps.value * factor));
+    targetQ   = Math.min(100,  Math.round(quality.value * factor));
+  } else {
+    // Tylko za duże wyniki — skalujemy w dół z 3% marginesem bezpieczeństwa
+    const ratio  = targetBytes / actualBytes;
+    const factor = Math.pow(ratio, 0.25) * 0.97;
+    targetW   = Math.max(100, Math.round((width.value * factor) / 10) * 10);
+    targetFps = Math.max(1,   Math.round(fps.value * factor));
+    targetQ   = Math.max(1,   Math.round(quality.value * factor));
+  }
+
+  // Gwarancja minimalnej zmiany jakości gdy zaokrąglenie wyzerowało delta
+  if (targetQ === quality.value) {
+    const minDelta = Math.max(1, Math.round(Math.abs(actualBytes - targetBytes) / targetBytes * quality.value));
+    targetQ = tooSmall
+      ? Math.min(100, quality.value + minDelta)
+      : Math.max(1,   quality.value - minDelta);
+  }
+  targetW   = Math.min(1280, Math.max(100, targetW));
+  targetFps = Math.min(30,   Math.max(1,   targetFps));
+  targetQ   = Math.min(100,  Math.max(1,   targetQ));
+
+  const changed = targetW !== width.value || targetFps !== fps.value || targetQ !== quality.value;
+  if (targetW   !== width.value)   width.value   = targetW;
+  if (targetFps !== fps.value)     fps.value     = targetFps;
+  if (targetQ   !== quality.value) quality.value = targetQ;
+  return { changed, state: newState };
 }
+
+const BISECT_INIT = { loW: null, loFps: null, loQ: null, hiW: null, hiFps: null, hiQ: null };
 
 function clearPreview() {
   if (previewFrame.value) { URL.revokeObjectURL(previewFrame.value); previewFrame.value = null; }
@@ -1827,7 +1851,7 @@ function onPreviewLoaded() {
 }
 
 // ---- ANALIZA ROZMIARU ----
-async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
+async function analyzeAndEstimate(attempt = 0, preloadedFileData = null, bisectState = BISECT_INIT) {
   if (!videoUrl.value.trim() || inputExt.value === 'webp') {
     if (inputExt.value === 'webp') error.value = 'Analiza rozmiaru dla WebP nie jest obsługiwana.';
     return;
@@ -1885,12 +1909,9 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
       const tooBig   = estimatedSize.value > targetBytes;
       const tooSmall = estimatedSize.value < targetBytes * SIZE_TOLERANCE;
       if (tooBig || tooSmall) {
-        const remaining = 8 - attempt; // ile prób zostało ŁĄCZNIE (włącznie z tą)
-        const changed = adjustParamsToTarget(estimatedSize.value, targetBytes, tooSmall, remaining);
-        // Przekazujemy dalej ten sam fileData, żeby rekurencja nie pobierała wideo ponownie z sieci.
-        if (changed) await analyzeAndEstimate(attempt + 1, fileData);
+        const { changed, state: nextState } = applyBisectionStep(estimatedSize.value, targetBytes, bisectState);
+        if (changed) await analyzeAndEstimate(attempt + 1, fileData, nextState);
       }
-      // W przeciwnym razie estymata mieści się w paśmie [95%-100% celu] — wystarczająco blisko.
     }
   } catch(e) { error.value = `Błąd analizy: ${e.message}`; console.error(e); }
 }
@@ -2138,24 +2159,23 @@ async function convert() {
     // zbliżyć się do zadanego rozmiaru (a nie zostawiać niepotrzebny zapas) — ale zawsze
     // z marginesem bezpieczeństwa, żeby nigdy nie przekroczyć limitu.
     if (limitSizeEnabled.value) {
-      const MAX_FINAL_ATTEMPTS = 4;
+      const MAX_FINAL_ATTEMPTS = 5;
       let finalAttempt = 0;
+      let bisectState = BISECT_INIT;
       while (resultBlob.value && finalAttempt < MAX_FINAL_ATTEMPTS) {
         const size = resultBlob.value.size;
         const tooBig   = size > targetBytes;
         const tooSmall = size < targetBytes * SIZE_TOLERANCE;
-        if (!tooBig && !tooSmall) break; // w paśmie tolerancji — wystarczająco blisko celu
+        if (!tooBig && !tooSmall) break; // w paśmie tolerancji 95–100% celu — gotowe
 
         finalAttempt++;
-        // Przekazujemy ile prób zostało — funkcja skaluje agresywność kroku proporcjonalnie.
-        // Przy ostatniej próbie krok będzie "brał wszystko naraz" zamiast oszczędzać na kolejne.
-        const remaining = MAX_FINAL_ATTEMPTS - finalAttempt + 1;
-        const changed = adjustParamsToTarget(size, targetBytes, tooSmall, remaining);
-        if (!changed) break; // parametry utknęły na granicy (min. lub maks.) — dalsze próby nic nie dadzą
+        const { changed, state: nextState } = applyBisectionStep(size, targetBytes, bisectState);
+        bisectState = nextState;
+        if (!changed) break; // parametry na granicy min/max — dalsze próby nic nie dadzą
 
         conversionStage.value = tooBig
-          ? `Plik za duży (${formatFileSize(size)}) — zmniejszam parametry i generuję ponownie (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`
-          : `Plik mniejszy niż limit (${formatFileSize(size)}) — zwiększam parametry, by zbliżyć się do ${targetSizeMB.value} MB (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`;
+          ? `Plik za duży (${formatFileSize(size)}) — zmniejszam parametry, generuję ponownie (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`
+          : `Plik za mały (${formatFileSize(size)} < ${targetSizeMB.value} MB) — zwiększam parametry (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`;
         await performEncode(fileData);
       }
     }
