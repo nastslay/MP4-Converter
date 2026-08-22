@@ -1622,95 +1622,88 @@ const SIZE_TOLERANCE = 0.95;
 const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 
 // Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony.
-function adjustParamsToTarget(actualBytes, targetBytes, growing) {
+// remainingAttempts: ile prób zostało ŁĄCZNIE (włącznie z tą) — używane do skalowania
+// agresywności: jeśli zostały 3 próby, a brakuje 2MB, każda próba musi zrobić krok
+// odpowiadający ~1/3 tej odległości (a nie 10% jak przy stałym tłumieniu).
+function adjustParamsToTarget(actualBytes, targetBytes, growing, remainingAttempts = 1) {
   const ratio = targetBytes / actualBytes;
-  
-  // FAZA 1: Precyzyjne dostrajanie (gdy jesteśmy blisko celu, np. różnica < 25%)
-  // W tej fazie zmieniamy TYLKO JEDEN parametr naraz (głównie Jakość). 
-  // Próba zmiany 3 parametrów przy małej odległości prowadzi do oscylacji (bo ich wpływ się mnoży)
-  // albo do "utknięcia" (bo matematyczne zaokrąglenia wyzerują zmiany).
-  if (Math.abs(1 - ratio) < 0.25) {
-     // Ponieważ jakość wpływa nieliniowo (zwłaszcza w MP4), ucinamy ratio o połowę.
-     let fineRatio = 1 + (ratio - 1) * 0.5; 
-     
-     if (growing) {
-         let newQuality = Math.round(quality.value * fineRatio);
-         if (newQuality === quality.value && quality.value < 100) newQuality += 1;
-         
-         if (newQuality <= 100 && newQuality !== quality.value) { 
-             quality.value = newQuality; return true; 
-         }
-         
-         // Jakość wyczerpana (dobiła do 100) -> podnosimy FPS
-         let newFps = Math.round(fps.value * fineRatio);
-         if (newFps === fps.value && fps.value < 30) newFps += 1;
-         if (newFps <= 30 && newFps !== fps.value) {
-             fps.value = newFps; return true;
-         }
-         
-         // FPS wyczerpane -> podnosimy rozdzielczość
-         let newWidth = Math.round(width.value * (1 + (fineRatio - 1)*0.5) / 10) * 10;
-         if (newWidth === width.value && width.value < 1280) newWidth += 10;
-         if (newWidth <= 1280 && newWidth !== width.value) {
-             width.value = newWidth; return true;
-         }
-     } else {
-         // Jeśli plik za duży - docinamy odrobinę mocniej (margines 3%), żeby na pewno wejść pod limit
-         let cutRatio = fineRatio * 0.97;
-         let newQuality = Math.round(quality.value * cutRatio);
-         if (newQuality === quality.value && quality.value > 1) newQuality -= 1;
-         
-         if (newQuality >= 1 && newQuality !== quality.value) { 
-             quality.value = newQuality; return true; 
-         }
-         
-         let newFps = Math.round(fps.value * cutRatio);
-         if (newFps === fps.value && fps.value > 1) newFps -= 1;
-         if (newFps >= 1 && newFps !== fps.value) {
-             fps.value = newFps; return true;
-         }
-         
-         let newWidth = Math.round(width.value * cutRatio / 10) * 10;
-         if (newWidth === width.value && width.value > 100) newWidth -= 10;
-         if (newWidth >= 100 && newWidth !== width.value) {
-             width.value = newWidth; return true;
-         }
-     }
-  } 
-  // FAZA 2: Zgrubne zmiany (gdy jesteśmy daleko od celu)
-  else {
-      // Skalujemy wszystko naraz, ale używamy pierwiastka 4-tego stopnia (0.25).
-      // Wynika to z matematyki: pow(width, 2) * fps * quality = wpływ x^4 na finalny rozmiar.
-      const rawFactor = Math.pow(ratio, 0.25);
-      
-      let factor;
-      if (growing) {
-          factor = 1 + (rawFactor - 1) * 0.80; // lekko tłumione w górę
-      } else {
-          factor = (1 + (rawFactor - 1) * 0.85) * 0.95; // 5% margines w dół
-      }
+  const gap   = Math.abs(1 - ratio); // jak daleko jesteśmy od celu (0 = cel, 1 = 2× dalej)
 
-      let newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
-      let newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value * factor)));
-      let newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
-      
-      let changed = false;
-      if (newWidth !== width.value) { width.value = newWidth; changed = true; }
-      if (newFps !== fps.value) { fps.value = newFps; changed = true; }
-      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
-      
-      if (changed) return true;
-      
-      // Zabezpieczenie na wypadek dziwnych zaokrągleń
-      if (growing) {
-          if (quality.value < 100) { quality.value += 2; return true; }
-          if (fps.value < 30) { fps.value += 1; return true; }
-          if (width.value < 1280) { width.value += 10; return true; }
-      } else {
-          if (quality.value > 1) { quality.value -= 2; return true; }
-          if (fps.value > 1) { fps.value -= 1; return true; }
-          if (width.value > 100) { width.value -= 10; return true; }
-      }
+  // Wymagany postęp w tej iteracji: rozłóż odległość równo na pozostałe próby,
+  // ale nie rób mniejszego kroku niż 60% odległości (żeby nie "dreptać w miejscu")
+  // i nie większego niż 1.0 (cała odległość naraz — zawsze z marginesem w fazie shrink).
+  const stepShare = Math.min(1.0, Math.max(0.8, 1 / Math.max(1, remainingAttempts)));
+
+  // Docelowy ratio po tej iteracji — interpolacja między actual a target
+  const targetRatio = growing
+    ? 1 + gap * stepShare        // w górę: zmierzamy do celu o stepShare drogi
+    : 1 - gap * stepShare;       // w dół:  j.w.
+
+  // rawFactor to ile razy muszą wzrosnąć/spaść parametry (kombinacja Szerokość×FPS×Jakość)
+  // żeby osiągnąć targetRatio. Używamy pierwiastka 4. stopnia bo rozmiar ≈ (w^2 * fps * q).
+  const rawFactor = Math.pow(targetRatio, 0.25);
+
+  // Margines bezpieczeństwa: przy zmniejszaniu dokładamy 3% zapasu "w dół",
+  // żeby nigdy nie wylądować tuż ponad limitem.
+  const factor = growing ? rawFactor : rawFactor * 0.97;
+
+  const FINE = gap < 0.25; // czy jesteśmy blisko celu?
+
+  if (FINE) {
+    // --- FAZA PRECYZYJNA ---
+    // Blisko celu zmieniamy parametry POJEDYNCZO (Jakość → FPS → Szerokość),
+    // żeby mnożnikowy efekt trzech suwaków jednocześnie nie powodował oscylacji.
+    // Gwarancja minimalnego kroku +/-1: jeśli matematyka zaokrągliłaby do zera,
+    // wymuszamy przynajmniej jednostkową zmianę — ważne zwłaszcza gdy gap jest mały
+    // ale remainingAttempts też małe (trzeba zrobić większy krok niż "normalnie").
+    if (growing) {
+      let nq = Math.round(quality.value * factor);
+      if (nq === quality.value && quality.value < 100) nq = quality.value + Math.max(1, Math.ceil(gap * quality.value * stepShare));
+      if (nq <= 100 && nq !== quality.value) { quality.value = nq; return true; }
+
+      let nf = Math.round(fps.value * factor);
+      if (nf === fps.value && fps.value < 30) nf = fps.value + 1;
+      if (nf <= 30 && nf !== fps.value) { fps.value = nf; return true; }
+
+      let nw = Math.round((width.value * factor) / 10) * 10;
+      if (nw === width.value && width.value < 1280) nw = width.value + 10;
+      if (nw <= 1280 && nw !== width.value) { width.value = nw; return true; }
+    } else {
+      let nq = Math.round(quality.value * factor);
+      if (nq === quality.value && quality.value > 1) nq = quality.value - Math.max(1, Math.ceil(gap * quality.value * stepShare));
+      if (nq >= 1 && nq !== quality.value) { quality.value = nq; return true; }
+
+      let nf = Math.round(fps.value * factor);
+      if (nf === fps.value && fps.value > 1) nf = fps.value - 1;
+      if (nf >= 1 && nf !== fps.value) { fps.value = nf; return true; }
+
+      let nw = Math.round((width.value * factor) / 10) * 10;
+      if (nw === width.value && width.value > 100) nw = width.value - 10;
+      if (nw >= 100 && nw !== width.value) { width.value = nw; return true; }
+    }
+  } else {
+    // --- FAZA ZGRUBNA ---
+    // Daleko od celu wszystkie trzy parametry zmieniamy jednocześnie.
+    const newWidth   = Math.min(1280, Math.max(100, Math.round((width.value   * factor) / 10) * 10));
+    const newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value     * factor)));
+    const newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
+
+    let changed = false;
+    if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
+    if (newFps     !== fps.value)     { fps.value     = newFps;     changed = true; }
+    if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
+    if (changed) return true;
+
+    // Zabezpieczenie: zaokrąglenia wyzerowały wszystkie zmiany — wymuszamy krok ręcznie
+    if (growing) {
+      if (quality.value < 100) { quality.value = Math.min(100, quality.value + 3); return true; }
+      if (fps.value     < 30)  { fps.value     = Math.min(30,  fps.value + 1);     return true; }
+      if (width.value   < 1280){ width.value   = Math.min(1280,width.value + 10);  return true; }
+    } else {
+      if (quality.value > 1)   { quality.value = Math.max(1,   quality.value - 3); return true; }
+      if (fps.value     > 1)   { fps.value     = Math.max(1,   fps.value - 1);     return true; }
+      if (width.value   > 100) { width.value   = Math.max(100, width.value - 10);  return true; }
+    }
   }
   return false;
 }
@@ -1935,7 +1928,8 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
       const tooBig   = estimatedSize.value > targetBytes;
       const tooSmall = estimatedSize.value < targetBytes * SIZE_TOLERANCE;
       if (tooBig || tooSmall) {
-        const changed = adjustParamsToTarget(estimatedSize.value, targetBytes, tooSmall);
+        const remaining = 8 - attempt; // ile prób zostało ŁĄCZNIE (włącznie z tą)
+        const changed = adjustParamsToTarget(estimatedSize.value, targetBytes, tooSmall, remaining);
         // Przekazujemy dalej ten sam fileData, żeby rekurencja nie pobierała wideo ponownie z sieci.
         if (changed) await analyzeAndEstimate(attempt + 1, fileData);
       }
@@ -2196,7 +2190,10 @@ async function convert() {
         if (!tooBig && !tooSmall) break; // w paśmie tolerancji — wystarczająco blisko celu
 
         finalAttempt++;
-        const changed = adjustParamsToTarget(size, targetBytes, tooSmall);
+        // Przekazujemy ile prób zostało — funkcja skaluje agresywność kroku proporcjonalnie.
+        // Przy ostatniej próbie krok będzie "brał wszystko naraz" zamiast oszczędzać na kolejne.
+        const remaining = MAX_FINAL_ATTEMPTS - finalAttempt + 1;
+        const changed = adjustParamsToTarget(size, targetBytes, tooSmall, remaining);
         if (!changed) break; // parametry utknęły na granicy (min. lub maks.) — dalsze próby nic nie dadzą
 
         conversionStage.value = tooBig
