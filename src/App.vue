@@ -616,9 +616,13 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 const videoUrl   = ref('');
 const startTime  = ref(0);
 const endTime    = ref(20);
-const fps        = ref(15);
-const width      = ref(310);
-const quality    = ref(50);
+// Jedno źródło domyślnych parametrów — używane także po pobraniu nowego pliku.
+const DEFAULT_FPS = 15;
+const DEFAULT_WIDTH = 310;
+const DEFAULT_QUALITY = 50;
+const fps        = ref(DEFAULT_FPS);
+const width      = ref(DEFAULT_WIDTH);
+const quality    = ref(DEFAULT_QUALITY);
 const useOriginalWidth = ref(false);
 const outputFormat = ref('webp');
 const limitSizeEnabled = ref(false);
@@ -1508,7 +1512,8 @@ function parseWebPMetadata(arrayBuffer) {
 
 // ---- RESET ----
 function resetConversionState() {
-  startTime.value = 0; endTime.value = 20; fps.value = 20; width.value = 350; quality.value = 85;
+  startTime.value = 0; endTime.value = 20;
+  fps.value = DEFAULT_FPS; width.value = DEFAULT_WIDTH; quality.value = DEFAULT_QUALITY;
   cropEnabled.value = false;
   cropTop.value = 0; cropBottom.value = 0; cropLeft.value = 0; cropRight.value = 0;
   syncVertical.value = true; syncHorizontal.value = true;
