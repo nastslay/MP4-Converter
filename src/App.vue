@@ -1606,6 +1606,32 @@ function qualityToCrf() {
   return Math.round(51 - (quality.value / 100) * 33);
 }
 
+// Dolna granica pasma tolerancji: rozmiar w przedziale [SIZE_TOLERANCE * target, target]
+// uznajemy za "wystarczająco blisko celu" i przestajemy dalej dostrajać.
+const SIZE_TOLERANCE = 0.95;
+
+// Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony:
+// - growing = false (za duży plik): zmniejsza, celując tuż PONIŻEJ limitu (margines 0.95),
+//   żeby nigdy go nie przekroczyć.
+// - growing = true (plik wyraźnie mniejszy niż limit): zwiększa parametry, żeby zbliżyć
+//   się do limitu i wykorzystać dostępny "budżet" rozmiaru — ale z mocnym tłumieniem
+//   (tylko 60% obliczonego skoku), żeby nie przeskoczyć ponad limit w jednej iteracji.
+// Zawsze trzyma się realnych granic suwaków (Szerokość 100-1280, FPS 1-30, Jakość 1-100).
+// Zwraca true, jeśli którykolwiek parametr faktycznie się zmienił.
+function adjustParamsToTarget(actualBytes, targetBytes, growing) {
+  const ratio = targetBytes / actualBytes;
+  const rawFactor = Math.cbrt(ratio);
+  const factor = growing ? (1 + (rawFactor - 1) * 0.6) : (rawFactor * 0.95);
+
+  const newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
+  const newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value * factor)));
+  const newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
+
+  const changed = newWidth !== width.value || newFps !== fps.value || newQuality !== quality.value;
+  width.value = newWidth; fps.value = newFps; quality.value = newQuality;
+  return changed;
+}
+
 function clearPreview() {
   if (previewFrame.value) { URL.revokeObjectURL(previewFrame.value); previewFrame.value = null; }
   previewNaturalWidth.value = 0; previewNaturalHeight.value = 0;
@@ -1775,7 +1801,7 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
   }
   error.value = '';
   if (attempt === 0) { estimatedSize.value = null; sizeConfidence.value = null; }
-  if (isConverting.value) conversionStage.value = `Dopasowywanie parametrów do limitu rozmiaru (próba ${attempt + 1}/6)...`;
+  if (isConverting.value) conversionStage.value = `Dopasowywanie parametrów do limitu rozmiaru (próba ${attempt + 1}/8)...`;
   try {
     const fileData = preloadedFileData || await fetchVideo(videoUrl.value);
     await ffmpeg.writeFile('analyze.mp4', new Uint8Array(fileData.slice().buffer));
@@ -1814,21 +1840,16 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
     }
     await ffmpeg.deleteFile('analyze.mp4');
 
-    if (limitSizeEnabled.value && attempt < 6) {
+    if (limitSizeEnabled.value && attempt < 8) {
       const targetBytes = targetSizeMB.value * 1024 * 1024;
-      if (estimatedSize.value > targetBytes) {
-        const ratio  = targetBytes / estimatedSize.value;
-        const factor = Math.cbrt(ratio);
-        const newWidth   = Math.max(100, Math.round((width.value * factor) / 10) * 10);
-        const newFps     = Math.max(1, Math.round(fps.value * factor));
-        const newQuality = Math.max(1, Math.min(100, Math.round(quality.value * factor)));
-        const changed = newWidth !== width.value || newFps !== fps.value || newQuality !== quality.value;
-        width.value   = newWidth;
-        fps.value     = newFps;
-        quality.value = newQuality;
+      const tooBig   = estimatedSize.value > targetBytes;
+      const tooSmall = estimatedSize.value < targetBytes * SIZE_TOLERANCE;
+      if (tooBig || tooSmall) {
+        const changed = adjustParamsToTarget(estimatedSize.value, targetBytes, tooSmall);
         // Przekazujemy dalej ten sam fileData, żeby rekurencja nie pobierała wideo ponownie z sieci.
         if (changed) await analyzeAndEstimate(attempt + 1, fileData);
       }
+      // W przeciwnym razie estymata mieści się w paśmie [95%-100% celu] — wystarczająco blisko.
     }
   } catch(e) { error.value = `Błąd analizy: ${e.message}`; console.error(e); }
 }
@@ -2042,21 +2063,6 @@ async function performEncode(fileData) {
   }
 }
 
-// Po realnym wygenerowaniu pliku zmniejsza Szerokość / FPS / Jakość proporcjonalnie
-// (pierwiastek sześcienny współczynnika, żeby redukcja rozłożyła się na 3 parametry
-// naraz) i zwraca true, jeśli którykolwiek parametr faktycznie się zmienił.
-// Mnożnik 0.95 to mały margines bezpieczeństwa, żeby nie utknąć tuż nad limitem.
-function shrinkParamsToFit(actualBytes, targetBytes) {
-  const ratio  = targetBytes / actualBytes;
-  const factor = Math.cbrt(ratio) * 0.95;
-  const newWidth   = Math.max(100, Math.round((width.value * factor) / 10) * 10);
-  const newFps     = Math.max(1, Math.round(fps.value * factor));
-  const newQuality = Math.max(1, Math.min(100, Math.round(quality.value * factor)));
-  const changed = newWidth !== width.value || newFps !== fps.value || newQuality !== quality.value;
-  width.value = newWidth; fps.value = newFps; quality.value = newQuality;
-  return changed;
-}
-
 async function convert() {
   if (!videoUrl.value.trim()) { error.value = 'Wprowadź link do wideo lub wgraj plik.'; return; }
   error.value = ''; resultUrl.value = null; resultBlob.value = null; isConverting.value = true;
@@ -2067,8 +2073,8 @@ async function convert() {
     const targetBytes = targetSizeMB.value * 1024 * 1024;
 
     // KROK 1: jeśli włączony limit rozmiaru, próba "w tle" na krótkiej próbce —
-    // dostosowuje Szerokość / FPS / Jakość, zanim wygenerujemy pełny plik.
-    // (Dla wejścia WebP analiza próbki nie jest wspierana — patrz analyzeAndEstimate.)
+    // dostosowuje Szerokość / FPS / Jakość (w OBIE strony — patrz analyzeAndEstimate),
+    // zanim wygenerujemy pełny plik. (Dla wejścia WebP analiza próbki nie jest wspierana.)
     if (limitSizeEnabled.value && inputExt.value !== 'webp') {
       await analyzeAndEstimate(0, fileData);
     }
@@ -2077,21 +2083,27 @@ async function convert() {
     conversionStage.value = 'Generowanie pliku...';
     await performEncode(fileData);
 
-    // KROK 3: realna weryfikacja PO wygenerowaniu — próbka to tylko przybliżenie,
-    // więc jeśli faktyczny plik mimo wszystko przekracza limit, dokręcamy parametry
-    // i generujemy jeszcze raz (maks. kilka prób, bo pełne kodowanie jest kosztowne).
+    // KROK 3: realna weryfikacja PO wygenerowaniu — próbka to tylko przybliżenie, więc
+    // dociągamy jeszcze raz na podstawie PRAWDZIWEGO rozmiaru: jeśli plik jest za duży,
+    // zmniejszamy parametry; jeśli jest wyraźnie MNIEJSZY niż limit, zwiększamy je, żeby
+    // zbliżyć się do zadanego rozmiaru (a nie zostawiać niepotrzebny zapas) — ale zawsze
+    // z marginesem bezpieczeństwa, żeby nigdy nie przekroczyć limitu.
     if (limitSizeEnabled.value) {
-      const MAX_FINAL_ATTEMPTS = 3;
+      const MAX_FINAL_ATTEMPTS = 4;
       let finalAttempt = 0;
-      while (
-        resultBlob.value &&
-        resultBlob.value.size > targetBytes &&
-        finalAttempt < MAX_FINAL_ATTEMPTS
-      ) {
+      while (resultBlob.value && finalAttempt < MAX_FINAL_ATTEMPTS) {
+        const size = resultBlob.value.size;
+        const tooBig   = size > targetBytes;
+        const tooSmall = size < targetBytes * SIZE_TOLERANCE;
+        if (!tooBig && !tooSmall) break; // w paśmie tolerancji — wystarczająco blisko celu
+
         finalAttempt++;
-        const changed = shrinkParamsToFit(resultBlob.value.size, targetBytes);
-        if (!changed) break; // parametry utknęły na dolnych limitach — dalsze próby nic nie dadzą
-        conversionStage.value = `Plik za duży (${formatFileSize(resultBlob.value.size)}) — generuję ponownie z niższymi parametrami (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`;
+        const changed = adjustParamsToTarget(size, targetBytes, tooSmall);
+        if (!changed) break; // parametry utknęły na granicy (min. lub maks.) — dalsze próby nic nie dadzą
+
+        conversionStage.value = tooBig
+          ? `Plik za duży (${formatFileSize(size)}) — zmniejszam parametry i generuję ponownie (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`
+          : `Plik mniejszy niż limit (${formatFileSize(size)}) — zwiększam parametry, by zbliżyć się do ${targetSizeMB.value} MB (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`;
         await performEncode(fileData);
       }
     }
