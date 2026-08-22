@@ -1622,90 +1622,47 @@ const SIZE_TOLERANCE = 0.95;
 const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 
 // Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony.
-// remainingAttempts: ile prób zostało ŁĄCZNIE (włącznie z tą) — używane do skalowania
-// agresywności: jeśli zostały 3 próby, a brakuje 2MB, każda próba musi zrobić krok
-// odpowiadający ~1/3 tej odległości (a nie 10% jak przy stałym tłumieniu).
+// Jedna spójna logika bez sztucznego podziału na "fazy" — wszystkie trzy parametry
+// zawsze zmieniane jednocześnie, krok proporcjonalny do odległości od celu i liczby
+// pozostałych prób (im mniej prób zostało, tym agresywniejszy krok).
 function adjustParamsToTarget(actualBytes, targetBytes, growing, remainingAttempts = 1) {
-  const ratio = targetBytes / actualBytes;
-  const gap   = Math.abs(1 - ratio); // jak daleko jesteśmy od celu (0 = cel, 1 = 2× dalej)
+  const ratio = targetBytes / actualBytes; // np. 9.75 / 7.75 = 1.258 (trzeba urosnąć o 26%)
+  const gap   = ratio - 1;                // signed: + = za mały, - = za duży
 
-  // Wymagany postęp w tej iteracji: rozłóż odległość równo na pozostałe próby,
-  // ale nie rób mniejszego kroku niż 60% odległości (żeby nie "dreptać w miejscu")
-  // i nie większego niż 1.0 (cała odległość naraz — zawsze z marginesem w fazie shrink).
+  // Ile procent drogi do celu pokrywamy w tym kroku.
+  // Przy wielu próbach możemy być ostrożniejsi (0.8), przy ostatniej bierzemy wszystko (1.0).
   const stepShare = Math.min(1.0, Math.max(0.8, 1 / Math.max(1, remainingAttempts)));
 
-  // Docelowy ratio po tej iteracji — interpolacja między actual a target
-  const targetRatio = growing
-    ? 1 + gap * stepShare        // w górę: zmierzamy do celu o stepShare drogi
-    : 1 - gap * stepShare;       // w dół:  j.w.
+  // Docelowe ratio po tym kroku — np. gap=0.258, stepShare=0.8 → targetRatio = 1.206
+  const targetRatio = 1 + gap * stepShare;
 
-  // rawFactor to ile razy muszą wzrosnąć/spaść parametry (kombinacja Szerokość×FPS×Jakość)
-  // żeby osiągnąć targetRatio. Używamy pierwiastka 4. stopnia bo rozmiar ≈ (w^2 * fps * q).
-  const rawFactor = Math.pow(targetRatio, 0.25);
+  // rozmiar ≈ width² × fps × quality → parametry rosną/maleją jak targetRatio^(1/4)
+  const rawFactor = Math.pow(Math.max(0.01, targetRatio), 0.25);
 
-  // Margines bezpieczeństwa: przy zmniejszaniu dokładamy 3% zapasu "w dół",
-  // żeby nigdy nie wylądować tuż ponad limitem.
+  // Przy zmniejszaniu 3% marginesu, żeby nigdy nie wylądować tuż ponad limitem
   const factor = growing ? rawFactor : rawFactor * 0.97;
 
-  const FINE = gap < 0.25; // czy jesteśmy blisko celu?
+  // Minimalny gwarantowany krok jakości = max(1, round(|gap| × quality)).
+  // Kluczowe dla małych gap: np. gap=0.20, quality=80 → minQDelta=16
+  // Bez tego zaokrąglenie math.round(80 × 1.048) = 80 → brak zmiany.
+  const minQDelta = Math.max(1, Math.round(Math.abs(gap) * quality.value));
 
-  if (FINE) {
-    // --- FAZA PRECYZYJNA ---
-    // Blisko celu zmieniamy parametry POJEDYNCZO (Jakość → FPS → Szerokość),
-    // żeby mnożnikowy efekt trzech suwaków jednocześnie nie powodował oscylacji.
-    // Gwarancja minimalnego kroku +/-1: jeśli matematyka zaokrągliłaby do zera,
-    // wymuszamy przynajmniej jednostkową zmianę — ważne zwłaszcza gdy gap jest mały
-    // ale remainingAttempts też małe (trzeba zrobić większy krok niż "normalnie").
-    if (growing) {
-      let nq = Math.round(quality.value * factor);
-      if (nq === quality.value && quality.value < 100) nq = quality.value + Math.max(1, Math.ceil(gap * quality.value * stepShare));
-      if (nq <= 100 && nq !== quality.value) { quality.value = nq; return true; }
+  const newWidth   = Math.min(1280, Math.max(100, Math.round((width.value   * factor) / 10) * 10));
+  const newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value     * factor)));
+  let   newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
 
-      let nf = Math.round(fps.value * factor);
-      if (nf === fps.value && fps.value < 30) nf = fps.value + 1;
-      if (nf <= 30 && nf !== fps.value) { fps.value = nf; return true; }
-
-      let nw = Math.round((width.value * factor) / 10) * 10;
-      if (nw === width.value && width.value < 1280) nw = width.value + 10;
-      if (nw <= 1280 && nw !== width.value) { width.value = nw; return true; }
-    } else {
-      let nq = Math.round(quality.value * factor);
-      if (nq === quality.value && quality.value > 1) nq = quality.value - Math.max(1, Math.ceil(gap * quality.value * stepShare));
-      if (nq >= 1 && nq !== quality.value) { quality.value = nq; return true; }
-
-      let nf = Math.round(fps.value * factor);
-      if (nf === fps.value && fps.value > 1) nf = fps.value - 1;
-      if (nf >= 1 && nf !== fps.value) { fps.value = nf; return true; }
-
-      let nw = Math.round((width.value * factor) / 10) * 10;
-      if (nw === width.value && width.value > 100) nw = width.value - 10;
-      if (nw >= 100 && nw !== width.value) { width.value = nw; return true; }
-    }
-  } else {
-    // --- FAZA ZGRUBNA ---
-    // Daleko od celu wszystkie trzy parametry zmieniamy jednocześnie.
-    const newWidth   = Math.min(1280, Math.max(100, Math.round((width.value   * factor) / 10) * 10));
-    const newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value     * factor)));
-    const newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
-
-    let changed = false;
-    if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
-    if (newFps     !== fps.value)     { fps.value     = newFps;     changed = true; }
-    if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
-    if (changed) return true;
-
-    // Zabezpieczenie: zaokrąglenia wyzerowały wszystkie zmiany — wymuszamy krok ręcznie
-    if (growing) {
-      if (quality.value < 100) { quality.value = Math.min(100, quality.value + 3); return true; }
-      if (fps.value     < 30)  { fps.value     = Math.min(30,  fps.value + 1);     return true; }
-      if (width.value   < 1280){ width.value   = Math.min(1280,width.value + 10);  return true; }
-    } else {
-      if (quality.value > 1)   { quality.value = Math.max(1,   quality.value - 3); return true; }
-      if (fps.value     > 1)   { fps.value     = Math.max(1,   fps.value - 1);     return true; }
-      if (width.value   > 100) { width.value   = Math.max(100, width.value - 10);  return true; }
-    }
+  // Gwarancja minimalnej zmiany jakości gdy zaokrąglenie ją wyzerowało
+  if (newQuality === quality.value) {
+    newQuality = growing
+      ? Math.min(100, quality.value + minQDelta)
+      : Math.max(1,   quality.value - minQDelta);
   }
-  return false;
+
+  const changed = newWidth !== width.value || newFps !== fps.value || newQuality !== quality.value;
+  if (newWidth   !== width.value)   width.value   = newWidth;
+  if (newFps     !== fps.value)     fps.value     = newFps;
+  if (newQuality !== quality.value) quality.value = newQuality;
+  return changed;
 }
 
 function clearPreview() {
