@@ -97,7 +97,7 @@
         <input type="number" v-model.number="targetSizeMB" min="0.1" max="50" step="0.5" :disabled="isConverting" />
         <span>MB</span>
       </div>
-      <button class="analyze-btn" @click="analyzeAndEstimate" :disabled="isConverting || !videoUrl || inputExt === 'webp' || outputFormat === 'mp4'">
+      <button class="analyze-btn" @click="analyzeAndEstimate()" :disabled="isConverting || !videoUrl || inputExt === 'webp'">
         🔍 Analizuj rozmiar
       </button>
     </div>
@@ -561,7 +561,7 @@
 
   <div v-if="isConverting" class="loader-container">
     <div class="spinner"></div>
-    <p class="loader-text">Trwa przetwarzanie...</p>
+    <p class="loader-text">{{ conversionStage || 'Trwa przetwarzanie...' }}</p>
   </div>
   <div v-if="error" class="error">{{ error }}</div>
 
@@ -624,6 +624,7 @@ const outputFormat = ref('webp');
 const limitSizeEnabled = ref(false);
 const targetSizeMB     = ref(10);
 const isConverting    = ref(false);
+const conversionStage = ref('');
 const isFetching      = ref(false);
 const error           = ref('');
 const resultUrl       = ref(null);
@@ -1767,23 +1768,26 @@ function onPreviewLoaded() {
 }
 
 // ---- ANALIZA ROZMIARU ----
-async function analyzeAndEstimate(attempt = 0) {
+async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
   if (!videoUrl.value.trim() || inputExt.value === 'webp') {
     if (inputExt.value === 'webp') error.value = 'Analiza rozmiaru dla WebP nie jest obsługiwana.';
     return;
   }
-  error.value = ''; estimatedSize.value = null; sizeConfidence.value = null;
+  error.value = '';
+  if (attempt === 0) { estimatedSize.value = null; sizeConfidence.value = null; }
+  if (isConverting.value) conversionStage.value = `Dopasowywanie parametrów do limitu rozmiaru (próba ${attempt + 1}/6)...`;
   try {
-    const fileData = await fetchVideo(videoUrl.value);
+    const fileData = preloadedFileData || await fetchVideo(videoUrl.value);
     await ffmpeg.writeFile('analyze.mp4', new Uint8Array(fileData.slice().buffer));
     const duration = endTime.value - startTime.value;
     const testDuration = Math.min(1.0, duration * 0.2);
     const testStart = startTime.value + duration * 0.4;
+
     if (outputFormat.value === 'gif') {
       const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
       await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','sample.gif']);
       const sampleSize = (await ffmpeg.readFile('sample.gif')).length;
-      await ffmpeg.deleteFile('sample.gif'); await ffmpeg.deleteFile('analyze.mp4');
+      await ffmpeg.deleteFile('sample.gif');
       const testFrames = Math.floor(testDuration * fps.value);
       const totalFrames = Math.floor(duration * fps.value);
       if (testFrames > 0) {
@@ -1792,13 +1796,22 @@ async function analyzeAndEstimate(attempt = 0) {
         estimatedSize.value = Math.round((sampleSize/testFrames)*totalFrames*nonLinearFactor*sizeFactor*1.05);
         sizeConfidence.value = 0.88;
       } else { estimatedSize.value = sampleSize; sizeConfidence.value = 0.5; }
-    } else {
+    } else if (outputFormat.value === 'webp') {
       await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','sample.webp']);
       const sampleSize = (await ffmpeg.readFile('sample.webp')).length;
-      await ffmpeg.deleteFile('sample.webp'); await ffmpeg.deleteFile('analyze.mp4');
+      await ffmpeg.deleteFile('sample.webp');
       estimatedSize.value = Math.round((sampleSize/testDuration)*duration*1.02);
       sizeConfidence.value = 0.95;
+    } else {
+      // MP4 — próbka kodowana tym samym libx264/CRF co finalny plik.
+      await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','sample.mp4']);
+      const sampleSize = (await ffmpeg.readFile('sample.mp4')).length;
+      await ffmpeg.deleteFile('sample.mp4');
+      estimatedSize.value = Math.round((sampleSize/testDuration)*duration*1.02);
+      sizeConfidence.value = 0.9;
     }
+    await ffmpeg.deleteFile('analyze.mp4');
+
     if (limitSizeEnabled.value && attempt < 6) {
       const targetBytes = targetSizeMB.value * 1024 * 1024;
       if (estimatedSize.value > targetBytes) {
@@ -1811,7 +1824,8 @@ async function analyzeAndEstimate(attempt = 0) {
         width.value   = newWidth;
         fps.value     = newFps;
         quality.value = newQuality;
-        if (changed) await analyzeAndEstimate(attempt + 1);
+        // Przekazujemy dalej ten sam fileData, żeby rekurencja nie pobierała wideo ponownie z sieci.
+        if (changed) await analyzeAndEstimate(attempt + 1, fileData);
       }
     }
   } catch(e) { error.value = `Błąd analizy: ${e.message}`; console.error(e); }
@@ -1984,53 +1998,103 @@ async function convertViaCanvas(fileData, srcExt) {
   await ffmpeg.deleteFile('output.' + outExt);
 }
 
+async function performEncode(fileData) {
+  const hasCrop = cropEnabled.value && (cropLeft.value+cropRight.value+cropTop.value+cropBottom.value > 0);
+  const hasFlip = flipHorizontal.value || flipVertical.value || rotate90.value !== 0;
+  const hasOverlays = overlays.value.some(item =>
+    (item.type === 'text' && item.text.trim() !== '') ||
+    (item.type === 'image' && !!item.imageSrc)
+  );
+
+  const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
+  const srcW = originalWidth.value || width.value;
+  const srcH = originalHeight.value || Math.round(width.value * 9 / 16);
+  const cropW = Math.max(1, srcW - cl - cr);
+  const cropH = Math.max(1, srcH - ct - cb);
+  resultWidth.value = width.value;
+  resultHeight.value = Math.round(width.value * cropH / cropW);
+  resultDuration.value = Math.max(0.1, endTime.value - startTime.value);
+
+  if (inputExt.value === 'webp') {
+    await convertViaCanvas(fileData, 'webp');
+  } else if (hasCrop || hasOverlays || hasFlip) {
+    await convertViaCanvas(fileData, 'mp4');
+  } else {
+    await ffmpeg.writeFile('input.mp4', new Uint8Array(fileData.slice().buffer));
+    if (outputFormat.value === 'gif') {
+      const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
+      await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','output.gif']);
+    } else if (outputFormat.value === 'webp') {
+      await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','output.webp']);
+    } else {
+      // MP4 z tej ścieżki (bez kadrowania/nakładek) koduje się bezpośrednio z oryginalnego
+      // pliku, więc — w odróżnieniu od ścieżki z canvasu — ZACHOWUJE dźwięk źródła.
+      await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','output.mp4']);
+    }
+    const outExt = outputFormat.value;
+    const data = await ffmpeg.readFile('output.' + outExt);
+    resultBlob.value = new Blob([data.buffer], { type: mimeForFormat(outExt) });
+    resultUrl.value = URL.createObjectURL(resultBlob.value);
+    await ffmpeg.deleteFile('input.mp4');
+    await ffmpeg.deleteFile('output.' + outExt);
+  }
+}
+
+// Po realnym wygenerowaniu pliku zmniejsza Szerokość / FPS / Jakość proporcjonalnie
+// (pierwiastek sześcienny współczynnika, żeby redukcja rozłożyła się na 3 parametry
+// naraz) i zwraca true, jeśli którykolwiek parametr faktycznie się zmienił.
+// Mnożnik 0.95 to mały margines bezpieczeństwa, żeby nie utknąć tuż nad limitem.
+function shrinkParamsToFit(actualBytes, targetBytes) {
+  const ratio  = targetBytes / actualBytes;
+  const factor = Math.cbrt(ratio) * 0.95;
+  const newWidth   = Math.max(100, Math.floor((width.value * factor) / 10) * 10);
+  const newFps     = Math.max(1, Math.floor(fps.value * factor));
+  const newQuality = Math.max(1, Math.min(100, Math.floor(quality.value * factor)));
+  const changed = newWidth !== width.value || newFps !== fps.value || newQuality !== quality.value;
+  width.value = newWidth; fps.value = newFps; quality.value = newQuality;
+  return changed;
+}
+
 async function convert() {
   if (!videoUrl.value.trim()) { error.value = 'Wprowadź link do wideo lub wgraj plik.'; return; }
   error.value = ''; resultUrl.value = null; resultBlob.value = null; isConverting.value = true;
+  conversionStage.value = '';
 
   try {
     const fileData = await fetchVideo(videoUrl.value);
-    const hasCrop = cropEnabled.value && (cropLeft.value+cropRight.value+cropTop.value+cropBottom.value > 0);
-    const hasFlip = flipHorizontal.value || flipVertical.value || rotate90.value !== 0;
-    const hasOverlays = overlays.value.some(item =>
-      (item.type === 'text' && item.text.trim() !== '') ||
-      (item.type === 'image' && !!item.imageSrc)
-    );
+    const targetBytes = targetSizeMB.value * 1024 * 1024;
 
-    const cl = cropLeft.value||0, cr = cropRight.value||0, ct = cropTop.value||0, cb = cropBottom.value||0;
-    const srcW = originalWidth.value || width.value;
-    const srcH = originalHeight.value || Math.round(width.value * 9 / 16);
-    const cropW = Math.max(1, srcW - cl - cr);
-    const cropH = Math.max(1, srcH - ct - cb);
-    resultWidth.value = width.value;
-    resultHeight.value = Math.round(width.value * cropH / cropW);
-    resultDuration.value = Math.max(0.1, endTime.value - startTime.value);
+    // KROK 1: jeśli włączony limit rozmiaru, próba "w tle" na krótkiej próbce —
+    // dostosowuje Szerokość / FPS / Jakość, zanim wygenerujemy pełny plik.
+    // (Dla wejścia WebP analiza próbki nie jest wspierana — patrz analyzeAndEstimate.)
+    if (limitSizeEnabled.value && inputExt.value !== 'webp') {
+      await analyzeAndEstimate(0, fileData);
+    }
 
-    if (inputExt.value === 'webp') {
-      await convertViaCanvas(fileData, 'webp');
-    } else if (hasCrop || hasOverlays || hasFlip) {
-      await convertViaCanvas(fileData, 'mp4');
-    } else {
-      await ffmpeg.writeFile('input.mp4', new Uint8Array(fileData.slice().buffer));
-      if (outputFormat.value === 'gif') {
-        const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
-        await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','output.gif']);
-      } else if (outputFormat.value === 'webp') {
-        await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','output.webp']);
-      } else {
-        // MP4 z tej ścieżki (bez kadrowania/nakładek) koduje się bezpośrednio z oryginalnego
-        // pliku, więc — w odróżnieniu od ścieżki z canvasu — ZACHOWUJE dźwięk źródła.
-        await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','output.mp4']);
+    // KROK 2: generujemy właściwy plik.
+    conversionStage.value = 'Generowanie pliku...';
+    await performEncode(fileData);
+
+    // KROK 3: realna weryfikacja PO wygenerowaniu — próbka to tylko przybliżenie,
+    // więc jeśli faktyczny plik mimo wszystko przekracza limit, dokręcamy parametry
+    // i generujemy jeszcze raz (maks. kilka prób, bo pełne kodowanie jest kosztowne).
+    if (limitSizeEnabled.value) {
+      const MAX_FINAL_ATTEMPTS = 3;
+      let finalAttempt = 0;
+      while (
+        resultBlob.value &&
+        resultBlob.value.size > targetBytes &&
+        finalAttempt < MAX_FINAL_ATTEMPTS
+      ) {
+        finalAttempt++;
+        const changed = shrinkParamsToFit(resultBlob.value.size, targetBytes);
+        if (!changed) break; // parametry utknęły na dolnych limitach — dalsze próby nic nie dadzą
+        conversionStage.value = `Plik za duży (${formatFileSize(resultBlob.value.size)}) — generuję ponownie z niższymi parametrami (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`;
+        await performEncode(fileData);
       }
-      const outExt = outputFormat.value;
-      const data = await ffmpeg.readFile('output.' + outExt);
-      resultBlob.value = new Blob([data.buffer], { type: mimeForFormat(outExt) });
-      resultUrl.value = URL.createObjectURL(resultBlob.value);
-      await ffmpeg.deleteFile('input.mp4');
-      await ffmpeg.deleteFile('output.' + outExt);
     }
   } catch(e) { error.value = `Błąd konwersji: ${e.message}`; console.error(e); }
-  finally { isConverting.value = false; }
+  finally { isConverting.value = false; conversionStage.value = ''; }
 }
 
 function downloadResult() {
