@@ -1791,24 +1791,26 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
       const testFrames = Math.floor(testDuration * fps.value);
       const totalFrames = Math.floor(duration * fps.value);
       if (testFrames > 0) {
-        const nonLinearFactor = 1 + (Math.log(totalFrames / testFrames) * 0.15);
-        const sizeFactor = Math.sqrt((width.value * width.value) / (640 * 480)) || 1;
-        estimatedSize.value = Math.round((sampleSize/testFrames)*totalFrames*nonLinearFactor*sizeFactor*1.05);
-        sizeConfidence.value = 0.88;
+        // Czysta ekstrapolacja liniowa — próbka jest już zakodowana w docelowej
+        // rozdzielczości (buildVfFilter ją skaluje), więc nie trzeba dodatkowo
+        // korygować rozmiaru pod kątem szerokości. Realną weryfikację i ew. dodatkowe
+        // dostrojenie po pełnym kodowaniu robi teraz osobny mechanizm w convert().
+        estimatedSize.value = Math.round((sampleSize/testFrames)*totalFrames);
+        sizeConfidence.value = 0.85;
       } else { estimatedSize.value = sampleSize; sizeConfidence.value = 0.5; }
     } else if (outputFormat.value === 'webp') {
       await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','sample.webp']);
       const sampleSize = (await ffmpeg.readFile('sample.webp')).length;
       await ffmpeg.deleteFile('sample.webp');
-      estimatedSize.value = Math.round((sampleSize/testDuration)*duration*1.02);
-      sizeConfidence.value = 0.95;
+      estimatedSize.value = Math.round((sampleSize/testDuration)*duration);
+      sizeConfidence.value = 0.9;
     } else {
       // MP4 — próbka kodowana tym samym libx264/CRF co finalny plik.
       await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','sample.mp4']);
       const sampleSize = (await ffmpeg.readFile('sample.mp4')).length;
       await ffmpeg.deleteFile('sample.mp4');
-      estimatedSize.value = Math.round((sampleSize/testDuration)*duration*1.02);
-      sizeConfidence.value = 0.9;
+      estimatedSize.value = Math.round((sampleSize/testDuration)*duration);
+      sizeConfidence.value = 0.85;
     }
     await ffmpeg.deleteFile('analyze.mp4');
 
@@ -1817,9 +1819,9 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
       if (estimatedSize.value > targetBytes) {
         const ratio  = targetBytes / estimatedSize.value;
         const factor = Math.cbrt(ratio);
-        const newWidth   = Math.max(100, Math.floor((width.value * factor) / 10) * 10);
-        const newFps     = Math.max(1, Math.floor(fps.value * factor));
-        const newQuality = Math.max(1, Math.min(100, Math.floor(quality.value * factor)));
+        const newWidth   = Math.max(100, Math.round((width.value * factor) / 10) * 10);
+        const newFps     = Math.max(1, Math.round(fps.value * factor));
+        const newQuality = Math.max(1, Math.min(100, Math.round(quality.value * factor)));
         const changed = newWidth !== width.value || newFps !== fps.value || newQuality !== quality.value;
         width.value   = newWidth;
         fps.value     = newFps;
@@ -2047,9 +2049,9 @@ async function performEncode(fileData) {
 function shrinkParamsToFit(actualBytes, targetBytes) {
   const ratio  = targetBytes / actualBytes;
   const factor = Math.cbrt(ratio) * 0.95;
-  const newWidth   = Math.max(100, Math.floor((width.value * factor) / 10) * 10);
-  const newFps     = Math.max(1, Math.floor(fps.value * factor));
-  const newQuality = Math.max(1, Math.min(100, Math.floor(quality.value * factor)));
+  const newWidth   = Math.max(100, Math.round((width.value * factor) / 10) * 10);
+  const newFps     = Math.max(1, Math.round(fps.value * factor));
+  const newQuality = Math.max(1, Math.min(100, Math.round(quality.value * factor)));
   const changed = newWidth !== width.value || newFps !== fps.value || newQuality !== quality.value;
   width.value = newWidth; fps.value = newFps; quality.value = newQuality;
   return changed;
