@@ -631,6 +631,7 @@ const resultUrl       = ref(null);
 const resultBlob      = ref(null);
 const estimatedSize  = ref(null);
 const sizeConfidence = ref(null);
+const sizeEstimationCorrection = ref(1.0);
 const cachedFileData = ref(null);
 const cachedUrl      = ref('');
 const inputExt = ref('mp4');
@@ -1610,6 +1611,11 @@ function qualityToCrf() {
 // uznajemy za "wystarczająco blisko celu" i przestajemy dalej dostrajać.
 const SIZE_TOLERANCE = 0.95;
 
+// Szacowany narzut nagłówków/kontenerów per format (bajty).
+// Przy krótkiej próbce ten stały narzut jest proporcjonalnie duży i zawyża
+// ekstrapolację liniową — odejmujemy go przed skalowaniem, dodajemy raz na końcu.
+const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
+
 // Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony.
 // Używa pierwiastka sześciennego (rozkłada zmianę na 3 niezależne parametry)
 // z tłumieniem 70-75%, żeby zbliżać się monotonicznie do celu BEZ oscylacji.
@@ -1822,10 +1828,13 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
     const fileData = preloadedFileData || await fetchVideo(videoUrl.value);
     await ffmpeg.writeFile('analyze.mp4', new Uint8Array(fileData.slice().buffer));
     const duration = endTime.value - startTime.value;
-    const testDuration = Math.min(1.0, duration * 0.2);
+    // Dłuższa próbka (2.5s / 25% filmu) daje bardziej reprezentatywną ekstrapolację
+    const testDuration = Math.min(2.5, duration * 0.25);
     const testStart = startTime.value + duration * 0.4;
+    const fmt = outputFormat.value;
+    const overhead = CONTAINER_OVERHEAD[fmt] || 1000;
 
-    if (outputFormat.value === 'gif') {
+    if (fmt === 'gif') {
       const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
       await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','sample.gif']);
       const sampleSize = (await ffmpeg.readFile('sample.gif')).length;
@@ -1833,25 +1842,29 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
       const testFrames = Math.floor(testDuration * fps.value);
       const totalFrames = Math.floor(duration * fps.value);
       if (testFrames > 0) {
-        // Czysta ekstrapolacja liniowa — próbka jest już zakodowana w docelowej
-        // rozdzielczości (buildVfFilter ją skaluje), więc nie trzeba dodatkowo
-        // korygować rozmiaru pod kątem szerokości. Realną weryfikację i ew. dodatkowe
-        // dostrojenie po pełnym kodowaniu robi teraz osobny mechanizm w convert().
-        estimatedSize.value = Math.round((sampleSize/testFrames)*totalFrames);
+        // Odejmujemy narzut kontenera przed ekstrapolacją, dodajemy raz na końcu.
+        // Bez tego krótka próbka zawyża prognozę (narzut skaluje się × ilość klatek).
+        const dataOnly = Math.max(0, sampleSize - overhead);
+        const rawEstimate = overhead + (dataOnly / testFrames) * totalFrames;
+        estimatedSize.value = Math.round(rawEstimate * sizeEstimationCorrection.value);
         sizeConfidence.value = 0.85;
       } else { estimatedSize.value = sampleSize; sizeConfidence.value = 0.5; }
-    } else if (outputFormat.value === 'webp') {
+    } else if (fmt === 'webp') {
       await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','sample.webp']);
       const sampleSize = (await ffmpeg.readFile('sample.webp')).length;
       await ffmpeg.deleteFile('sample.webp');
-      estimatedSize.value = Math.round((sampleSize/testDuration)*duration);
+      const dataOnly = Math.max(0, sampleSize - overhead);
+      const rawEstimate = overhead + (dataOnly / testDuration) * duration;
+      estimatedSize.value = Math.round(rawEstimate * sizeEstimationCorrection.value);
       sizeConfidence.value = 0.9;
     } else {
       // MP4 — próbka kodowana tym samym libx264/CRF co finalny plik.
       await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','sample.mp4']);
       const sampleSize = (await ffmpeg.readFile('sample.mp4')).length;
       await ffmpeg.deleteFile('sample.mp4');
-      estimatedSize.value = Math.round((sampleSize/testDuration)*duration);
+      const dataOnly = Math.max(0, sampleSize - overhead);
+      const rawEstimate = overhead + (dataOnly / testDuration) * duration;
+      estimatedSize.value = Math.round(rawEstimate * sizeEstimationCorrection.value);
       sizeConfidence.value = 0.85;
     }
     await ffmpeg.deleteFile('analyze.mp4');
@@ -2099,6 +2112,14 @@ async function convert() {
     conversionStage.value = 'Generowanie pliku...';
     await performEncode(fileData);
 
+    // Uczenie współczynnika korekcji: porównujemy realny rozmiar z prognozą
+    // i zapamiętujemy stosunek, żeby następne estymacje były celniejsze.
+    if (estimatedSize.value && estimatedSize.value > 0 && resultBlob.value) {
+      const correctionFromThisEncode = resultBlob.value.size / estimatedSize.value;
+      // Wygładzone uśrednianie: 30% starej wartości + 70% nowego pomiaru
+      sizeEstimationCorrection.value = 0.3 * sizeEstimationCorrection.value + 0.7 * correctionFromThisEncode;
+    }
+
     // KROK 3: realna weryfikacja PO wygenerowaniu — próbka to tylko przybliżenie, więc
     // dociągamy jeszcze raz na podstawie PRAWDZIWEGO rozmiaru: jeśli plik jest za duży,
     // zmniejszamy parametry; jeśli jest wyraźnie MNIEJSZY niż limit, zwiększamy je, żeby
@@ -2139,7 +2160,7 @@ function downloadResult() {
 watch(videoUrl, (newUrl) => {
   if (newUrl.trim() !== cachedUrl.value) {
     cachedFileData.value = null; cachedUrl.value = ''; estimatedSize.value = null;
-    sizeConfidence.value = null; inputExt.value = 'mp4';
+    sizeConfidence.value = null; sizeEstimationCorrection.value = 1.0; inputExt.value = 'mp4';
     originalSize.value = null; originalWidth.value = null; originalHeight.value = null;
     originalFps.value = null; originalDuration.value = null;
     resultWidth.value = 0; resultHeight.value = 0; resultDuration.value = 0;
