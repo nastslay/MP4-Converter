@@ -1617,40 +1617,52 @@ const SIZE_TOLERANCE = 0.95;
 const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 
 // Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony.
-// Używa pierwiastka sześciennego (rozkłada zmianę na 3 niezależne parametry)
-// z tłumieniem 70-75%, żeby zbliżać się monotonicznie do celu BEZ oscylacji.
-// Typowa konwergencja: 2-4 iteracje.
-//
-// - growing = false (za duży plik): zmniejsza parametry, z marginesem 3%
-//   żeby nigdy nie przekroczyć limitu.
-// - growing = true (za mały plik): zwiększa parametry, ale z mocniejszym
-//   tłumieniem (70%), żeby nie przeskoczyć ponad limit.
-// Zawsze trzyma się realnych granic suwaków (Szerokość 100-1280, FPS 1-30, Jakość 1-100).
-// Zwraca true, jeśli którykolwiek parametr faktycznie się zmienił.
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   const ratio = targetBytes / actualBytes;
+  const distance = Math.abs(1 - ratio);
 
-  // Pierwiastek sześcienny — rozkłada skalowanie równomiernie na 3 parametry.
-  // Jest stabilny i nie powoduje oscylacji jak wyższe potęgi.
-  const rawFactor = Math.cbrt(ratio);
+  // Adaptacyjny mnożnik:
+  // Gdy jesteśmy daleko (distance > 20%), używamy bezpiecznego pierwiastka sześciennego (0.33), 
+  // który zapobiega dzikim oscylacjom rozkładając mocno zmianę na 3 suwaki.
+  // Gdy jesteśmy blisko (distance < 20%), 0.33 daje tak małe różnice, że znikają 
+  // one przez matematyczne zaokrąglenia, dając kroczki rzędu 0.05MB. Dlatego 
+  // przy mniejszych dystansach zwiększamy potęgę (0.6), by skok był stanowczy.
+  const exponent = distance < 0.20 ? 0.6 : 0.333;
+  const rawFactor = Math.pow(ratio, exponent);
 
-  // Tłumienie: przesuwamy się tylko o 70-75% w stronę wartości teoretycznej.
-  // Dzięki temu każda iteracja zbliża się do celu, ale nigdy go nie przeskakuje.
   let factor;
   if (growing) {
-    // Gdy plik za mały — zwiększamy ostrożnie (70% skoku), żeby nie przekroczyć limitu
-    factor = 1 + (rawFactor - 1) * 0.70;
+    // Gdy plik za mały — zwiększamy odważnie, żeby nadgonić brakujące mb.
+    factor = 1 + (rawFactor - 1) * 0.85;
   } else {
-    // Gdy plik za duży — zmniejszamy trochę mocniej (75% skoku) + 3% margines bezpieczeństwa
-    factor = (1 + (rawFactor - 1) * 0.75) * 0.97;
+    // Gdy plik za duży — tniemy agresywnie (90% skoku) + dodajemy 4% twardego 
+    // marginesu bezpieczeństwa, by na pewno spaść pod limit w kolejnej próbie.
+    factor = (1 + (rawFactor - 1) * 0.90) * 0.96;
   }
 
-  const newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
-  const newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value * factor)));
-  const newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
+  let newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
+  let newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value * factor)));
+  let newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
 
-  const changed = newWidth !== width.value || newFps !== fps.value || newQuality !== quality.value;
-  width.value = newWidth; fps.value = newFps; quality.value = newQuality;
+  // Gwarantowane przełamanie blokady: jeśli zaokrąglenia wyzerowały zmianę,
+  // wymuszamy ręczny krok na jakości (najbardziej płynny wpływ) lub FPS / szerokości.
+  if (newWidth === width.value && newFps === fps.value && newQuality === quality.value) {
+     if (growing) {
+         if (newQuality < 100) newQuality = Math.min(100, newQuality + 2);
+         else if (newFps < 30) newFps = Math.min(30, newFps + 1);
+         else if (newWidth < 1280) newWidth = Math.min(1280, newWidth + 10);
+     } else {
+         if (newQuality > 1) newQuality = Math.max(1, newQuality - 2);
+         else if (newFps > 1) newFps = Math.max(1, newFps - 1);
+         else if (newWidth > 100) newWidth = Math.max(100, newWidth - 10);
+     }
+  }
+
+  let changed = false;
+  if (newWidth !== width.value) { width.value = newWidth; changed = true; }
+  if (newFps !== fps.value) { fps.value = newFps; changed = true; }
+  if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
+  
   return changed;
 }
 
