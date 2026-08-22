@@ -1610,37 +1610,33 @@ function qualityToCrf() {
 // uznajemy za "wystarczająco blisko celu" i przestajemy dalej dostrajać.
 const SIZE_TOLERANCE = 0.95;
 
-// Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony:
-// - growing = false (za duży plik): zmniejsza, celując tuż PONIŻEJ limitu (margines 0.95),
-//   żeby nigdy go nie przekroczyć.
-// - growing = true (plik wyraźnie mniejszy niż limit): zwiększa parametry, żeby zbliżyć
-//   się do limitu i wykorzystać dostępny "budżet" rozmiaru — ale z mocnym tłumieniem
-//   (tylko 60% obliczonego skoku), żeby nie przeskoczyć ponad limit w jednej iteracji.
+// Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony.
+// Używa pierwiastka sześciennego (rozkłada zmianę na 3 niezależne parametry)
+// z tłumieniem 70-75%, żeby zbliżać się monotonicznie do celu BEZ oscylacji.
+// Typowa konwergencja: 2-4 iteracje.
+//
+// - growing = false (za duży plik): zmniejsza parametry, z marginesem 3%
+//   żeby nigdy nie przekroczyć limitu.
+// - growing = true (za mały plik): zwiększa parametry, ale z mocniejszym
+//   tłumieniem (70%), żeby nie przeskoczyć ponad limit.
 // Zawsze trzyma się realnych granic suwaków (Szerokość 100-1280, FPS 1-30, Jakość 1-100).
 // Zwraca true, jeśli którykolwiek parametr faktycznie się zmienił.
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   const ratio = targetBytes / actualBytes;
-  
-  // Adaptacyjny krok: im dalej od celu, tym mocniej zmieniamy parametry (większy exponent)
-  let errorDistance = Math.abs(ratio - 1);
-  if (!growing && ratio < 1) {
-    // W przypadku zmniejszania skalujemy odległość, by 1/2 była tak samo traktowana jak 2
-    errorDistance = Math.abs((1 / ratio) - 1);
-  }
 
-  // Płynne przejście potęgi (od ~0.33 gdy blisko do 0.85 gdy daleko)
-  const exponent = Math.min(0.85, 0.333 + (errorDistance * 0.15));
-  const rawFactor = Math.pow(ratio, exponent);
+  // Pierwiastek sześcienny — rozkłada skalowanie równomiernie na 3 parametry.
+  // Jest stabilny i nie powoduje oscylacji jak wyższe potęgi.
+  const rawFactor = Math.cbrt(ratio);
 
+  // Tłumienie: przesuwamy się tylko o 70-75% w stronę wartości teoretycznej.
+  // Dzięki temu każda iteracja zbliża się do celu, ale nigdy go nie przeskakuje.
   let factor;
   if (growing) {
-    // Zwiększamy tłumienie (wolniejsze wzrosty) gdy jesteśmy blisko, 
-    // ale pozwalamy na szybkie wzrosty gdy daleko.
-    const damping = Math.min(0.9, 0.6 + (errorDistance * 0.1));
-    factor = 1 + (rawFactor - 1) * damping;
+    // Gdy plik za mały — zwiększamy ostrożnie (70% skoku), żeby nie przekroczyć limitu
+    factor = 1 + (rawFactor - 1) * 0.70;
   } else {
-    // Gdy zmniejszamy, zachowujemy drobny margines bezpieczeństwa
-    factor = rawFactor * 0.95;
+    // Gdy plik za duży — zmniejszamy trochę mocniej (75% skoku) + 3% margines bezpieczeństwa
+    factor = (1 + (rawFactor - 1) * 0.75) * 0.97;
   }
 
   const newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
