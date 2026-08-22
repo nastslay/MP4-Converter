@@ -1607,146 +1607,107 @@ function qualityToCrf() {
   return Math.round(51 - (quality.value / 100) * 33);
 }
 
-// Celujemy minimalnie poniżej limitu, bo rzeczywisty rozmiar zależy m.in. od
-// zawartości klatek i nie da się go przewidzieć wyłącznie z ustawień kodeka.
-const SIZE_TARGET_RATIO = 0.985;
-// Plik w przedziale [SIZE_TOLERANCE * limit, limit] uznajemy za wystarczająco
-// dobrze dopasowany. Poniżej tej granicy próbujemy odzyskać jakość.
-const SIZE_TOLERANCE = 0.92;
+// Dolna granica pasma tolerancji: rozmiar w przedziale [SIZE_TOLERANCE * target, target]
+// uznajemy za "wystarczająco blisko celu" i przestajemy dalej dostrajać.
+const SIZE_TOLERANCE = 0.95;
 
 // Szacowany narzut nagłówków/kontenerów per format (bajty).
 // Przy krótkiej próbce ten stały narzut jest proporcjonalnie duży i zawyża
 // ekstrapolację liniową — odejmujemy go przed skalowaniem, dodajemy raz na końcu.
 const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 
-// Pomiary pełnych kodowań z bieżącej sesji. Pozwalają interpolować kolejną
-// wartość parametru zamiast za każdym razem wykonywać stały krok "na ślepo".
-let sizeFitHistory = [];
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function sizeTargetBytes(limitBytes) {
-  return Math.floor(limitBytes * SIZE_TARGET_RATIO);
-}
-
-function currentEncodingParams() {
-  return { quality: quality.value, fps: fps.value, width: width.value };
-}
-
-function recordSizeMeasurement(bytes) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return;
-  sizeFitHistory.push({ ...currentEncodingParams(), bytes });
-}
-
-function currentResultCandidate() {
-  if (!resultBlob.value) return null;
-  return {
-    blob: resultBlob.value,
-    params: currentEncodingParams(),
-    width: resultWidth.value,
-    height: resultHeight.value,
-    duration: resultDuration.value,
-  };
-}
-
-// Szuka dwóch pomiarów różniących się wyłącznie jednym parametrem i wylicza
-// wartość leżącą między nimi. Logarytm rozmiaru dobrze opisuje zmiany kodeków.
-function interpolateParameter(parameter, targetBytes) {
-  const fixedParameters = ['quality', 'fps', 'width'].filter(key => key !== parameter);
-  const matching = sizeFitHistory.filter(item =>
-    fixedParameters.every(key => item[key] === (key === 'quality' ? quality.value : key === 'fps' ? fps.value : width.value))
-  );
-  const below = matching.filter(item => item.bytes <= targetBytes)
-    .sort((a, b) => b.bytes - a.bytes)[0];
-  const above = matching.filter(item => item.bytes >= targetBytes)
-    .sort((a, b) => a.bytes - b.bytes)[0];
-  if (!below || !above || below[parameter] === above[parameter] || below.bytes === above.bytes) return null;
-
-  const progress = (Math.log(targetBytes) - Math.log(below.bytes)) /
-    (Math.log(above.bytes) - Math.log(below.bytes));
-  return below[parameter] + (above[parameter] - below[parameter]) * progress;
-}
-
-function crfToQuality(crf) {
-  return clamp(Math.round(((51 - crf) / 33) * 100), 0, 100);
-}
-
-function nextQualityForRatio(ratio) {
-  if (outputFormat.value === 'mp4') {
-    // Zmiana CRF o ok. 6 zwykle podwaja/poławia bitrate. Tłumienie ogranicza
-    // przeskok przy materiałach o bardzo nierównej złożoności.
-    const wantedCrf = clamp(qualityToCrf() - 6 * Math.log2(ratio) * 0.8, 18, 51);
-    return crfToQuality(wantedCrf);
-  }
-  return clamp(Math.round(quality.value * Math.pow(ratio, 0.65)), 0, 100);
-}
-
-function applyAdaptiveWidth(nextWidth) {
-  const rounded = clamp(Math.round(nextWidth / 10) * 10, 100, 1280);
-  if (rounded === width.value) return false;
-  // "Oryginalny rozmiar" nie może pozostać aktywny, gdy limit wymusza zmianę
-  // rozdzielczości — w przeciwnym razie interfejs sugerowałby błędny stan.
-  if (useOriginalWidth.value) useOriginalWidth.value = false;
-  width.value = rounded;
-  return true;
-}
-
-// Dostosowuje jeden parametr na raz. Najpierw jakość, potem FPS i szerokość:
-// pojedyncza zmiana umożliwia wykorzystanie realnego wyniku kolejnej próby i
-// eliminuje oscylacje powodowane przez równoczesną zmianę trzech parametrów.
+// Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony.
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
-  const desiredBytes = sizeTargetBytes(targetBytes);
-  const ratio = desiredBytes / actualBytes;
-  const direction = growing ? 1 : -1;
+  const ratio = targetBytes / actualBytes;
+  
+  // FAZA 1: Precyzyjne dostrajanie (gdy jesteśmy blisko celu, np. różnica < 25%)
+  // W tej fazie zmieniamy TYLKO JEDEN parametr naraz (głównie Jakość). 
+  // Próba zmiany 3 parametrów przy małej odległości prowadzi do oscylacji (bo ich wpływ się mnoży)
+  // albo do "utknięcia" (bo matematyczne zaokrąglenia wyzerują zmiany).
+  if (Math.abs(1 - ratio) < 0.25) {
+     // Ponieważ jakość wpływa nieliniowo (zwłaszcza w MP4), ucinamy ratio o połowę.
+     let fineRatio = 1 + (ratio - 1) * 0.5; 
+     
+     if (growing) {
+         let newQuality = Math.round(quality.value * fineRatio);
+         if (newQuality === quality.value && quality.value < 100) newQuality += 1;
+         
+         if (newQuality <= 100 && newQuality !== quality.value) { 
+             quality.value = newQuality; return true; 
+         }
+         
+         // Jakość wyczerpana (dobiła do 100) -> podnosimy FPS
+         let newFps = Math.round(fps.value * fineRatio);
+         if (newFps === fps.value && fps.value < 30) newFps += 1;
+         if (newFps <= 30 && newFps !== fps.value) {
+             fps.value = newFps; return true;
+         }
+         
+         // FPS wyczerpane -> podnosimy rozdzielczość
+         let newWidth = Math.round(width.value * (1 + (fineRatio - 1)*0.5) / 10) * 10;
+         if (newWidth === width.value && width.value < 1280) newWidth += 10;
+         if (newWidth <= 1280 && newWidth !== width.value) {
+             width.value = newWidth; return true;
+         }
+     } else {
+         // Jeśli plik za duży - docinamy odrobinę mocniej (margines 3%), żeby na pewno wejść pod limit
+         let cutRatio = fineRatio * 0.97;
+         let newQuality = Math.round(quality.value * cutRatio);
+         if (newQuality === quality.value && quality.value > 1) newQuality -= 1;
+         
+         if (newQuality >= 1 && newQuality !== quality.value) { 
+             quality.value = newQuality; return true; 
+         }
+         
+         let newFps = Math.round(fps.value * cutRatio);
+         if (newFps === fps.value && fps.value > 1) newFps -= 1;
+         if (newFps >= 1 && newFps !== fps.value) {
+             fps.value = newFps; return true;
+         }
+         
+         let newWidth = Math.round(width.value * cutRatio / 10) * 10;
+         if (newWidth === width.value && width.value > 100) newWidth -= 10;
+         if (newWidth >= 100 && newWidth !== width.value) {
+             width.value = newWidth; return true;
+         }
+     }
+  } 
+  // FAZA 2: Zgrubne zmiany (gdy jesteśmy daleko od celu)
+  else {
+      // Skalujemy wszystko naraz, ale używamy pierwiastka 4-tego stopnia (0.25).
+      // Wynika to z matematyki: pow(width, 2) * fps * quality = wpływ x^4 na finalny rozmiar.
+      const rawFactor = Math.pow(ratio, 0.25);
+      
+      let factor;
+      if (growing) {
+          factor = 1 + (rawFactor - 1) * 0.80; // lekko tłumione w górę
+      } else {
+          factor = (1 + (rawFactor - 1) * 0.85) * 0.95; // 5% margines w dół
+      }
 
-  let fittedQuality = interpolateParameter('quality', desiredBytes);
-  let newQuality = fittedQuality === null ? nextQualityForRatio(ratio) : Math.round(fittedQuality);
-  newQuality = clamp(newQuality, 0, 100);
-  if ((growing && newQuality > quality.value) || (!growing && newQuality < quality.value)) {
-    quality.value = newQuality;
-    return true;
+      let newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
+      let newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value * factor)));
+      let newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
+      
+      let changed = false;
+      if (newWidth !== width.value) { width.value = newWidth; changed = true; }
+      if (newFps !== fps.value) { fps.value = newFps; changed = true; }
+      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
+      
+      if (changed) return true;
+      
+      // Zabezpieczenie na wypadek dziwnych zaokrągleń
+      if (growing) {
+          if (quality.value < 100) { quality.value += 2; return true; }
+          if (fps.value < 30) { fps.value += 1; return true; }
+          if (width.value < 1280) { width.value += 10; return true; }
+      } else {
+          if (quality.value > 1) { quality.value -= 2; return true; }
+          if (fps.value > 1) { fps.value -= 1; return true; }
+          if (width.value > 100) { width.value -= 10; return true; }
+      }
   }
-  if ((growing && quality.value < 100) || (!growing && quality.value > 0)) {
-    quality.value = clamp(quality.value + direction * (Math.abs(ratio - 1) > 0.15 ? 3 : 1), 0, 100);
-    return true;
-  }
-
-  const fittedFps = interpolateParameter('fps', desiredBytes);
-  let newFps = fittedFps === null
-    ? Math.round(fps.value * Math.pow(ratio, 0.75))
-    : Math.round(fittedFps);
-  newFps = clamp(newFps, 1, 30);
-  if ((growing && newFps > fps.value) || (!growing && newFps < fps.value)) {
-    fps.value = newFps;
-    return true;
-  }
-  if ((growing && fps.value < 30) || (!growing && fps.value > 1)) {
-    fps.value = clamp(fps.value + direction, 1, 30);
-    return true;
-  }
-
-  const fittedWidth = interpolateParameter('width', desiredBytes);
-  const newWidth = fittedWidth === null
-    ? width.value * Math.pow(ratio, 0.38)
-    : fittedWidth;
-  if ((growing && newWidth > width.value) || (!growing && newWidth < width.value)) {
-    return applyAdaptiveWidth(newWidth);
-  }
-  if (growing && width.value < 1280) return applyAdaptiveWidth(width.value + 10);
-  if (!growing && width.value > 100) return applyAdaptiveWidth(width.value - 10);
   return false;
-}
-
-// Przy małych limitach stałe 128 kb/s audio mogłoby zużyć większość budżetu
-// MP4. Dzielimy dostępne pasmo adaptacyjnie, ale nigdy nie schodzimy poniżej
-// 16 kb/s, żeby ścieżka dźwiękowa pozostała użyteczna.
-function mp4AudioBitrate() {
-  if (!limitSizeEnabled.value) return '128k';
-  const duration = Math.max(0.1, endTime.value - startTime.value);
-  const totalKbps = (targetSizeMB.value * 1024 * 1024 * 8) / duration / 1000;
-  return `${Math.floor(clamp(totalKbps * 0.2, 16, 128))}k`;
 }
 
 function clearPreview() {
@@ -1918,7 +1879,7 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
   }
   error.value = '';
   if (attempt === 0) { estimatedSize.value = null; sizeConfidence.value = null; }
-  if (isConverting.value) conversionStage.value = `Dopasowywanie parametrów do limitu rozmiaru (próba ${attempt + 1}/6)...`;
+  if (isConverting.value) conversionStage.value = `Dopasowywanie parametrów do limitu rozmiaru (próba ${attempt + 1}/8)...`;
   try {
     const fileData = preloadedFileData || await fetchVideo(videoUrl.value);
     await ffmpeg.writeFile('analyze.mp4', new Uint8Array(fileData.slice().buffer));
@@ -1954,7 +1915,7 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
       sizeConfidence.value = 0.9;
     } else {
       // MP4 — próbka kodowana tym samym libx264/CRF co finalny plik.
-      await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a',mp4AudioBitrate(),'-movflags','+faststart','sample.mp4']);
+      await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','sample.mp4']);
       const sampleSize = (await ffmpeg.readFile('sample.mp4')).length;
       await ffmpeg.deleteFile('sample.mp4');
       const dataOnly = Math.max(0, sampleSize - overhead);
@@ -1964,16 +1925,16 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
     }
     await ffmpeg.deleteFile('analyze.mp4');
 
-    if (limitSizeEnabled.value && attempt < 6) {
+    if (limitSizeEnabled.value && attempt < 8) {
       const targetBytes = targetSizeMB.value * 1024 * 1024;
       const tooBig   = estimatedSize.value > targetBytes;
-      const tooSmall = estimatedSize.value < sizeTargetBytes(targetBytes) * SIZE_TOLERANCE;
+      const tooSmall = estimatedSize.value < targetBytes * SIZE_TOLERANCE;
       if (tooBig || tooSmall) {
         const changed = adjustParamsToTarget(estimatedSize.value, targetBytes, tooSmall);
         // Przekazujemy dalej ten sam fileData, żeby rekurencja nie pobierała wideo ponownie z sieci.
         if (changed) await analyzeAndEstimate(attempt + 1, fileData);
       }
-      // W przeciwnym razie estymata mieści się w bezpiecznym paśmie celu.
+      // W przeciwnym razie estymata mieści się w paśmie [95%-100% celu] — wystarczająco blisko.
     }
   } catch(e) { error.value = `Błąd analizy: ${e.message}`; console.error(e); }
 }
@@ -2140,7 +2101,6 @@ async function convertViaCanvas(fileData, srcExt) {
 
   const outExt = outputFormat.value;
   const data = await ffmpeg.readFile('output.' + outExt);
-  if (resultUrl.value) URL.revokeObjectURL(resultUrl.value);
   resultBlob.value = new Blob([data.buffer], { type: mimeForFormat(outExt) });
   resultUrl.value = URL.createObjectURL(resultBlob.value);
   await ffmpeg.deleteFile('output.' + outExt);
@@ -2177,11 +2137,10 @@ async function performEncode(fileData) {
     } else {
       // MP4 z tej ścieżki (bez kadrowania/nakładek) koduje się bezpośrednio z oryginalnego
       // pliku, więc — w odróżnieniu od ścieżki z canvasu — ZACHOWUJE dźwięk źródła.
-      await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a',mp4AudioBitrate(),'-movflags','+faststart','output.mp4']);
+      await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','output.mp4']);
     }
     const outExt = outputFormat.value;
     const data = await ffmpeg.readFile('output.' + outExt);
-    if (resultUrl.value) URL.revokeObjectURL(resultUrl.value);
     resultBlob.value = new Blob([data.buffer], { type: mimeForFormat(outExt) });
     resultUrl.value = URL.createObjectURL(resultBlob.value);
     await ffmpeg.deleteFile('input.mp4');
@@ -2191,14 +2150,12 @@ async function performEncode(fileData) {
 
 async function convert() {
   if (!videoUrl.value.trim()) { error.value = 'Wprowadź link do wideo lub wgraj plik.'; return; }
-  if (resultUrl.value) URL.revokeObjectURL(resultUrl.value);
   error.value = ''; resultUrl.value = null; resultBlob.value = null; isConverting.value = true;
   conversionStage.value = '';
 
   try {
     const fileData = await fetchVideo(videoUrl.value);
     const targetBytes = targetSizeMB.value * 1024 * 1024;
-    sizeFitHistory = [];
 
     // KROK 1: jeśli włączony limit rozmiaru, próba "w tle" na krótkiej próbce —
     // dostosowuje Szerokość / FPS / Jakość (w OBIE strony — patrz analyzeAndEstimate),
@@ -2210,7 +2167,6 @@ async function convert() {
     // KROK 2: generujemy właściwy plik.
     conversionStage.value = 'Generowanie pliku...';
     await performEncode(fileData);
-    if (limitSizeEnabled.value && resultBlob.value) recordSizeMeasurement(resultBlob.value.size);
 
     // Uczenie współczynnika korekcji: porównujemy realny rozmiar z prognozą
     // i zapamiętujemy stosunek, żeby następne estymacje były celniejsze.
@@ -2226,18 +2182,12 @@ async function convert() {
     // zbliżyć się do zadanego rozmiaru (a nie zostawiać niepotrzebny zapas) — ale zawsze
     // z marginesem bezpieczeństwa, żeby nigdy nie przekroczyć limitu.
     if (limitSizeEnabled.value) {
-      const MAX_FINAL_ATTEMPTS = 7;
+      const MAX_FINAL_ATTEMPTS = 4;
       let finalAttempt = 0;
-      // Jeżeli próba zwiększenia jakości przekroczy limit, nie tracimy
-      // poprzedniego, poprawnego wariantu. Na końcu wybieramy największy plik,
-      // który mieści się w limicie, bo daje on najwięcej dostępnej jakości.
-      let bestWithinLimit = resultBlob.value && resultBlob.value.size <= targetBytes
-        ? currentResultCandidate()
-        : null;
       while (resultBlob.value && finalAttempt < MAX_FINAL_ATTEMPTS) {
         const size = resultBlob.value.size;
         const tooBig   = size > targetBytes;
-        const tooSmall = size < sizeTargetBytes(targetBytes) * SIZE_TOLERANCE;
+        const tooSmall = size < targetBytes * SIZE_TOLERANCE;
         if (!tooBig && !tooSmall) break; // w paśmie tolerancji — wystarczająco blisko celu
 
         finalAttempt++;
@@ -2248,24 +2198,6 @@ async function convert() {
           ? `Plik za duży (${formatFileSize(size)}) — zmniejszam parametry i generuję ponownie (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`
           : `Plik mniejszy niż limit (${formatFileSize(size)}) — zwiększam parametry, by zbliżyć się do ${targetSizeMB.value} MB (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`;
         await performEncode(fileData);
-        if (resultBlob.value) {
-          recordSizeMeasurement(resultBlob.value.size);
-          if (resultBlob.value.size <= targetBytes &&
-              (!bestWithinLimit || resultBlob.value.size > bestWithinLimit.blob.size)) {
-            bestWithinLimit = currentResultCandidate();
-          }
-        }
-      }
-      if (resultBlob.value && resultBlob.value.size > targetBytes && bestWithinLimit) {
-        if (resultUrl.value) URL.revokeObjectURL(resultUrl.value);
-        resultBlob.value = bestWithinLimit.blob;
-        quality.value = bestWithinLimit.params.quality;
-        fps.value = bestWithinLimit.params.fps;
-        width.value = bestWithinLimit.params.width;
-        resultWidth.value = bestWithinLimit.width;
-        resultHeight.value = bestWithinLimit.height;
-        resultDuration.value = bestWithinLimit.duration;
-        resultUrl.value = URL.createObjectURL(bestWithinLimit.blob);
       }
     }
   } catch(e) { error.value = `Błąd konwersji: ${e.message}`; console.error(e); }
