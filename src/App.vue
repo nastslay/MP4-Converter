@@ -1629,7 +1629,7 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   // W tej fazie zmieniamy TYLKO JEDEN parametr naraz (głównie Jakość). 
   // Próba zmiany 3 parametrów przy małej odległości prowadzi do oscylacji (bo ich wpływ się mnoży)
   // albo do "utknięcia" (bo matematyczne zaokrąglenia wyzerują zmiany).
-  if (Math.abs(1 - ratio) < 0.25) {
+  if (Math.abs(1 - ratio) < 0.15) {
      // Ponieważ jakość wpływa nieliniowo (zwłaszcza w MP4), ucinamy ratio o połowę.
      let fineRatio = 1 + (ratio - 1) * 0.5; 
      
