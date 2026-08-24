@@ -1631,7 +1631,7 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   // albo do "utknięcia" (bo matematyczne zaokrąglenia wyzerują zmiany).
   if (Math.abs(1 - ratio) < 0.15) {
      // Ponieważ jakość wpływa nieliniowo (zwłaszcza w MP4), ucinamy ratio o połowę.
-     let fineRatio = 1 + (ratio - 1) * 0.5; 
+     let fineRatio = 1 + (ratio - 1) * 1.0; 
      
      if (growing) {
          let newQuality = Math.round(quality.value * fineRatio);
@@ -1656,7 +1656,7 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
          }
      } else {
          // Jeśli plik za duży - docinamy odrobinę mocniej (margines 3%), żeby na pewno wejść pod limit
-         let cutRatio = fineRatio * 0.97;
+         let cutRatio = fineRatio * 0.96;
          let newQuality = Math.round(quality.value * cutRatio);
          if (newQuality === quality.value && quality.value > 1) newQuality -= 1;
          
