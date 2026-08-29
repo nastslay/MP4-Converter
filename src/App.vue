@@ -626,8 +626,11 @@ const quality    = ref(DEFAULT_QUALITY);
 const useOriginalWidth = ref(false);
 const outputFormat = ref('webp');
 const limitSizeEnabled = ref(false);
-const targetSizeMB     = ref(parseFloat(localStorage.getItem('targetSizeMB') || '10'));
-watch(targetSizeMB, (val) => { localStorage.setItem('targetSizeMB', val); });
+const _savedSize = parseFloat(localStorage.getItem('targetSizeMB') ?? '');
+const targetSizeMB = ref(isNaN(_savedSize) ? 10 : _savedSize);
+watch(targetSizeMB, (val) => {
+  try { localStorage.setItem('targetSizeMB', String(val)); } catch(e) {}
+}, { immediate: true });
 const isConverting    = ref(false);
 const conversionStage = ref('');
 const isFetching      = ref(false);
@@ -1613,11 +1616,13 @@ function qualityToCrf() {
   return Math.round(51 - (quality.value / 100) * 33);
 }
 
-// Pasmo tolerancji: uznajemy wynik za satysfakcjonujący gdy mieści się w przedziale
-// [95% celu, 105% celu] — zarówno przy zwiększaniu jak i zmniejszaniu.
-// Przy zmniejszaniu 5% powyżej limitu też jest OK (nie przekraczamy go "drastycznie").
-const SIZE_BAND_LO = 0.95; // dolna granica: 95% celu
-const SIZE_BAND_HI = 1.05; // górna granica: 105% celu (akceptowalne przekroczenie)
+// Pasmo tolerancji dla fazy próbkowania — uznajemy parametry za wystarczająco dopasowane
+// gdy estymata mieści się w 95–105% celu (5% marginesu w górę bo to tylko szacunek).
+const SIZE_BAND_LO = 0.95;
+const SIZE_BAND_HI = 1.05;
+
+// Pasmo tolerancji dla finalnego pliku — musi być w 95–100% celu (nie może przekroczyć limitu).
+const SIZE_FINAL_LO = 0.95;
 
 // Szacowany narzut nagłówków/kontenerów per format (bajty).
 // Przy krótkiej próbce ten stały narzut jest proporcjonalnie duży i zawyża
@@ -2196,9 +2201,9 @@ async function convert() {
       let finalAttempt = 0;
       while (resultBlob.value && finalAttempt < MAX_FINAL_ATTEMPTS) {
         const size = resultBlob.value.size;
-        const tooBig   = size > targetBytes * SIZE_BAND_HI;
-        const tooSmall = size < targetBytes * SIZE_BAND_LO;
-        if (!tooBig && !tooSmall) break; // w paśmie 95–105% celu — satysfakcjonujące
+        const tooBig   = size > targetBytes;
+        const tooSmall = size < targetBytes * SIZE_FINAL_LO;
+        if (!tooBig && !tooSmall) break; // w paśmie 95–100% celu — gotowe
 
         finalAttempt++;
         const changed = adjustParamsToTarget(size, targetBytes, tooSmall);
