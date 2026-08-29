@@ -626,7 +626,8 @@ const quality    = ref(DEFAULT_QUALITY);
 const useOriginalWidth = ref(false);
 const outputFormat = ref('webp');
 const limitSizeEnabled = ref(false);
-const targetSizeMB     = ref(10);
+const targetSizeMB     = ref(parseFloat(localStorage.getItem('targetSizeMB') || '10'));
+watch(targetSizeMB, (val) => { localStorage.setItem('targetSizeMB', val); });
 const isConverting    = ref(false);
 const conversionStage = ref('');
 const isFetching      = ref(false);
@@ -1612,9 +1613,11 @@ function qualityToCrf() {
   return Math.round(51 - (quality.value / 100) * 33);
 }
 
-// Dolna granica pasma tolerancji: rozmiar w przedziale [SIZE_TOLERANCE * target, target]
-// uznajemy za "wystarczająco blisko celu" i przestajemy dalej dostrajać.
-const SIZE_TOLERANCE = 0.95;
+// Pasmo tolerancji: uznajemy wynik za satysfakcjonujący gdy mieści się w przedziale
+// [95% celu, 105% celu] — zarówno przy zwiększaniu jak i zmniejszaniu.
+// Przy zmniejszaniu 5% powyżej limitu też jest OK (nie przekraczamy go "drastycznie").
+const SIZE_BAND_LO = 0.95; // dolna granica: 95% celu
+const SIZE_BAND_HI = 1.05; // górna granica: 105% celu (akceptowalne przekroczenie)
 
 // Szacowany narzut nagłówków/kontenerów per format (bajty).
 // Przy krótkiej próbce ten stały narzut jest proporcjonalnie duży i zawyża
@@ -1625,7 +1628,20 @@ const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   const ratio = targetBytes / actualBytes;
   
-  // FAZA PRECYZYJNA (różnica < 15%): jakość + szerokość ±1–2 px równolegle, FPS jako ostatni
+  // FAZA SUPER-PRECYZYJNA (różnica < 6%): tylko jakość ±2–3 punkty
+  if (Math.abs(1 - ratio) < 0.06) {
+    const delta = ratio > 1.03 ? 3 : 2;
+    if (growing) {
+      const newQuality = Math.min(100, quality.value + delta);
+      if (newQuality !== quality.value) { quality.value = newQuality; return true; }
+    } else {
+      const newQuality = Math.max(1, quality.value - delta);
+      if (newQuality !== quality.value) { quality.value = newQuality; return true; }
+    }
+    return false;
+  }
+
+  // FAZA PRECYZYJNA (różnica 6–15%): jakość + szerokość ±1–2 px równolegle, FPS jako ostatni
   if (Math.abs(1 - ratio) < 0.15) {
     const fineRatio = 1 + (ratio - 1) * 1.0;
     const cutRatio  = fineRatio * 0.96;
@@ -1921,8 +1937,8 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
 
     if (limitSizeEnabled.value && attempt < 8) {
       const targetBytes = targetSizeMB.value * 1024 * 1024;
-      const tooBig   = estimatedSize.value > targetBytes;
-      const tooSmall = estimatedSize.value < targetBytes * SIZE_TOLERANCE;
+      const tooBig   = estimatedSize.value > targetBytes * SIZE_BAND_HI;
+      const tooSmall = estimatedSize.value < targetBytes * SIZE_BAND_LO;
       if (tooBig || tooSmall) {
         const changed = adjustParamsToTarget(estimatedSize.value, targetBytes, tooSmall);
         // Przekazujemy dalej ten sam fileData, żeby rekurencja nie pobierała wideo ponownie z sieci.
@@ -2180,9 +2196,9 @@ async function convert() {
       let finalAttempt = 0;
       while (resultBlob.value && finalAttempt < MAX_FINAL_ATTEMPTS) {
         const size = resultBlob.value.size;
-        const tooBig   = size > targetBytes;
-        const tooSmall = size < targetBytes * SIZE_TOLERANCE;
-        if (!tooBig && !tooSmall) break; // w paśmie tolerancji — wystarczająco blisko celu
+        const tooBig   = size > targetBytes * SIZE_BAND_HI;
+        const tooSmall = size < targetBytes * SIZE_BAND_LO;
+        if (!tooBig && !tooSmall) break; // w paśmie 95–105% celu — satysfakcjonujące
 
         finalAttempt++;
         const changed = adjustParamsToTarget(size, targetBytes, tooSmall);
