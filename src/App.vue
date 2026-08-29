@@ -1625,49 +1625,49 @@ const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   const ratio = targetBytes / actualBytes;
   
-  // FAZA PRECYZYJNA (różnica < 15%): jakość + rozdzielczość ±1–2 px jednocześnie
+  // FAZA PRECYZYJNA (różnica < 15%): sekwencyjnie jakość → FPS → szerokość ±1–2 px
   if (Math.abs(1 - ratio) < 0.15) {
     const fineRatio = 1 + (ratio - 1) * 1.0;
-    const cutRatio  = fineRatio * 0.96; // margines 4% przy zmniejszaniu
+    const cutRatio  = fineRatio * 0.96;
 
     if (growing) {
       let newQuality = Math.round(quality.value * fineRatio);
       if (newQuality === quality.value && quality.value < 100) newQuality += 1;
-      if (newQuality > 100) newQuality = 100;
-
-      // Szerokość +1 lub +2 px proporcjonalnie do odległości od celu
-      const wDelta  = ratio > 1.08 ? 2 : 1;
-      let newWidth  = width.value + wDelta;
-      if (newWidth > 1280) newWidth = 1280;
+      if (newQuality <= 100 && newQuality !== quality.value) {
+        quality.value = newQuality; return true;
+      }
 
       let newFps = Math.round(fps.value * fineRatio);
       if (newFps === fps.value && fps.value < 30) newFps += 1;
-      if (newFps > 30) newFps = 30;
+      if (newFps <= 30 && newFps !== fps.value) {
+        fps.value = newFps; return true;
+      }
 
-      let changed = false;
-      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
-      if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
-      if (newFps     !== fps.value)     { fps.value     = newFps;     changed = true; }
-      return changed;
+      // Szerokość +1 lub +2 px (nie co 10)
+      const wDelta = ratio > 1.08 ? 2 : 1;
+      const newWidth = Math.min(1280, width.value + wDelta);
+      if (newWidth !== width.value) {
+        width.value = newWidth; return true;
+      }
     } else {
       let newQuality = Math.round(quality.value * cutRatio);
       if (newQuality === quality.value && quality.value > 1) newQuality -= 1;
-      if (newQuality < 1) newQuality = 1;
-
-      // Szerokość -1 lub -2 px proporcjonalnie do odległości od celu
-      const wDelta  = ratio < 0.92 ? 2 : 1;
-      let newWidth  = width.value - wDelta;
-      if (newWidth < 100) newWidth = 100;
+      if (newQuality >= 1 && newQuality !== quality.value) {
+        quality.value = newQuality; return true;
+      }
 
       let newFps = Math.round(fps.value * cutRatio);
       if (newFps === fps.value && fps.value > 1) newFps -= 1;
-      if (newFps < 1) newFps = 1;
+      if (newFps >= 1 && newFps !== fps.value) {
+        fps.value = newFps; return true;
+      }
 
-      let changed = false;
-      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
-      if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
-      if (newFps     !== fps.value)     { fps.value     = newFps;     changed = true; }
-      return changed;
+      // Szerokość -1 lub -2 px (nie co 10)
+      const wDelta = ratio < 0.92 ? 2 : 1;
+      const newWidth = Math.max(100, width.value - wDelta);
+      if (newWidth !== width.value) {
+        width.value = newWidth; return true;
+      }
     }
   } 
   // FAZA 2: Zgrubne zmiany (gdy jesteśmy daleko od celu)
@@ -2202,11 +2202,41 @@ async function convert() {
   finally { isConverting.value = false; conversionStage.value = ''; }
 }
 
+const RANDOM_WORDS = [
+  'aurora','bison','cobalt','delta','ember','falcon','granite','harbor',
+  'indigo','jasper','kestrel','lagoon','mosaic','nebula','obsidian','prism',
+  'quartz','raven','sierra','tundra','umber','vortex','willow','xenon','zephyr',
+];
+
+function buildDownloadName() {
+  const url = videoUrl.value.trim();
+  const ext = outputFormat.value;
+  let base = '';
+
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      const pathname = new URL(url).pathname;
+      const segment  = pathname.split('/').filter(Boolean).pop() || '';
+      base = segment.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60);
+    } catch (e) { base = ''; }
+  } else if (url) {
+    base = url.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60);
+  }
+
+  if (!base || base === '_' || base.replace(/_/g, '').length < 2) {
+    const w1 = RANDOM_WORDS[Math.floor(Math.random() * RANDOM_WORDS.length)];
+    const w2 = RANDOM_WORDS[Math.floor(Math.random() * RANDOM_WORDS.length)];
+    base = `${w1}-${w2}-${Date.now().toString(36)}`;
+  }
+
+  return `temp_file${base}.${ext}`;
+}
+
 function downloadResult() {
   if (!resultBlob.value) return;
   const link = document.createElement('a');
   link.href = URL.createObjectURL(resultBlob.value);
-  link.download = 'animation.' + outputFormat.value;
+  link.download = buildDownloadName();
   link.click();
 }
 
