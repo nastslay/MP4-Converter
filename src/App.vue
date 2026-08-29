@@ -2240,7 +2240,7 @@ function buildDownloadName() {
     base = `${w1}-${w2}-${Date.now().toString(36)}`;
   }
 
-  return `${base}.${ext}`;
+  return `temp_file${base}.${ext}`;
 }
 
 function downloadResult() {
