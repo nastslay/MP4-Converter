@@ -22,7 +22,7 @@
       <button class="fetch-btn" @click="fetchAndSetDuration" :disabled="isConverting || !videoUrl || isFetching">
         {{ isFetching ? 'Pobieranie…' : '⬇ Pobierz z linku' }}
       </button>
-      <input type="file" ref="fileInput" accept="video/mp4,video/x-m4v,video/*,image/webp" style="display:none" @change="handleFileUpload" />
+      <input type="file" ref="fileInput" accept="video/mp4,video/x-m4v,video/*,image/webp,image/gif" style="display:none" @change="handleFileUpload" />
       <input type="file" ref="imageFileInput" accept="image/*" style="display:none" @change="handleImageFileUpload" />
       <button class="upload-btn" @click="$refs.fileInput.click()" :disabled="isConverting || isFetching">📁 Wgraj z dysku</button>
     </div>
@@ -1546,13 +1546,15 @@ async function handleFileUpload(event) {
     const fileData = new Uint8Array(arrayBuffer);
     cachedFileData.value = fileData; cachedUrl.value = file.name;
     const isWebP = file.name.toLowerCase().endsWith('.webp') || file.type === 'image/webp';
-    inputExt.value = isWebP ? 'webp' : 'mp4';
+    const isGIF  = file.name.toLowerCase().endsWith('.gif')  || file.type === 'image/gif';
+    inputExt.value = isWebP ? 'webp' : isGIF ? 'gif' : 'mp4';
     let metadata;
     if (isWebP) {
       metadata = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset+fileData.byteLength));
       if (!metadata) throw new Error('Nie udało się odczytać metadanych WebP.');
     } else {
-      metadata = await getVideoMetadata(fileData, 'mp4');
+      // GIF i MP4 — ffmpeg odczytuje metadane z obu formatów bezpośrednio
+      metadata = await getVideoMetadata(fileData, inputExt.value);
     }
     originalSize.value = file.size; originalWidth.value = metadata.width; originalHeight.value = metadata.height;
     originalDuration.value = metadata.duration;
@@ -1810,14 +1812,17 @@ async function getVideoMetadata(fileData, ext = 'mp4') {
     const meta = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset+fileData.byteLength));
     return meta || { duration: null, width: null, height: null, fps: null };
   }
+  // Zachowujemy oryginalne rozszerzenie w nazwie pliku tymczasowego —
+  // ffmpeg rozpoznaje format z rozszerzenia, więc 'meta.gif' jest wymagane dla GIF-a.
+  const tmpName = `meta.${ext}`;
   const dataCopy = new Uint8Array(fileData.slice().buffer);
-  await ffmpeg.writeFile('meta.mp4', dataCopy);
+  await ffmpeg.writeFile(tmpName, dataCopy);
   let fullLog = '';
   const logHandler = ({ message }) => { fullLog += message + '\n'; };
   ffmpeg.on('log', logHandler);
-  try { await ffmpeg.exec(['-i','meta.mp4']); } catch(e) {}
+  try { await ffmpeg.exec(['-i', tmpName]); } catch(e) {}
   ffmpeg.off('log', logHandler);
-  await ffmpeg.deleteFile('meta.mp4');
+  await ffmpeg.deleteFile(tmpName);
   let duration=null, w=null, h=null, fpsv=null;
   const durMatch = fullLog.match(/Duration: (\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/);
   if (durMatch) duration = parseInt(durMatch[1])*3600 + parseInt(durMatch[2])*60 + parseFloat(durMatch[3]);
@@ -1836,7 +1841,7 @@ async function fetchAndSetDuration() {
   try {
     const fileData = await fetchVideo(videoUrl.value);
     const url = videoUrl.value.trim().toLowerCase();
-    inputExt.value = url.endsWith('.webp') ? 'webp' : 'mp4';
+    inputExt.value = url.endsWith('.webp') ? 'webp' : url.endsWith('.gif') ? 'gif' : 'mp4';
     const metadata = await getVideoMetadata(fileData, inputExt.value);
     originalSize.value = fileData.length; originalWidth.value = metadata.width;
     originalHeight.value = metadata.height; originalDuration.value = metadata.duration;
@@ -1865,14 +1870,15 @@ async function loadPreviewFrame() {
       isLoadingPreview.value = false;
       return;
     }
-    await ffmpeg.writeFile('preview_in.mp4', new Uint8Array(fileData.slice().buffer));
+    await ffmpeg.writeFile(`preview_in.${inputExt.value === 'gif' ? 'gif' : 'mp4'}`, new Uint8Array(fileData.slice().buffer));
+    const previewInFile = `preview_in.${inputExt.value === 'gif' ? 'gif' : 'mp4'}`;
     const frameTime = startTime.value + (endTime.value - startTime.value) * 0.3;
-    await ffmpeg.exec(['-i','preview_in.mp4','-ss',frameTime.toFixed(2),'-vframes','1','-c:v','png','-f','image2pipe','preview_frame.png']);
+    await ffmpeg.exec(['-i',previewInFile,'-ss',frameTime.toFixed(2),'-vframes','1','-c:v','png','-f','image2pipe','preview_frame.png']);
     const frameData = await ffmpeg.readFile('preview_frame.png');
     const blob = new Blob([frameData.buffer], { type: 'image/png' });
     clearPreview();
     previewFrame.value = URL.createObjectURL(blob);
-    await ffmpeg.deleteFile('preview_in.mp4');
+    await ffmpeg.deleteFile(previewInFile);
     await ffmpeg.deleteFile('preview_frame.png');
   } catch(e) { error.value = `Błąd podglądu: ${e.message}`; console.error(e); }
   finally { isLoadingPreview.value = false; }
@@ -1897,7 +1903,9 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
   if (isConverting.value) conversionStage.value = `Dopasowywanie parametrów do limitu rozmiaru (próba ${attempt + 1}/8)...`;
   try {
     const fileData = preloadedFileData || await fetchVideo(videoUrl.value);
-    await ffmpeg.writeFile('analyze.mp4', new Uint8Array(fileData.slice().buffer));
+    const analyzeExt  = inputExt.value === 'gif' ? 'gif' : 'mp4';
+    const analyzeFile = `analyze.${analyzeExt}`;
+    await ffmpeg.writeFile(analyzeFile, new Uint8Array(fileData.slice().buffer));
     const duration = endTime.value - startTime.value;
     // Dłuższa próbka (2.5s / 25% filmu) daje bardziej reprezentatywną ekstrapolację
     const testDuration = Math.min(2.5, duration * 0.25);
@@ -1907,7 +1915,7 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
 
     if (fmt === 'gif') {
       const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
-      await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','sample.gif']);
+      await ffmpeg.exec(['-i',analyzeFile,'-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','sample.gif']);
       const sampleSize = (await ffmpeg.readFile('sample.gif')).length;
       await ffmpeg.deleteFile('sample.gif');
       const testFrames = Math.floor(testDuration * fps.value);
@@ -1921,7 +1929,7 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
         sizeConfidence.value = 0.85;
       } else { estimatedSize.value = sampleSize; sizeConfidence.value = 0.5; }
     } else if (fmt === 'webp') {
-      await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','sample.webp']);
+      await ffmpeg.exec(['-i',analyzeFile,'-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','sample.webp']);
       const sampleSize = (await ffmpeg.readFile('sample.webp')).length;
       await ffmpeg.deleteFile('sample.webp');
       const dataOnly = Math.max(0, sampleSize - overhead);
@@ -1930,7 +1938,7 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
       sizeConfidence.value = 0.9;
     } else {
       // MP4 — próbka kodowana tym samym libx264/CRF co finalny plik.
-      await ffmpeg.exec(['-i','analyze.mp4','-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','sample.mp4']);
+      await ffmpeg.exec(['-i',analyzeFile,'-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','sample.mp4']);
       const sampleSize = (await ffmpeg.readFile('sample.mp4')).length;
       await ffmpeg.deleteFile('sample.mp4');
       const dataOnly = Math.max(0, sampleSize - overhead);
@@ -1938,7 +1946,7 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
       estimatedSize.value = Math.round(rawEstimate * sizeEstimationCorrection.value);
       sizeConfidence.value = 0.85;
     }
-    await ffmpeg.deleteFile('analyze.mp4');
+    await ffmpeg.deleteFile(analyzeFile);
 
     if (limitSizeEnabled.value && attempt < 8) {
       const targetBytes = targetSizeMB.value * 1024 * 1024;
@@ -2039,9 +2047,11 @@ async function convertViaCanvas(fileData, srcExt) {
     }
     decoder.close();
   } else {
-    await ffmpeg.writeFile('conv_input.mp4', new Uint8Array(fileData.slice().buffer));
+    const convInExt  = srcExt === 'gif' ? 'gif' : 'mp4';
+    const convInFile = `conv_input.${convInExt}`;
+    await ffmpeg.writeFile(convInFile, new Uint8Array(fileData.slice().buffer));
     await ffmpeg.exec([
-      '-i', 'conv_input.mp4',
+      '-i', convInFile,
       '-ss', userStart.toString(),
       '-to', userEnd.toString(),
       '-vf', (hasCrop ? `crop=${srcW-cl-cr}:${srcH-ct-cb}:${cl}:${ct},` : '') + `fps=${userFps}`,
@@ -2082,7 +2092,7 @@ async function convertViaCanvas(fileData, srcExt) {
       frameIdx = i + 1;
     }
 
-    await ffmpeg.deleteFile('conv_input.mp4');
+    await ffmpeg.deleteFile(convInFile);
     outputFrameCount_actual = frameIdx;
   }
 
@@ -2141,24 +2151,25 @@ async function performEncode(fileData) {
   if (inputExt.value === 'webp') {
     await convertViaCanvas(fileData, 'webp');
   } else if (hasCrop || hasOverlays || hasFlip) {
-    await convertViaCanvas(fileData, 'mp4');
+    await convertViaCanvas(fileData, inputExt.value === 'gif' ? 'gif' : 'mp4');
   } else {
-    await ffmpeg.writeFile('input.mp4', new Uint8Array(fileData.slice().buffer));
+    // GIF i MP4 — ffmpeg dekoduje oba natywnie; używamy właściwego rozszerzenia
+    const inExt = inputExt.value === 'gif' ? 'gif' : 'mp4';
+    const inFile = `input.${inExt}`;
+    await ffmpeg.writeFile(inFile, new Uint8Array(fileData.slice().buffer));
     if (outputFormat.value === 'gif') {
       const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
-      await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','output.gif']);
+      await ffmpeg.exec(['-i',inFile,'-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','output.gif']);
     } else if (outputFormat.value === 'webp') {
-      await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','output.webp']);
+      await ffmpeg.exec(['-i',inFile,'-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','output.webp']);
     } else {
-      // MP4 z tej ścieżki (bez kadrowania/nakładek) koduje się bezpośrednio z oryginalnego
-      // pliku, więc — w odróżnieniu od ścieżki z canvasu — ZACHOWUJE dźwięk źródła.
-      await ffmpeg.exec(['-i','input.mp4','-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','output.mp4']);
+      await ffmpeg.exec(['-i',inFile,'-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','output.mp4']);
     }
     const outExt = outputFormat.value;
     const data = await ffmpeg.readFile('output.' + outExt);
     resultBlob.value = new Blob([data.buffer], { type: mimeForFormat(outExt) });
     resultUrl.value = URL.createObjectURL(resultBlob.value);
-    await ffmpeg.deleteFile('input.mp4');
+    await ffmpeg.deleteFile(inFile);
     await ffmpeg.deleteFile('output.' + outExt);
   }
 }
