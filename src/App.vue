@@ -1625,57 +1625,50 @@ const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   const ratio = targetBytes / actualBytes;
   
-  // FAZA 1: Precyzyjne dostrajanie (gdy jesteśmy blisko celu, np. różnica < 25%)
-  // W tej fazie zmieniamy TYLKO JEDEN parametr naraz (głównie Jakość). 
-  // Próba zmiany 3 parametrów przy małej odległości prowadzi do oscylacji (bo ich wpływ się mnoży)
-  // albo do "utknięcia" (bo matematyczne zaokrąglenia wyzerują zmiany).
+  // FAZA PRECYZYJNA (różnica < 15%): jakość + rozdzielczość ±1–2 px jednocześnie
   if (Math.abs(1 - ratio) < 0.15) {
-     // Ponieważ jakość wpływa nieliniowo (zwłaszcza w MP4), ucinamy ratio o połowę.
-     let fineRatio = 1 + (ratio - 1) * 1.0; 
-     
-     if (growing) {
-         let newQuality = Math.round(quality.value * fineRatio);
-         if (newQuality === quality.value && quality.value < 100) newQuality += 1;
-         
-         if (newQuality <= 100 && newQuality !== quality.value) { 
-             quality.value = newQuality; return true; 
-         }
-         
-         // Jakość wyczerpana (dobiła do 100) -> podnosimy FPS
-         let newFps = Math.round(fps.value * fineRatio);
-         if (newFps === fps.value && fps.value < 30) newFps += 1;
-         if (newFps <= 30 && newFps !== fps.value) {
-             fps.value = newFps; return true;
-         }
-         
-         // FPS wyczerpane -> podnosimy rozdzielczość
-         let newWidth = Math.round(width.value * (1 + (fineRatio - 1)*0.5) / 10) * 10;
-         if (newWidth === width.value && width.value < 1280) newWidth += 10;
-         if (newWidth <= 1280 && newWidth !== width.value) {
-             width.value = newWidth; return true;
-         }
-     } else {
-         // Jeśli plik za duży - docinamy odrobinę mocniej (margines 3%), żeby na pewno wejść pod limit
-         let cutRatio = fineRatio * 0.96;
-         let newQuality = Math.round(quality.value * cutRatio);
-         if (newQuality === quality.value && quality.value > 1) newQuality -= 1;
-         
-         if (newQuality >= 1 && newQuality !== quality.value) { 
-             quality.value = newQuality; return true; 
-         }
-         
-         let newFps = Math.round(fps.value * cutRatio);
-         if (newFps === fps.value && fps.value > 1) newFps -= 1;
-         if (newFps >= 1 && newFps !== fps.value) {
-             fps.value = newFps; return true;
-         }
-         
-         let newWidth = Math.round(width.value * cutRatio / 10) * 10;
-         if (newWidth === width.value && width.value > 100) newWidth -= 10;
-         if (newWidth >= 100 && newWidth !== width.value) {
-             width.value = newWidth; return true;
-         }
-     }
+    const fineRatio = 1 + (ratio - 1) * 1.0;
+    const cutRatio  = fineRatio * 0.96; // margines 4% przy zmniejszaniu
+
+    if (growing) {
+      let newQuality = Math.round(quality.value * fineRatio);
+      if (newQuality === quality.value && quality.value < 100) newQuality += 1;
+      if (newQuality > 100) newQuality = 100;
+
+      // Szerokość +1 lub +2 px proporcjonalnie do odległości od celu
+      const wDelta  = ratio > 1.08 ? 2 : 1;
+      let newWidth  = width.value + wDelta;
+      if (newWidth > 1280) newWidth = 1280;
+
+      let newFps = Math.round(fps.value * fineRatio);
+      if (newFps === fps.value && fps.value < 30) newFps += 1;
+      if (newFps > 30) newFps = 30;
+
+      let changed = false;
+      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
+      if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
+      if (newFps     !== fps.value)     { fps.value     = newFps;     changed = true; }
+      return changed;
+    } else {
+      let newQuality = Math.round(quality.value * cutRatio);
+      if (newQuality === quality.value && quality.value > 1) newQuality -= 1;
+      if (newQuality < 1) newQuality = 1;
+
+      // Szerokość -1 lub -2 px proporcjonalnie do odległości od celu
+      const wDelta  = ratio < 0.92 ? 2 : 1;
+      let newWidth  = width.value - wDelta;
+      if (newWidth < 100) newWidth = 100;
+
+      let newFps = Math.round(fps.value * cutRatio);
+      if (newFps === fps.value && fps.value > 1) newFps -= 1;
+      if (newFps < 1) newFps = 1;
+
+      let changed = false;
+      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
+      if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
+      if (newFps     !== fps.value)     { fps.value     = newFps;     changed = true; }
+      return changed;
+    }
   } 
   // FAZA 2: Zgrubne zmiany (gdy jesteśmy daleko od celu)
   else {
@@ -2209,45 +2202,11 @@ async function convert() {
   finally { isConverting.value = false; conversionStage.value = ''; }
 }
 
-// Słowa do losowej nazwy pliku gdy nie można wyciągnąć sensownej nazwy ze źródła.
-const RANDOM_WORDS = [
-  'aurora','bison','cobalt','delta','ember','falcon','granite','harbor',
-  'indigo','jasper','kestrel','lagoon','mosaic','nebula','obsidian','prism',
-  'quartz','raven','sierra','tundra','umber','vortex','willow','xenon','zephyr',
-];
-
-function buildDownloadName() {
-  const url = videoUrl.value.trim();
-  const ext = outputFormat.value;
-  let base = '';
-
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    // Link — bierzemy ostatni segment ścieżki bez query/hash/rozszerzenia
-    try {
-      const pathname = new URL(url).pathname;
-      const segment  = pathname.split('/').filter(Boolean).pop() || '';
-      base = segment.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60);
-    } catch (e) { base = ''; }
-  } else if (url) {
-    // Wgrany plik — videoUrl zawiera nazwę pliku (ustawiane w handleFileUpload)
-    base = url.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60);
-  }
-
-  // Fallback: dwa losowe słowa + timestamp żeby uniknąć kolizji
-  if (!base || base === '_' || base.replace(/_/g, '').length < 2) {
-    const w1 = RANDOM_WORDS[Math.floor(Math.random() * RANDOM_WORDS.length)];
-    const w2 = RANDOM_WORDS[Math.floor(Math.random() * RANDOM_WORDS.length)];
-    base = `${w1}-${w2}-${Date.now().toString(36)}`;
-  }
-
-  return `temp_file${base}.${ext}`;
-}
-
 function downloadResult() {
   if (!resultBlob.value) return;
   const link = document.createElement('a');
   link.href = URL.createObjectURL(resultBlob.value);
-  link.download = buildDownloadName();
+  link.download = 'animation.' + outputFormat.value;
   link.click();
 }
 
