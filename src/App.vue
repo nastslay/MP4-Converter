@@ -2209,11 +2209,45 @@ async function convert() {
   finally { isConverting.value = false; conversionStage.value = ''; }
 }
 
+// Słowa do losowej nazwy pliku gdy nie można wyciągnąć sensownej nazwy ze źródła.
+const RANDOM_WORDS = [
+  'aurora','bison','cobalt','delta','ember','falcon','granite','harbor',
+  'indigo','jasper','kestrel','lagoon','mosaic','nebula','obsidian','prism',
+  'quartz','raven','sierra','tundra','umber','vortex','willow','xenon','zephyr',
+];
+
+function buildDownloadName() {
+  const url = videoUrl.value.trim();
+  const ext = outputFormat.value;
+  let base = '';
+
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    // Link — bierzemy ostatni segment ścieżki bez query/hash/rozszerzenia
+    try {
+      const pathname = new URL(url).pathname;
+      const segment  = pathname.split('/').filter(Boolean).pop() || '';
+      base = segment.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60);
+    } catch (e) { base = ''; }
+  } else if (url) {
+    // Wgrany plik — videoUrl zawiera nazwę pliku (ustawiane w handleFileUpload)
+    base = url.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60);
+  }
+
+  // Fallback: dwa losowe słowa + timestamp żeby uniknąć kolizji
+  if (!base || base === '_' || base.replace(/_/g, '').length < 2) {
+    const w1 = RANDOM_WORDS[Math.floor(Math.random() * RANDOM_WORDS.length)];
+    const w2 = RANDOM_WORDS[Math.floor(Math.random() * RANDOM_WORDS.length)];
+    base = `${w1}-${w2}-${Date.now().toString(36)}`;
+  }
+
+  return `${base}.${ext}`;
+}
+
 function downloadResult() {
   if (!resultBlob.value) return;
   const link = document.createElement('a');
   link.href = URL.createObjectURL(resultBlob.value);
-  link.download = 'animation.' + outputFormat.value;
+  link.download = buildDownloadName();
   link.click();
 }
 
