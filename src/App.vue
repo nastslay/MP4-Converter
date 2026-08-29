@@ -1625,7 +1625,7 @@ const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   const ratio = targetBytes / actualBytes;
   
-  // FAZA PRECYZYJNA (różnica < 15%): sekwencyjnie jakość → FPS → szerokość ±1–2 px
+  // FAZA PRECYZYJNA (różnica < 15%): jakość + szerokość ±1–2 px równolegle, FPS jako ostatni
   if (Math.abs(1 - ratio) < 0.15) {
     const fineRatio = 1 + (ratio - 1) * 1.0;
     const cutRatio  = fineRatio * 0.96;
@@ -1633,41 +1633,37 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
     if (growing) {
       let newQuality = Math.round(quality.value * fineRatio);
       if (newQuality === quality.value && quality.value < 100) newQuality += 1;
-      if (newQuality <= 100 && newQuality !== quality.value) {
-        quality.value = newQuality; return true;
-      }
+      if (newQuality > 100) newQuality = 100;
 
+      const wDelta  = ratio > 1.08 ? 2 : 1;
+      const newWidth = Math.min(1280, width.value + wDelta);
+
+      let changed = false;
+      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
+      if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
+      if (changed) return true;
+
+      // Fallback: jakość i szerokość wyczerpane → FPS
       let newFps = Math.round(fps.value * fineRatio);
       if (newFps === fps.value && fps.value < 30) newFps += 1;
-      if (newFps <= 30 && newFps !== fps.value) {
-        fps.value = newFps; return true;
-      }
-
-      // Szerokość +1 lub +2 px (nie co 10)
-      const wDelta = ratio > 1.08 ? 2 : 1;
-      const newWidth = Math.min(1280, width.value + wDelta);
-      if (newWidth !== width.value) {
-        width.value = newWidth; return true;
-      }
+      if (newFps <= 30 && newFps !== fps.value) { fps.value = newFps; return true; }
     } else {
       let newQuality = Math.round(quality.value * cutRatio);
       if (newQuality === quality.value && quality.value > 1) newQuality -= 1;
-      if (newQuality >= 1 && newQuality !== quality.value) {
-        quality.value = newQuality; return true;
-      }
+      if (newQuality < 1) newQuality = 1;
 
+      const wDelta  = ratio < 0.92 ? 2 : 1;
+      const newWidth = Math.max(100, width.value - wDelta);
+
+      let changed = false;
+      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
+      if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
+      if (changed) return true;
+
+      // Fallback: jakość i szerokość wyczerpane → FPS
       let newFps = Math.round(fps.value * cutRatio);
       if (newFps === fps.value && fps.value > 1) newFps -= 1;
-      if (newFps >= 1 && newFps !== fps.value) {
-        fps.value = newFps; return true;
-      }
-
-      // Szerokość -1 lub -2 px (nie co 10)
-      const wDelta = ratio < 0.92 ? 2 : 1;
-      const newWidth = Math.max(100, width.value - wDelta);
-      if (newWidth !== width.value) {
-        width.value = newWidth; return true;
-      }
+      if (newFps >= 1 && newFps !== fps.value) { fps.value = newFps; return true; }
     }
   } 
   // FAZA 2: Zgrubne zmiany (gdy jesteśmy daleko od celu)
