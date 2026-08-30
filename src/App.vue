@@ -639,7 +639,9 @@ const resultUrl       = ref(null);
 const resultBlob      = ref(null);
 const estimatedSize  = ref(null);
 const sizeConfidence = ref(null);
-const sizeEstimationCorrection = ref(1.0);
+// Osobny współczynnik korekcji dla każdego formatu — GIF/WebP/MP4 mają całkowicie
+// inną charakterystykę kompresji, więc mieszanie ich w jednym współczynniku gwarantuje błędy.
+const sizeEstimationCorrection = ref({ gif: 1.0, webp: 1.0, mp4: 1.0 });
 const cachedFileData = ref(null);
 const cachedUrl      = ref('');
 const inputExt = ref('mp4');
@@ -1907,44 +1909,72 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
     const analyzeFile = `analyze.${analyzeExt}`;
     await ffmpeg.writeFile(analyzeFile, new Uint8Array(fileData.slice().buffer));
     const duration = endTime.value - startTime.value;
-    // Dłuższa próbka (2.5s / 25% filmu) daje bardziej reprezentatywną ekstrapolację
-    const testDuration = Math.min(2.5, duration * 0.25);
-    const testStart = startTime.value + duration * 0.4;
     const fmt = outputFormat.value;
     const overhead = CONTAINER_OVERHEAD[fmt] || 1000;
 
+    // Próbkujemy w KILKU miejscach rozłożonych po całym klipie (nie jeden ciągły fragment),
+    // żeby uśrednić różnice w złożoności treści (np. spokojny początek vs. dynamiczna końcówka).
+    // Krótsze klipy dostają mniej segmentów, żeby uniknąć nakładania się okien próbek.
+    const SEGMENT_FRACTIONS = duration < 3 ? [0.5] : duration < 8 ? [0.25, 0.7] : [0.15, 0.5, 0.82];
+    const perSegDuration = Math.max(0.3, Math.min(1.2, (Math.min(3.0, duration * 0.3)) / SEGMENT_FRACTIONS.length));
+
+    let totalSampleBytes = 0;
+    let totalSampledSeconds = 0;
+    let totalSampledFrames = 0;
+
+    let sharedGifPalette = null;
     if (fmt === 'gif') {
       const gifMaxColors = Math.max(2, Math.min(256, Math.round(quality.value * 2.56)));
-      await ffmpeg.exec(['-i',analyzeFile,'-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter()+`,split[s0][s1];[s0]palettegen=max_colors=${gifMaxColors}[p];[s1][p]paletteuse=dither=bayer`,'-loop','0','sample.gif']);
-      const sampleSize = (await ffmpeg.readFile('sample.gif')).length;
-      await ffmpeg.deleteFile('sample.gif');
-      const testFrames = Math.floor(testDuration * fps.value);
+      // KLUCZOWE dla dokładności: paleta generowana RAZ z CAŁEGO wybranego zakresu —
+      // dokładnie tak jak zrobi to finalne kodowanie. Gdyby każdy segment próbki budował
+      // WŁASNĄ paletę (dopasowaną tylko do wąskiego okna), kompresowałby się nienaturalnie
+      // dobrze — pełny klip ma więcej zróżnicowania treści, więc ta sama liczba kolorów
+      // musi się na nie "rozciągnąć", dając więcej ditheringu i gorszą kompresję niż
+      // sugerowałaby próbka z lokalną paletą. To główne źródło zaniżonej prognozy dla GIF.
+      await ffmpeg.exec(['-ss',startTime.value.toString(),'-to',endTime.value.toString(),'-i',analyzeFile,'-vf',buildVfFilter()+`,palettegen=max_colors=${gifMaxColors}`,'palette_full.png']);
+      sharedGifPalette = 'palette_full.png';
+    }
+
+    for (const frac of SEGMENT_FRACTIONS) {
+      const rawStart = startTime.value + duration * frac;
+      const segStart = Math.max(startTime.value, Math.min(rawStart, endTime.value - perSegDuration));
+      const segDuration = Math.min(perSegDuration, endTime.value - segStart);
+      if (segDuration <= 0) continue;
+
+      let sampleBytes;
+      if (fmt === 'gif') {
+        await ffmpeg.exec(['-ss',segStart.toFixed(2),'-t',segDuration.toFixed(2),'-i',analyzeFile,'-i',sharedGifPalette,'-filter_complex',`[0:v]${buildVfFilter()}[v];[v][1:v]paletteuse=dither=bayer`,'-loop','0','sample_seg.gif']);
+        sampleBytes = (await ffmpeg.readFile('sample_seg.gif')).length;
+        await ffmpeg.deleteFile('sample_seg.gif');
+      } else if (fmt === 'webp') {
+        await ffmpeg.exec(['-i',analyzeFile,'-ss',segStart.toFixed(2),'-t',segDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','sample_seg.webp']);
+        sampleBytes = (await ffmpeg.readFile('sample_seg.webp')).length;
+        await ffmpeg.deleteFile('sample_seg.webp');
+      } else {
+        await ffmpeg.exec(['-i',analyzeFile,'-ss',segStart.toFixed(2),'-t',segDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','sample_seg.mp4']);
+        sampleBytes = (await ffmpeg.readFile('sample_seg.mp4')).length;
+        await ffmpeg.deleteFile('sample_seg.mp4');
+      }
+
+      // Odejmujemy narzut kontenera KAŻDEGO segmentu z osobna (to N osobnych plików),
+      // dodamy go z powrotem raz na końcu (finalny plik to jeden kontener).
+      totalSampleBytes   += Math.max(0, sampleBytes - overhead);
+      totalSampledSeconds += segDuration;
+      totalSampledFrames  += Math.floor(segDuration * fps.value);
+    }
+    if (sharedGifPalette) await ffmpeg.deleteFile(sharedGifPalette);
+
+    if (fmt === 'gif') {
       const totalFrames = Math.floor(duration * fps.value);
-      if (testFrames > 0) {
-        // Odejmujemy narzut kontenera przed ekstrapolacją, dodajemy raz na końcu.
-        // Bez tego krótka próbka zawyża prognozę (narzut skaluje się × ilość klatek).
-        const dataOnly = Math.max(0, sampleSize - overhead);
-        const rawEstimate = overhead + (dataOnly / testFrames) * totalFrames;
-        estimatedSize.value = Math.round(rawEstimate * sizeEstimationCorrection.value);
-        sizeConfidence.value = 0.85;
-      } else { estimatedSize.value = sampleSize; sizeConfidence.value = 0.5; }
-    } else if (fmt === 'webp') {
-      await ffmpeg.exec(['-i',analyzeFile,'-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','webp','-q:v',quality.value.toString(),'-loop','0','-preset','default','-an','sample.webp']);
-      const sampleSize = (await ffmpeg.readFile('sample.webp')).length;
-      await ffmpeg.deleteFile('sample.webp');
-      const dataOnly = Math.max(0, sampleSize - overhead);
-      const rawEstimate = overhead + (dataOnly / testDuration) * duration;
-      estimatedSize.value = Math.round(rawEstimate * sizeEstimationCorrection.value);
-      sizeConfidence.value = 0.9;
+      if (totalSampledFrames > 0) {
+        const rawEstimate = overhead + (totalSampleBytes / totalSampledFrames) * totalFrames;
+        estimatedSize.value = Math.round(rawEstimate * sizeEstimationCorrection.value.gif);
+        sizeConfidence.value = 0.9;
+      } else { estimatedSize.value = totalSampleBytes + overhead; sizeConfidence.value = 0.5; }
     } else {
-      // MP4 — próbka kodowana tym samym libx264/CRF co finalny plik.
-      await ffmpeg.exec(['-i',analyzeFile,'-ss',testStart.toFixed(2),'-t',testDuration.toFixed(2),'-vf',buildVfFilter(),'-c:v','libx264','-pix_fmt','yuv420p','-crf',qualityToCrf().toString(),'-c:a','aac','-b:a','128k','-movflags','+faststart','sample.mp4']);
-      const sampleSize = (await ffmpeg.readFile('sample.mp4')).length;
-      await ffmpeg.deleteFile('sample.mp4');
-      const dataOnly = Math.max(0, sampleSize - overhead);
-      const rawEstimate = overhead + (dataOnly / testDuration) * duration;
-      estimatedSize.value = Math.round(rawEstimate * sizeEstimationCorrection.value);
-      sizeConfidence.value = 0.85;
+      const rawEstimate = overhead + (totalSampleBytes / totalSampledSeconds) * duration;
+      estimatedSize.value = Math.round(rawEstimate * sizeEstimationCorrection.value[fmt]);
+      sizeConfidence.value = fmt === 'webp' ? 0.92 : 0.88;
     }
     await ffmpeg.deleteFile(analyzeFile);
 
@@ -2199,7 +2229,12 @@ async function convert() {
     if (estimatedSize.value && estimatedSize.value > 0 && resultBlob.value) {
       const correctionFromThisEncode = resultBlob.value.size / estimatedSize.value;
       // Wygładzone uśrednianie: 30% starej wartości + 70% nowego pomiaru
-      sizeEstimationCorrection.value = 0.3 * sizeEstimationCorrection.value + 0.7 * correctionFromThisEncode;
+      const fmt = outputFormat.value;
+      const oldCorrection = sizeEstimationCorrection.value[fmt];
+      sizeEstimationCorrection.value = {
+        ...sizeEstimationCorrection.value,
+        [fmt]: 0.3 * oldCorrection + 0.7 * correctionFromThisEncode,
+      };
     }
 
     // KROK 3: realna weryfikacja PO wygenerowaniu — próbka to tylko przybliżenie, więc
@@ -2272,7 +2307,7 @@ function downloadResult() {
 watch(videoUrl, (newUrl) => {
   if (newUrl.trim() !== cachedUrl.value) {
     cachedFileData.value = null; cachedUrl.value = ''; estimatedSize.value = null;
-    sizeConfidence.value = null; sizeEstimationCorrection.value = 1.0; inputExt.value = 'mp4';
+    sizeConfidence.value = null; sizeEstimationCorrection.value = { gif: 1.0, webp: 1.0, mp4: 1.0 }; inputExt.value = 'mp4';
     originalSize.value = null; originalWidth.value = null; originalHeight.value = null;
     originalFps.value = null; originalDuration.value = null;
     resultWidth.value = 0; resultHeight.value = 0; resultDuration.value = 0;
