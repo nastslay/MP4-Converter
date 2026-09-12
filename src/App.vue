@@ -2808,7 +2808,12 @@ watch(useOriginalWidth, async (enabled) => {
 .theme-label { white-space: nowrap; }
 
 /* ===== PRZETWARZANIE WSADOWE ===== */
-.batch-section { margin-top: 1rem; }
+.batch-section {
+  margin-top: 1rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
 
 .batch-panel {
   margin-top: 0.75rem;
@@ -2819,6 +2824,10 @@ watch(useOriginalWidth, async (enabled) => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 
 .batch-hint {
@@ -2826,6 +2835,7 @@ watch(useOriginalWidth, async (enabled) => {
   font-size: 0.82rem;
   color: #666;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .batch-upload-row,
@@ -2834,12 +2844,39 @@ watch(useOriginalWidth, async (enabled) => {
   flex-wrap: wrap;
   gap: 0.6rem;
   align-items: center;
+  max-width: 100%;
+}
+
+.batch-upload-row button,
+.batch-actions button {
+  white-space: normal;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .batch-options-row {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  cursor: pointer;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.checkbox-label input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
 }
 
 .batch-status-message {
@@ -2850,6 +2887,9 @@ watch(useOriginalWidth, async (enabled) => {
   border-radius: 8px;
   font-size: 0.82rem;
   color: #8a6d00;
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .batch-queue {
@@ -2857,6 +2897,9 @@ watch(useOriginalWidth, async (enabled) => {
   border-radius: 8px;
   background: #fff;
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .batch-queue-header {
@@ -2866,6 +2909,7 @@ watch(useOriginalWidth, async (enabled) => {
   color: #213547;
   background: #f0f0f0;
   border-bottom: 1px solid #e0e0e0;
+  overflow-wrap: anywhere;
 }
 
 .batch-list {
@@ -2880,6 +2924,8 @@ watch(useOriginalWidth, async (enabled) => {
   padding: 0.45rem 0.75rem;
   border-bottom: 1px solid #eee;
   font-size: 0.85rem;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 .batch-item:last-child { border-bottom: none; }
 
