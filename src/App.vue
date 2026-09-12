@@ -90,6 +90,9 @@
               {{ item.status === 'done' ? '✅' : item.status === 'processing' ? '⏳' : item.status === 'error' ? '⚠️' : '⬜' }}
             </span>
             <span class="batch-item-label" :title="item.source">{{ item.label }}</span>
+            <span v-if="item.durationMs && (item.status === 'done' || item.status === 'error')" class="batch-item-duration">
+              {{ (item.durationMs / 1000).toFixed(1) }}s
+            </span>
             <span v-if="item.status === 'error'" class="batch-item-error" :title="item.errorMsg">{{ item.errorMsg }}</span>
             <button v-if="item.status === 'done'" class="batch-item-dl" @click="downloadBatchItem(item)" title="Pobierz ten plik">⬇</button>
             <button class="batch-item-remove" @click="removeBatchItem(item.id)" :disabled="isBatchRunning" title="Usuń z kolejki">✕</button>
@@ -104,6 +107,14 @@
           :disabled="isBatchRunning || isConverting || isFetching || !batchItems.length || batchDoneCount === batchItems.length"
         >
           {{ isBatchRunning ? '⏳ Przetwarzanie…' : '▶ Uruchom przetwarzanie wsadowe' }}
+        </button>
+        <button
+          v-if="batchHasErrors && !isBatchRunning"
+          class="upload-btn"
+          @click="retryFailedBatchItems"
+          :title="`Ponów tylko ${batchErrorCount} nieudanych pozycji`"
+        >
+          🔁 Spróbuj ponownie ({{ batchErrorCount }} błędnych)
         </button>
         <button v-if="isBatchRunning" class="clear-btn" @click="stopBatch">⏹ Zatrzymaj po bieżącym pliku</button>
         <button class="download-btn" @click="downloadAllBatchResults" :disabled="!batchDoneCount || isDownloadingBatch">
@@ -786,6 +797,7 @@ const fileInput      = ref(null);
 const imageFileInput = ref(null);
 
 let ffmpeg = null;
+let lastFfmpegActivityAt = Date.now(); // aktualizowane przy każdym logu/postępie FFmpeg — używane do wykrywania zawieszenia silnika
 
 // ---- PRZETWARZANIE WSADOWE (WIELE PLIKÓW / LINKÓW) ----
 const jsonFileInput  = ref(null);
@@ -801,6 +813,7 @@ const isDownloadingBatch   = ref(false);
 const batchStatusMessage   = ref('');
 const batchDoneCount  = computed(() => batchItems.value.filter(i => i.status === 'done').length);
 const batchErrorCount = computed(() => batchItems.value.filter(i => i.status === 'error').length);
+const batchHasErrors  = computed(() => batchErrorCount.value > 0);
 
 // ---- SCHOWEK / CLIPBOARD ----
 const clipboardOpen = ref(false);
@@ -1858,7 +1871,13 @@ watch(isDarkMode, (val) => {
 // podczas długiego przetwarzania wsadowego — patrz restartFfmpegEngine()).
 async function initFFmpeg() {
   const inst = new FFmpeg();
-  inst.on('log', ({ message }) => console.log(message));
+  inst.on('log', ({ message }) => {
+    lastFfmpegActivityAt = Date.now();
+    console.log(message);
+  });
+  inst.on('progress', () => {
+    lastFfmpegActivityAt = Date.now();
+  });
   const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
   await inst.load({
     coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
@@ -2595,18 +2614,43 @@ async function loadBatchFileItem(item) {
 // FFmpeg.wasm potrafi się "zawiesić" (wyciek pamięci w silniku WASM) po dłuższej
 // serii konwersji w jednej instancji — wtedy pojedyncze wywołanie ffmpeg.exec()
 // nigdy się nie kończy (ani sukcesem, ani błędem) i cała kolejka utyka w miejscu.
-// Dlatego każdy krok wsadowy ma limit czasu: jeśli zostanie przekroczony, uznajemy
-// silnik za martwy, ubijamy go i tworzymy nowy — kolejka jedzie dalej.
-const BATCH_METADATA_TIMEOUT_MS = 90000;   // 1.5 min na pobranie/odczyt + analizę pojedynczego pliku
-const BATCH_CONVERT_TIMEOUT_MS  = 240000;  // 4 min na właściwą konwersję pojedynczego pliku
-const BATCH_RESTART_ENGINE_EVERY = 5;      // dodatkowo: prewencyjny restart silnika co N plików
+//
+// Zwykły, sztywny limit czasu (np. "4 minuty na plik") źle się tu sprawdza:
+// część plików (większe/dłuższe wideo, GIF w wysokiej rozdzielczości) POTRAFI
+// legalnie potrzebować kilku minut i był fałszywie zabijany, mimo że silnik
+// cały czas pracował. Dlatego zamiast tego pilnujemy AKTYWNOŚCI silnika
+// (zdarzenia 'log'/'progress' z FFmpeg, patrz initFFmpeg): jeśli silnik przez
+// dłuższy czas nie daje żadnego znaku życia — to jest zawieszenie. Jeśli
+// pracuje, nawet długo, zostawiamy go w spokoju (do bezwzględnego górnego limitu).
+const BATCH_IDLE_TIMEOUT_MS = 45000;        // brak JAKIEJKOLWIEK aktywności FFmpeg przez 45s = uznajemy silnik za zawieszony
+const BATCH_HARD_CAP_MS     = 900000;       // absolutny sufit na 1 plik (15 min), nawet jeśli silnik cały czas "żyje"
+const BATCH_RESTART_ENGINE_EVERY = 10;      // dodatkowo: prewencyjny restart silnika co N plików (higiena pamięci)
 
-function withTimeout(promise, ms, message) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(message)), ms);
+// Ściga realną pracę (ffmpeg) z "psem stróżującym", który patrzy na czas od
+// ostatniego sygnału życia z silnika, a nie na sztywny, globalny stoper.
+function raceWithHangWatchdog(promise, { idleLimitMs, hardCapMs }) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    let settled = false;
+    const iv = setInterval(() => {
+      if (settled) return;
+      const idleFor = Date.now() - lastFfmpegActivityAt;
+      const totalFor = Date.now() - start;
+      if (idleFor > idleLimitMs) {
+        settled = true;
+        clearInterval(iv);
+        reject(new Error(`Silnik FFmpeg nie wykazywał żadnej aktywności przez ${Math.round(idleLimitMs / 1000)}s — prawdopodobnie się zawiesił.`));
+      } else if (totalFor > hardCapMs) {
+        settled = true;
+        clearInterval(iv);
+        reject(new Error(`Przekroczono bezwzględny limit czasu na ten plik (${Math.round(hardCapMs / 60000)} min), mimo że silnik odpowiadał.`));
+      }
+    }, 2000);
+    promise.then(
+      (val) => { if (!settled) { settled = true; clearInterval(iv); resolve(val); } },
+      (err) => { if (!settled) { settled = true; clearInterval(iv); reject(err); } }
+    );
   });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 // Ubija bieżącą instancję FFmpeg i ładuje świeżą. Używane zarówno po wykryciu
@@ -2616,6 +2660,7 @@ async function restartFfmpegEngine() {
   ffmpeg = null;
   try { old?.terminate?.(); } catch (e) { console.warn('Nie udało się zatrzymać starej instancji FFmpeg:', e); }
   ffmpeg = await initFFmpeg();
+  lastFfmpegActivityAt = Date.now();
 }
 
 async function processBatchItem(item) {
@@ -2627,14 +2672,16 @@ async function processBatchItem(item) {
   estimatedSize.value = null;
   sizeConfidence.value = null;
   error.value = '';
+  const startedAt = Date.now();
+  lastFfmpegActivityAt = Date.now();
   let engineMayBeDead = false;
   try {
-    if (item.kind === 'url') {
-      await withTimeout(loadBatchUrlItem(item), BATCH_METADATA_TIMEOUT_MS, 'Przekroczono czas pobierania/analizy pliku — silnik FFmpeg prawdopodobnie przestał odpowiadać.');
-    } else {
-      await withTimeout(loadBatchFileItem(item), BATCH_METADATA_TIMEOUT_MS, 'Przekroczono czas odczytu pliku — silnik FFmpeg prawdopodobnie przestał odpowiadać.');
-    }
-    await withTimeout(convert(), BATCH_CONVERT_TIMEOUT_MS, 'Przekroczono czas konwersji — silnik FFmpeg prawdopodobnie przestał odpowiadać.');
+    const work = (async () => {
+      if (item.kind === 'url') await loadBatchUrlItem(item);
+      else await loadBatchFileItem(item);
+      await convert();
+    })();
+    await raceWithHangWatchdog(work, { idleLimitMs: BATCH_IDLE_TIMEOUT_MS, hardCapMs: BATCH_HARD_CAP_MS });
     if (!resultBlob.value) throw new Error(error.value || 'Nie udało się wygenerować pliku wynikowego.');
     item.resultBlob = resultBlob.value;
     item.resultName = buildDownloadName();
@@ -2642,8 +2689,9 @@ async function processBatchItem(item) {
   } catch (e) {
     item.status = 'error';
     item.errorMsg = e?.message || String(e);
-    engineMayBeDead = /przekroczono czas/i.test(item.errorMsg);
+    engineMayBeDead = /aktywności|bezwzględny limit/i.test(item.errorMsg);
   }
+  item.durationMs = Date.now() - startedAt;
   if (engineMayBeDead) {
     batchStatusMessage.value = 'Silnik FFmpeg nie odpowiadał — restartuję i kontynuuję kolejkę...';
     try { await restartFfmpegEngine(); }
@@ -2676,6 +2724,19 @@ async function runBatch() {
 
 function stopBatch() {
   batchStopRequested.value = true;
+}
+
+// Ponawia WYŁĄCZNIE pozycje zakończone błędem (np. fałszywe zawieszenie, chwilowy
+// błąd sieci) — gotowe pliki zostają nietknięte, nie trzeba przechodzić całej kolejki od nowa.
+function retryFailedBatchItems() {
+  if (isBatchRunning.value) return;
+  for (const item of batchItems.value) {
+    if (item.status === 'error') {
+      item.status = 'pending';
+      item.errorMsg = '';
+    }
+  }
+  runBatch();
 }
 
 function downloadBatchItem(item) {
@@ -2938,6 +2999,13 @@ watch(useOriginalWidth, async (enabled) => {
   overflow: hidden;
   text-overflow: ellipsis;
   color: #333;
+}
+
+.batch-item-duration {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  color: #999;
+  font-variant-numeric: tabular-nums;
 }
 
 .batch-item-error {
@@ -4187,6 +4255,7 @@ watch(useOriginalWidth, async (enabled) => {
 .dark-mode .batch-queue-header { background: #2a2d34; border-color: #3a3d44; color: #e8e8e8; }
 .dark-mode .batch-item { border-color: #3a3d44; }
 .dark-mode .batch-item-label { color: #e8e8e8; }
+.dark-mode .batch-item-duration { color: #7a7a7a; }
 .dark-mode .batch-item-error { color: #ff9a9a; }
 .dark-mode .batch-status-error .batch-item-label { color: #ff9a9a; }
 .dark-mode .batch-item-dl,
