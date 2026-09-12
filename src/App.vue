@@ -15,16 +15,95 @@
   <div class="input-group">
     <label>Wideo (Link lub plik MP4 / WebP):</label>
     <div class="input-row">
-      <input type="text" v-model="videoUrl" placeholder="Wklej link do wideo..." :disabled="isConverting" />
-      <button class="clear-btn" @click="videoUrl = ''" :disabled="isConverting || !videoUrl">Wyczyść</button>
+      <input type="text" v-model="videoUrl" placeholder="Wklej link do wideo..." :disabled="isConverting || isBatchRunning" />
+      <button class="clear-btn" @click="videoUrl = ''" :disabled="isConverting || !videoUrl || isBatchRunning">Wyczyść</button>
     </div>
     <div class="fetch-row">
-      <button class="fetch-btn" @click="fetchAndSetDuration" :disabled="isConverting || !videoUrl || isFetching">
+      <button class="fetch-btn" @click="fetchAndSetDuration" :disabled="isConverting || !videoUrl || isFetching || isBatchRunning">
         {{ isFetching ? 'Pobieranie…' : '⬇ Pobierz z linku' }}
       </button>
       <input type="file" ref="fileInput" accept="video/mp4,video/x-m4v,video/*,image/webp,image/gif" style="display:none" @change="handleFileUpload" />
       <input type="file" ref="imageFileInput" accept="image/*" style="display:none" @change="handleImageFileUpload" />
-      <button class="upload-btn" @click="$refs.fileInput.click()" :disabled="isConverting || isFetching">📁 Wgraj z dysku</button>
+      <button class="upload-btn" @click="$refs.fileInput.click()" :disabled="isConverting || isFetching || isBatchRunning">📁 Wgraj z dysku</button>
+    </div>
+  </div>
+
+  <!-- ===== PRZETWARZANIE WSADOWE (WIELE PLIKÓW / LINKÓW) ===== -->
+  <div class="batch-section">
+    <button
+      class="crop-toggle-btn"
+      :class="{ active: batchPanelOpen }"
+      @click="batchPanelOpen = !batchPanelOpen"
+      :disabled="isConverting"
+    >
+      🗂️ {{ batchPanelOpen ? 'Ukryj przetwarzanie wsadowe' : 'Przetwarzanie wsadowe (wiele plików / linków)' }}
+    </button>
+
+    <div v-if="batchPanelOpen" class="batch-panel">
+      <p class="batch-hint">
+        Wczytaj linki z pliku JSON (np. eksport zakładek) albo wybierz wiele plików naraz z dysku.
+        Każda pozycja z kolejki zostanie przekonwertowana po kolei, używając aktualnych ustawień
+        (format, jakość, kadrowanie, nakładki) ustawionych powyżej — a na koniec pobierzesz
+        wszystkie gotowe pliki jednym kliknięciem.
+      </p>
+
+      <div class="batch-upload-row">
+        <input type="file" ref="jsonFileInput" accept="application/json,.json" style="display:none" @change="handleBookmarksJsonUpload" />
+        <button class="upload-btn" @click="$refs.jsonFileInput.click()" :disabled="isBatchRunning || isConverting">
+          📄 Wczytaj linki z pliku JSON
+        </button>
+
+        <input type="file" ref="batchFileInput" multiple accept="video/mp4,video/x-m4v,video/*,image/webp,image/gif" style="display:none" @change="handleBatchFilesUpload" />
+        <button class="upload-btn" @click="$refs.batchFileInput.click()" :disabled="isBatchRunning || isConverting">
+          📁 Wybierz wiele plików z dysku
+        </button>
+
+        <button class="clear-btn" @click="clearBatchQueue" :disabled="isBatchRunning || !batchItems.length">
+          🧹 Wyczyść kolejkę
+        </button>
+      </div>
+
+      <div class="batch-options-row">
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="batchUseFullDuration" :disabled="isBatchRunning" />
+          Użyj pełnej długości każdego pliku (ignoruj ręcznie ustawiony zakres Start/Koniec)
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="batchIncludePhotos" :disabled="isBatchRunning" />
+          Dołącz też zdjęcia (photo) z JSON — eksperymentalne, ten konwerter jest przeznaczony do wideo/WebP
+        </label>
+      </div>
+
+      <div v-if="batchItems.length" class="batch-queue">
+        <div class="batch-queue-header">
+          Kolejka: {{ batchDoneCount }} / {{ batchItems.length }} gotowych{{ batchErrorCount ? ` · ${batchErrorCount} z błędem` : '' }}
+        </div>
+        <div class="batch-list">
+          <div v-for="item in batchItems" :key="item.id" class="batch-item" :class="'batch-status-' + item.status">
+            <span class="batch-item-status">
+              {{ item.status === 'done' ? '✅' : item.status === 'processing' ? '⏳' : item.status === 'error' ? '⚠️' : '⬜' }}
+            </span>
+            <span class="batch-item-label" :title="item.source">{{ item.label }}</span>
+            <span v-if="item.status === 'error'" class="batch-item-error" :title="item.errorMsg">{{ item.errorMsg }}</span>
+            <button v-if="item.status === 'done'" class="batch-item-dl" @click="downloadBatchItem(item)" title="Pobierz ten plik">⬇</button>
+            <button class="batch-item-remove" @click="removeBatchItem(item.id)" :disabled="isBatchRunning" title="Usuń z kolejki">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="batch-actions">
+        <button
+          class="fetch-btn"
+          @click="runBatch"
+          :disabled="isBatchRunning || isConverting || isFetching || !batchItems.length || batchDoneCount === batchItems.length"
+        >
+          {{ isBatchRunning ? '⏳ Przetwarzanie…' : '▶ Uruchom przetwarzanie wsadowe' }}
+        </button>
+        <button v-if="isBatchRunning" class="clear-btn" @click="stopBatch">⏹ Zatrzymaj po bieżącym pliku</button>
+        <button class="download-btn" @click="downloadAllBatchResults" :disabled="!batchDoneCount">
+          ⬇ Pobierz wszystkie gotowe ({{ batchDoneCount }})
+        </button>
+      </div>
     </div>
   </div>
 
@@ -97,7 +176,7 @@
         <input type="number" v-model.number="targetSizeMB" min="0.1" max="50" step="0.5" :disabled="isConverting" />
         <span>MB</span>
       </div>
-      <button class="analyze-btn" @click="analyzeAndEstimate()" :disabled="isConverting || !videoUrl || inputExt === 'webp'">
+      <button class="analyze-btn" @click="analyzeAndEstimate()" :disabled="isConverting || !videoUrl || inputExt === 'webp' || isBatchRunning">
         🔍 Analizuj rozmiar
       </button>
     </div>
@@ -479,7 +558,7 @@
     </div>
   </div>
 
-  <button class="convert-btn" @click="convert" :disabled="isConverting || !videoUrl">
+  <button class="convert-btn" @click="convert" :disabled="isConverting || !videoUrl || isBatchRunning">
     {{ isConverting ? 'Konwertowanie…' : (inputExt === 'webp' ? 'Zastosuj zmiany i wygeneruj ' + outputFormat.toUpperCase() : 'Konwertuj do ' + outputFormat.toUpperCase()) }}
   </button>
 
@@ -700,6 +779,18 @@ const fileInput      = ref(null);
 const imageFileInput = ref(null);
 
 let ffmpeg = null;
+
+// ---- PRZETWARZANIE WSADOWE (WIELE PLIKÓW / LINKÓW) ----
+const jsonFileInput  = ref(null);
+const batchFileInput = ref(null);
+const batchItems           = ref([]); // { id, kind:'url'|'file', source, file?, label, status, errorMsg, resultBlob, resultName }
+const batchPanelOpen       = ref(false);
+const isBatchRunning       = ref(false);
+const batchStopRequested   = ref(false);
+const batchUseFullDuration = ref(true);
+const batchIncludePhotos   = ref(false);
+const batchDoneCount  = computed(() => batchItems.value.filter(i => i.status === 'done').length);
+const batchErrorCount = computed(() => batchItems.value.filter(i => i.status === 'error').length);
 
 // ---- SCHOWEK / CLIPBOARD ----
 const clipboardOpen = ref(false);
@@ -1538,6 +1629,7 @@ function resetConversionState() {
 }
 
 async function handleFileUpload(event) {
+  if (isBatchRunning.value) return;
   const file = event.target.files[0];
   if (!file) return;
   resetConversionState();
@@ -1837,6 +1929,7 @@ async function getVideoMetadata(fileData, ext = 'mp4') {
 }
 
 async function fetchAndSetDuration() {
+  if (isBatchRunning.value) return;
   if (!videoUrl.value.trim()) return;
   resetConversionState();
   isFetching.value = true; error.value = '';
@@ -2303,6 +2396,244 @@ function downloadResult() {
   link.click();
 }
 
+// =====================================================================
+// ==========  PRZETWARZANIE WSADOWE (WIELE PLIKÓW / LINKÓW)  ==========
+// =====================================================================
+// Każda pozycja w kolejce jest ładowana i konwertowana PO KOLEI (sekwencyjnie),
+// bo cała aplikacja opiera się na współdzielonym stanie (videoUrl, cachedFileData,
+// resultBlob...) oraz jednej instancji ffmpeg.wasm. Ustawienia edycji (format,
+// jakość, FPS, kadrowanie, nakładki tekstowe/graficzne) NIE są resetowane między
+// pozycjami — celowo, żeby te same ustawienia dało się zastosować do wielu plików.
+
+function genBatchId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+function stripTcoLinks(text) {
+  return (text || '').replace(/https?:\/\/t\.co\/\w+/g, '').trim();
+}
+
+// Wyciąga linki do mediów (wideo, opcjonalnie zdjęcia) z eksportu zakładek JSON.
+// Obsługuje zarówno gołą tablicę wpisów, jak i obiekt z polem "bookmarks"/"data".
+function extractBatchLinksFromBookmarks(json) {
+  let entries;
+  if (Array.isArray(json)) entries = json;
+  else if (json && Array.isArray(json.bookmarks)) entries = json.bookmarks;
+  else if (json && Array.isArray(json.data)) entries = json.data;
+  else throw new Error('Nieznana struktura pliku JSON — oczekiwano tablicy wpisów z polem "media".');
+
+  const seen = new Set(batchItems.value.filter(i => i.kind === 'url').map(i => i.source));
+  const found = [];
+  for (const entry of entries) {
+    const media = Array.isArray(entry?.media) ? entry.media : [];
+    for (const m of media) {
+      const isVideo = m?.type === 'video' || m?.type === 'animated_gif';
+      const isPhoto = m?.type === 'photo';
+      if (!isVideo && !(isPhoto && batchIncludePhotos.value)) continue;
+      const url = m.original || m.url;
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      const textLabel = stripTcoLinks(entry?.full_text).slice(0, 40);
+      const label = textLabel || (entry?.screen_name ? `@${entry.screen_name}` : url);
+      found.push({
+        id: genBatchId(),
+        kind: 'url',
+        source: url,
+        label: `${label} ${isPhoto ? '🖼️' : '🎬'}`,
+        status: 'pending',
+        errorMsg: '',
+        resultBlob: null,
+        resultName: '',
+      });
+    }
+  }
+  return found;
+}
+
+async function handleBookmarksJsonUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  error.value = '';
+  try {
+    const text = await file.text();
+    const json = JSON.parse(text);
+    const newItems = extractBatchLinksFromBookmarks(json);
+    if (!newItems.length) {
+      error.value = 'Nie znaleziono żadnych nowych linków wideo w tym pliku JSON.';
+    } else {
+      batchItems.value = [...batchItems.value, ...newItems];
+      batchPanelOpen.value = true;
+    }
+  } catch (e) {
+    error.value = `Błąd odczytu pliku JSON: ${e.message}`;
+  } finally {
+    event.target.value = '';
+  }
+}
+
+function handleBatchFilesUpload(event) {
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  const existingKeys = new Set(
+    batchItems.value.filter(i => i.kind === 'file').map(i => `${i.file.name}_${i.file.size}`)
+  );
+  const newItems = [];
+  for (const file of files) {
+    const key = `${file.name}_${file.size}`;
+    if (existingKeys.has(key)) continue;
+    existingKeys.add(key);
+    newItems.push({
+      id: genBatchId(),
+      kind: 'file',
+      file,
+      source: file.name,
+      label: file.name,
+      status: 'pending',
+      errorMsg: '',
+      resultBlob: null,
+      resultName: '',
+    });
+  }
+  batchItems.value = [...batchItems.value, ...newItems];
+  batchPanelOpen.value = true;
+  event.target.value = '';
+}
+
+function removeBatchItem(id) {
+  if (isBatchRunning.value) return;
+  batchItems.value = batchItems.value.filter(i => i.id !== id);
+}
+
+function clearBatchQueue() {
+  if (isBatchRunning.value) return;
+  batchItems.value = [];
+}
+
+// Ustala zakres startTime/endTime dla bieżącej pozycji z kolejki.
+function applyBatchTimeRange(duration) {
+  if (batchUseFullDuration.value) {
+    startTime.value = 0;
+    endTime.value = duration && duration > 0 ? duration : Math.max(endTime.value, 0.5);
+  } else if (duration && duration > 0) {
+    // Zachowaj ręcznie ustawiony zakres, ale przytnij go do długości TEGO pliku.
+    endTime.value = Math.min(endTime.value, duration);
+    startTime.value = Math.min(startTime.value, Math.max(0, endTime.value - 0.1));
+  }
+}
+
+// Ładuje metadane pozycji typu "link" do współdzielonego stanu (jak fetchAndSetDuration,
+// ale bez resetConversionState — ustawienia edycji mają przetrwać między pozycjami).
+async function loadBatchUrlItem(item) {
+  videoUrl.value = item.source;
+  cachedFileData.value = null;
+  cachedUrl.value = '';
+  const fileData = await fetchVideo(item.source);
+  const lower = item.source.trim().toLowerCase();
+  inputExt.value = lower.includes('.webp') ? 'webp' : lower.includes('.gif') ? 'gif' : 'mp4';
+  const metadata = await getVideoMetadata(fileData, inputExt.value);
+  originalSize.value = fileData.length;
+  originalWidth.value = metadata.width;
+  originalHeight.value = metadata.height;
+  originalDuration.value = metadata.duration;
+  if (inputExt.value === 'webp') {
+    const meta = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength));
+    originalFps.value = (meta && meta.duration > 0) ? Math.round((meta.frameCount / meta.duration) * 10) / 10 : (meta ? meta.frameCount : null);
+  } else {
+    originalFps.value = metadata.fps;
+  }
+  applyBatchTimeRange(metadata.duration);
+  if (useOriginalWidth.value && metadata.width) width.value = metadata.width;
+}
+
+// Ładuje metadane pozycji typu "plik lokalny" (jak handleFileUpload, bez resetConversionState).
+async function loadBatchFileItem(item) {
+  const file = item.file;
+  videoUrl.value = file.name;
+  const arrayBuffer = await file.arrayBuffer();
+  const fileData = new Uint8Array(arrayBuffer);
+  cachedFileData.value = fileData;
+  cachedUrl.value = file.name;
+  const isWebP = file.name.toLowerCase().endsWith('.webp') || file.type === 'image/webp';
+  const isGIF  = file.name.toLowerCase().endsWith('.gif')  || file.type === 'image/gif';
+  inputExt.value = isWebP ? 'webp' : isGIF ? 'gif' : 'mp4';
+  let metadata;
+  if (isWebP) {
+    metadata = parseWebPMetadata(fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength));
+    if (!metadata) throw new Error('Nie udało się odczytać metadanych WebP.');
+  } else {
+    metadata = await getVideoMetadata(fileData, inputExt.value);
+  }
+  originalSize.value = file.size;
+  originalWidth.value = metadata.width;
+  originalHeight.value = metadata.height;
+  originalDuration.value = metadata.duration;
+  originalFps.value = isWebP
+    ? (metadata.duration > 0 ? Math.round((metadata.frameCount / metadata.duration) * 10) / 10 : metadata.frameCount)
+    : metadata.fps;
+  applyBatchTimeRange(metadata.duration);
+  if (useOriginalWidth.value && metadata.width) width.value = metadata.width;
+}
+
+async function processBatchItem(item) {
+  item.status = 'processing';
+  item.errorMsg = '';
+  if (resultUrl.value) URL.revokeObjectURL(resultUrl.value);
+  resultUrl.value = null;
+  resultBlob.value = null;
+  estimatedSize.value = null;
+  sizeConfidence.value = null;
+  error.value = '';
+  try {
+    if (item.kind === 'url') await loadBatchUrlItem(item);
+    else await loadBatchFileItem(item);
+    await convert();
+    if (!resultBlob.value) throw new Error(error.value || 'Nie udało się wygenerować pliku wynikowego.');
+    item.resultBlob = resultBlob.value;
+    item.resultName = buildDownloadName();
+    item.status = 'done';
+  } catch (e) {
+    item.status = 'error';
+    item.errorMsg = e?.message || String(e);
+  }
+}
+
+async function runBatch() {
+  if (isBatchRunning.value) return;
+  const pending = batchItems.value.filter(i => i.status !== 'done');
+  if (!pending.length) return;
+  isBatchRunning.value = true;
+  batchStopRequested.value = false;
+  for (const item of pending) {
+    if (batchStopRequested.value) break;
+    await processBatchItem(item);
+  }
+  isBatchRunning.value = false;
+}
+
+function stopBatch() {
+  batchStopRequested.value = true;
+}
+
+function downloadBatchItem(item) {
+  if (!item.resultBlob) return;
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(item.resultBlob);
+  link.download = item.resultName || `output.${outputFormat.value}`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// Pobiera wszystkie gotowe pliki na raz — pojedyncze pobrania wyzwalane sekwencyjnie
+// z małym opóźnieniem, żeby przeglądarka nie zablokowała serii pobrań.
+async function downloadAllBatchResults() {
+  const done = batchItems.value.filter(i => i.status === 'done' && i.resultBlob);
+  for (let idx = 0; idx < done.length; idx++) {
+    downloadBatchItem(done[idx]);
+    if (idx < done.length - 1) await new Promise(resolve => setTimeout(resolve, 350));
+  }
+}
+
 // ---- WATCHERY ----
 watch(videoUrl, (newUrl) => {
   if (newUrl.trim() !== cachedUrl.value) {
@@ -2364,6 +2695,111 @@ watch(useOriginalWidth, async (enabled) => {
 .theme-toggle-btn:active { transform: scale(0.96); }
 .theme-icon { font-size: 1.15rem; line-height: 1; }
 .theme-label { white-space: nowrap; }
+
+/* ===== PRZETWARZANIE WSADOWE ===== */
+.batch-section { margin-top: 1rem; }
+
+.batch-panel {
+  margin-top: 0.75rem;
+  padding: 0.9rem;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.batch-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #666;
+  line-height: 1.4;
+}
+
+.batch-upload-row,
+.batch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.batch-options-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.batch-queue {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.batch-queue-header {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #213547;
+  background: #f0f0f0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.batch-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.batch-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid #eee;
+  font-size: 0.85rem;
+}
+.batch-item:last-child { border-bottom: none; }
+
+.batch-item-status { flex: 0 0 auto; }
+
+.batch-item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #333;
+}
+
+.batch-item-error {
+  flex: 0 1 auto;
+  font-size: 0.75rem;
+  color: #c0392b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+
+.batch-item-dl,
+.batch-item-remove {
+  flex: 0 0 auto;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  border-radius: 6px;
+  width: 1.8rem;
+  height: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.batch-item-dl:hover { border-color: #1da1f2; color: #1da1f2; }
+.batch-item-remove:hover:not(:disabled) { border-color: #e74c3c; color: #e74c3c; }
+.batch-item-remove:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.batch-status-error .batch-item-label { color: #c0392b; }
 
 /* ===== EDIT PANEL WRAPPER ===== */
 .edit-panel {
@@ -3576,6 +4012,23 @@ watch(useOriginalWidth, async (enabled) => {
   background: #4caf50;
   color: white;
 }
+
+.dark-mode .batch-panel { background: #23262c; border-color: #3a3d44; }
+.dark-mode .batch-hint { color: #b0b0b0; }
+.dark-mode .batch-queue { background: #1f2228; border-color: #3a3d44; }
+.dark-mode .batch-queue-header { background: #2a2d34; border-color: #3a3d44; color: #e8e8e8; }
+.dark-mode .batch-item { border-color: #3a3d44; }
+.dark-mode .batch-item-label { color: #e8e8e8; }
+.dark-mode .batch-item-error { color: #ff9a9a; }
+.dark-mode .batch-status-error .batch-item-label { color: #ff9a9a; }
+.dark-mode .batch-item-dl,
+.dark-mode .batch-item-remove {
+  background: #2a2d34;
+  border-color: #3a3d44;
+  color: #e8e8e8;
+}
+.dark-mode .batch-item-dl:hover { border-color: #1da1f2; color: #5ec1f7; }
+.dark-mode .batch-item-remove:hover:not(:disabled) { border-color: #ff9a9a; color: #ff9a9a; }
 </style>
 
 <style>
