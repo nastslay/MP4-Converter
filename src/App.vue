@@ -798,6 +798,7 @@ const imageFileInput = ref(null);
 
 let ffmpeg = null;
 let lastFfmpegActivityAt = Date.now(); // aktualizowane przy każdym logu/postępie FFmpeg — używane do wykrywania zawieszenia silnika
+let ffmpegGeneration = 0; // zwiększane przy każdym restarcie silnika — pozwala "zombie" pętlom (po fałszywym/prawdziwym zawieszeniu) same się przerwać zamiast dalej pisać do nowej instancji
 
 // ---- PRZETWARZANIE WSADOWE (WIELE PLIKÓW / LINKÓW) ----
 const jsonFileInput  = ref(null);
@@ -2175,8 +2176,16 @@ async function convertViaCanvas(fileData, srcExt) {
     if (typeof ImageDecoder === 'undefined') throw new Error('Edycja plików WebP wymaga przeglądarki z ImageDecoder (Chrome/Edge).');
     const decoder = new ImageDecoder({ data: fileData, type: 'image/webp' });
     await decoder.tracks.ready;
+    const myFfmpegGen = ffmpegGeneration;
 
     for (let i = 0; i < outputFrameCount; i++) {
+      // Ta pętla dekoduje klatki i rysuje na canvasie w czystym JS — FFmpeg nie
+      // generuje tu żadnych zdarzeń log/progress, więc ręcznie odświeżamy "puls",
+      // żeby watchdog (patrz raceWithHangWatchdog) nie uznał tego za zawieszenie.
+      lastFfmpegActivityAt = Date.now();
+      if (ffmpegGeneration !== myFfmpegGen) {
+        throw new Error('Przerwano: silnik FFmpeg został zrestartowany w trakcie przetwarzania tego pliku.');
+      }
       const t = userStart + (i / userFps);
       const srcIndex = Math.min(totalFrames-1, Math.max(0, Math.floor(t * srcFps)));
       const result = await decoder.decode({ frameIndex: srcIndex });
@@ -2220,7 +2229,15 @@ async function convertViaCanvas(fileData, srcExt) {
     ]);
 
     let frameIdx = 0;
+    const myFfmpegGen = ffmpegGeneration;
     for (let i = 0; i < outputFrameCount; i++) {
+      // Jak wyżej: dekodowanie PNG + rysowanie na canvasie to czysty JS, niewidoczny
+      // dla watchdoga FFmpeg — odświeżamy puls ręcznie i przerywamy, jeśli w
+      // międzyczasie silnik został zrestartowany (żeby nie pisać do nowej instancji).
+      lastFfmpegActivityAt = Date.now();
+      if (ffmpegGeneration !== myFfmpegGen) {
+        throw new Error('Przerwano: silnik FFmpeg został zrestartowany w trakcie przetwarzania tego pliku.');
+      }
       const fname = `rawframe_${String(i+1).padStart(5,'0')}.png`;
       let rawData;
       try { rawData = await ffmpeg.readFile(fname); } catch(e) {
@@ -2391,7 +2408,7 @@ async function convert() {
         await performEncode(fileData);
       }
     }
-  } catch(e) { error.value = `Błąd konwersji: ${e.message}`; console.error(e); }
+  } catch(e) { error.value = `Błąd konwersji: ${e?.message || String(e) || 'nieznany błąd'}`; console.error(e); }
   finally { isConverting.value = false; conversionStage.value = ''; }
 }
 
@@ -2658,6 +2675,7 @@ function raceWithHangWatchdog(promise, { idleLimitMs, hardCapMs }) {
 async function restartFfmpegEngine() {
   const old = ffmpeg;
   ffmpeg = null;
+  ffmpegGeneration++;
   try { old?.terminate?.(); } catch (e) { console.warn('Nie udało się zatrzymać starej instancji FFmpeg:', e); }
   ffmpeg = await initFFmpeg();
   lastFfmpegActivityAt = Date.now();
