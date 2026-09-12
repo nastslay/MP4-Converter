@@ -72,7 +72,13 @@
           <input type="checkbox" v-model="batchIncludePhotos" :disabled="isBatchRunning" />
           Dołącz też zdjęcia (photo) z JSON — eksperymentalne, ten konwerter jest przeznaczony do wideo/WebP
         </label>
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="batchDownloadAsZip" :disabled="isDownloadingBatch" />
+          Pobierz wszystkie jako jeden plik ZIP (zalecane — pojedyncze pliki mogą zostać zablokowane przez przeglądarkę)
+        </label>
       </div>
+
+      <p v-if="batchStatusMessage" class="batch-status-message">⏳ {{ batchStatusMessage }}</p>
 
       <div v-if="batchItems.length" class="batch-queue">
         <div class="batch-queue-header">
@@ -100,8 +106,8 @@
           {{ isBatchRunning ? '⏳ Przetwarzanie…' : '▶ Uruchom przetwarzanie wsadowe' }}
         </button>
         <button v-if="isBatchRunning" class="clear-btn" @click="stopBatch">⏹ Zatrzymaj po bieżącym pliku</button>
-        <button class="download-btn" @click="downloadAllBatchResults" :disabled="!batchDoneCount">
-          ⬇ Pobierz wszystkie gotowe ({{ batchDoneCount }})
+        <button class="download-btn" @click="downloadAllBatchResults" :disabled="!batchDoneCount || isDownloadingBatch">
+          {{ isDownloadingBatch ? '⏳ Pobieranie…' : (batchDownloadAsZip ? `⬇ Pobierz jako ZIP (${batchDoneCount})` : `⬇ Pobierz wszystkie gotowe (${batchDoneCount})`) }}
         </button>
       </div>
     </div>
@@ -690,6 +696,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import JSZip from 'jszip';
 
 // ---- Stan aplikacji ----
 const videoUrl   = ref('');
@@ -789,6 +796,9 @@ const isBatchRunning       = ref(false);
 const batchStopRequested   = ref(false);
 const batchUseFullDuration = ref(true);
 const batchIncludePhotos   = ref(false);
+const batchDownloadAsZip   = ref(true);
+const isDownloadingBatch   = ref(false);
+const batchStatusMessage   = ref('');
 const batchDoneCount  = computed(() => batchItems.value.filter(i => i.status === 'done').length);
 const batchErrorCount = computed(() => batchItems.value.filter(i => i.status === 'error').length);
 
@@ -1843,6 +1853,20 @@ watch(isDarkMode, (val) => {
 });
 
 // ---- FFmpeg INIT ----
+// Tworzy i ładuje nową instancję FFmpeg.wasm. Wydzielone do osobnej funkcji, żeby
+// móc ją ponownie wywołać w trakcie działania aplikacji (np. po awarii silnika
+// podczas długiego przetwarzania wsadowego — patrz restartFfmpegEngine()).
+async function initFFmpeg() {
+  const inst = new FFmpeg();
+  inst.on('log', ({ message }) => console.log(message));
+  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+  await inst.load({
+    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+  });
+  return inst;
+}
+
 onMounted(async () => {
   try {
     const savedTheme = localStorage.getItem('animconverter-theme');
@@ -1862,14 +1886,8 @@ onMounted(async () => {
     }
   } catch (e) {}
 
-  ffmpeg = new FFmpeg();
-  ffmpeg.on('log', ({ message }) => console.log(message));
   try {
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
+    ffmpeg = await initFFmpeg();
   } catch (err) {
     console.error('Błąd ładowania FFmpeg:', err);
     error.value = 'Nie udało się załadować silnika FFmpeg. Odśwież stronę.';
@@ -2574,6 +2592,32 @@ async function loadBatchFileItem(item) {
   if (useOriginalWidth.value && metadata.width) width.value = metadata.width;
 }
 
+// FFmpeg.wasm potrafi się "zawiesić" (wyciek pamięci w silniku WASM) po dłuższej
+// serii konwersji w jednej instancji — wtedy pojedyncze wywołanie ffmpeg.exec()
+// nigdy się nie kończy (ani sukcesem, ani błędem) i cała kolejka utyka w miejscu.
+// Dlatego każdy krok wsadowy ma limit czasu: jeśli zostanie przekroczony, uznajemy
+// silnik za martwy, ubijamy go i tworzymy nowy — kolejka jedzie dalej.
+const BATCH_METADATA_TIMEOUT_MS = 90000;   // 1.5 min na pobranie/odczyt + analizę pojedynczego pliku
+const BATCH_CONVERT_TIMEOUT_MS  = 240000;  // 4 min na właściwą konwersję pojedynczego pliku
+const BATCH_RESTART_ENGINE_EVERY = 5;      // dodatkowo: prewencyjny restart silnika co N plików
+
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// Ubija bieżącą instancję FFmpeg i ładuje świeżą. Używane zarówno po wykryciu
+// zawieszenia silnika, jak i prewencyjnie co kilka plików w długiej serii.
+async function restartFfmpegEngine() {
+  const old = ffmpeg;
+  ffmpeg = null;
+  try { old?.terminate?.(); } catch (e) { console.warn('Nie udało się zatrzymać starej instancji FFmpeg:', e); }
+  ffmpeg = await initFFmpeg();
+}
+
 async function processBatchItem(item) {
   item.status = 'processing';
   item.errorMsg = '';
@@ -2583,10 +2627,14 @@ async function processBatchItem(item) {
   estimatedSize.value = null;
   sizeConfidence.value = null;
   error.value = '';
+  let engineMayBeDead = false;
   try {
-    if (item.kind === 'url') await loadBatchUrlItem(item);
-    else await loadBatchFileItem(item);
-    await convert();
+    if (item.kind === 'url') {
+      await withTimeout(loadBatchUrlItem(item), BATCH_METADATA_TIMEOUT_MS, 'Przekroczono czas pobierania/analizy pliku — silnik FFmpeg prawdopodobnie przestał odpowiadać.');
+    } else {
+      await withTimeout(loadBatchFileItem(item), BATCH_METADATA_TIMEOUT_MS, 'Przekroczono czas odczytu pliku — silnik FFmpeg prawdopodobnie przestał odpowiadać.');
+    }
+    await withTimeout(convert(), BATCH_CONVERT_TIMEOUT_MS, 'Przekroczono czas konwersji — silnik FFmpeg prawdopodobnie przestał odpowiadać.');
     if (!resultBlob.value) throw new Error(error.value || 'Nie udało się wygenerować pliku wynikowego.');
     item.resultBlob = resultBlob.value;
     item.resultName = buildDownloadName();
@@ -2594,6 +2642,13 @@ async function processBatchItem(item) {
   } catch (e) {
     item.status = 'error';
     item.errorMsg = e?.message || String(e);
+    engineMayBeDead = /przekroczono czas/i.test(item.errorMsg);
+  }
+  if (engineMayBeDead) {
+    batchStatusMessage.value = 'Silnik FFmpeg nie odpowiadał — restartuję i kontynuuję kolejkę...';
+    try { await restartFfmpegEngine(); }
+    catch (e) { console.error('Nie udało się zrestartować FFmpeg po zawieszeniu:', e); error.value = 'Nie udało się zrestartować silnika FFmpeg. Odśwież stronę.'; }
+    finally { batchStatusMessage.value = ''; }
   }
 }
 
@@ -2603,9 +2658,18 @@ async function runBatch() {
   if (!pending.length) return;
   isBatchRunning.value = true;
   batchStopRequested.value = false;
+  let sinceRestart = 0;
   for (const item of pending) {
     if (batchStopRequested.value) break;
     await processBatchItem(item);
+    sinceRestart++;
+    if (!batchStopRequested.value && sinceRestart >= BATCH_RESTART_ENGINE_EVERY) {
+      sinceRestart = 0;
+      batchStatusMessage.value = 'Prewencyjny restart silnika FFmpeg (zapobiega awariom przy długich seriach)...';
+      try { await restartFfmpegEngine(); }
+      catch (e) { console.error('Nie udało się zrestartować FFmpeg:', e); }
+      finally { batchStatusMessage.value = ''; }
+    }
   }
   isBatchRunning.value = false;
 }
@@ -2622,15 +2686,62 @@ function downloadBatchItem(item) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
 }
 
-// Pobiera wszystkie gotowe pliki na raz — pojedyncze pobrania wyzwalane sekwencyjnie
-// z małym opóźnieniem, żeby przeglądarka nie zablokowała serii pobrań.
-async function downloadAllBatchResults() {
-  const done = batchItems.value.filter(i => i.status === 'done' && i.resultBlob);
+// Nadaje unikalne nazwy plikom trafiającym do archiwum ZIP (unika nadpisywania,
+// gdy kilka pozycji wygenerowałoby tę samą nazwę wynikową).
+function uniqueZipName(name, usedNames) {
+  if (!usedNames.has(name)) { usedNames.add(name); return name; }
+  const dot = name.lastIndexOf('.');
+  const base = dot === -1 ? name : name.slice(0, dot);
+  const ext = dot === -1 ? '' : name.slice(dot);
+  let n = 2, candidate;
+  do { candidate = `${base}_${n}${ext}`; n++; } while (usedNames.has(candidate));
+  usedNames.add(candidate);
+  return candidate;
+}
+
+async function downloadBatchAsZip(done) {
+  const zip = new JSZip();
+  const usedNames = new Set();
+  for (const item of done) {
+    const name = uniqueZipName(item.resultName || `output.${outputFormat.value}`, usedNames);
+    zip.file(name, item.resultBlob);
+  }
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(zipBlob);
+  link.download = `konwersje_wsadowe_${Date.now().toString(36)}.zip`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+}
+
+async function downloadBatchIndividually(done) {
   for (let idx = 0; idx < done.length; idx++) {
     downloadBatchItem(done[idx]);
-    if (idx < done.length - 1) await new Promise(resolve => setTimeout(resolve, 350));
+    if (idx < done.length - 1) await new Promise(resolve => setTimeout(resolve, 400));
+  }
+}
+
+// Pobiera wszystkie gotowe pliki na raz — jako jeden ZIP (domyślnie, jedno pobranie,
+// bez ryzyka blokady przez przeglądarkę) albo jako osobne pliki. Zabezpieczone przed
+// wielokrotnym/równoległym uruchomieniem tej samej operacji (to powodowało wcześniej
+// "zapętlone" pobieranie przy powtórnych kliknięciach).
+async function downloadAllBatchResults() {
+  if (isDownloadingBatch.value) return;
+  const done = batchItems.value.filter(i => i.status === 'done' && i.resultBlob);
+  if (!done.length) return;
+  isDownloadingBatch.value = true;
+  try {
+    if (batchDownloadAsZip.value) await downloadBatchAsZip(done);
+    else await downloadBatchIndividually(done);
+  } catch (e) {
+    error.value = `Błąd pobierania: ${e.message}`;
+  } finally {
+    isDownloadingBatch.value = false;
   }
 }
 
@@ -2729,6 +2840,16 @@ watch(useOriginalWidth, async (enabled) => {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+.batch-status-message {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: #8a6d00;
 }
 
 .batch-queue {
@@ -4015,6 +4136,7 @@ watch(useOriginalWidth, async (enabled) => {
 
 .dark-mode .batch-panel { background: #23262c; border-color: #3a3d44; }
 .dark-mode .batch-hint { color: #b0b0b0; }
+.dark-mode .batch-status-message { background: #3a3320; border-color: #6b5a1e; color: #ffd54f; }
 .dark-mode .batch-queue { background: #1f2228; border-color: #3a3d44; }
 .dark-mode .batch-queue-header { background: #2a2d34; border-color: #3a3d44; color: #e8e8e8; }
 .dark-mode .batch-item { border-color: #3a3d44; }
