@@ -1749,100 +1749,59 @@ const SIZE_FINAL_LO = 0.95;
 // ekstrapolację liniową — odejmujemy go przed skalowaniem, dodajemy raz na końcu.
 const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 
-// Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony.
+// Granice parametrów — zgodne z zakresami dostępnymi w tym UI (patrz atrybuty inputów wyżej).
+const PARAM_BOUNDS = {
+  width:   { min: 100, max: 1280 },
+  fps:     { min: 1,   max: 30   },
+  quality: { min: 1,   max: 100  },
+};
+
+// ==========================================================================
+// Dostrajanie Szerokość / FPS / Jakość do docelowego rozmiaru pliku.
+// Port dokładnie tego samego mechanizmu, co funkcja convert_to_target_gif()
+// w Bookmark_lokalnie_.py: korekta = sqrt(cel / aktualny_rozmiar), zastosowana
+// ASYMETRYCZNIE —
+//   • przy ZMNIEJSZANIU (plik za duży): pełna korekta na szerokości (bez tłumienia,
+//     żeby szybko zejść pod limit), jakość *0.90, FPS *0.95 na próbę.
+//   • przy POWIĘKSZANIU (plik za mały): korekta ograniczona do max +12% na próbę
+//     (żeby nie "przestrzelić" w drugą stronę), jakość *1.08, FPS *1.06.
+// Ta sama funkcja obsługuje próbki (analyzeAndEstimate) i finalną weryfikację
+// po realnym renderze (convert()) — oba miejsca korzystają z niej bez zmian.
+// ==========================================================================
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
-  const ratio = targetBytes / actualBytes;
-  
-  // FAZA SUPER-PRECYZYJNA (różnica < 6%): tylko jakość ±2–3 punkty
-  if (Math.abs(1 - ratio) < 0.06) {
-    const delta = ratio > 1.03 ? 3 : 2;
-    if (growing) {
-      const newQuality = Math.min(100, quality.value + delta);
-      if (newQuality !== quality.value) { quality.value = newQuality; return true; }
-    } else {
-      const newQuality = Math.max(1, quality.value - delta);
-      if (newQuality !== quality.value) { quality.value = newQuality; return true; }
+  if (!actualBytes || actualBytes <= 0) return false;
+  const correction = Math.sqrt(targetBytes / actualBytes);
+  let changed = false;
+
+  if (!growing) {
+    // Plik za duży -> szerokość dostajemy pełną korektę, jakość/FPS łagodniej.
+    const newWidth   = Math.max(PARAM_BOUNDS.width.min,   Math.round(width.value * correction));
+    const newQuality = Math.max(PARAM_BOUNDS.quality.min, Math.round(quality.value * 0.90));
+    const newFps     = Math.max(PARAM_BOUNDS.fps.min,     Math.round(fps.value * 0.95));
+
+    if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
+    if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
+    if (newFps     !== fps.value)     { fps.value     = newFps;     changed = true; }
+  } else {
+    // Wszystko już na maksimum -> nic więcej nie da się dokręcić.
+    if (width.value >= PARAM_BOUNDS.width.max &&
+        fps.value   >= PARAM_BOUNDS.fps.max   &&
+        quality.value >= PARAM_BOUNDS.quality.max) {
+      return false;
     }
-    return false;
+
+    // Plik za mały -> powiększamy, ale korektę w górę tłumimy do max +12% na próbę.
+    const cappedCorrection = Math.min(correction, 1.12);
+    const newWidth   = Math.min(PARAM_BOUNDS.width.max,   Math.round(width.value * cappedCorrection));
+    const newFps     = Math.min(PARAM_BOUNDS.fps.max,     Math.round(fps.value * 1.06));
+    const newQuality = Math.min(PARAM_BOUNDS.quality.max, Math.round(quality.value * 1.08));
+
+    if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
+    if (newFps     !== fps.value)     { fps.value     = newFps;     changed = true; }
+    if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
   }
 
-  // FAZA PRECYZYJNA (różnica 6–15%): jakość + szerokość ±1–2 px równolegle, FPS jako ostatni
-  if (Math.abs(1 - ratio) < 0.15) {
-    const fineRatio = 1 + (ratio - 1) * 1.0;
-    const cutRatio  = fineRatio * 0.96;
-
-    if (growing) {
-      let newQuality = Math.round(quality.value * fineRatio);
-      if (newQuality === quality.value && quality.value < 100) newQuality += 1;
-      if (newQuality > 100) newQuality = 100;
-
-      const wDelta  = ratio > 1.08 ? 2 : 1;
-      const newWidth = Math.min(1280, width.value + wDelta);
-
-      let changed = false;
-      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
-      if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
-      if (changed) return true;
-
-      // Fallback: jakość i szerokość wyczerpane → FPS
-      let newFps = Math.round(fps.value * fineRatio);
-      if (newFps === fps.value && fps.value < 30) newFps += 1;
-      if (newFps <= 30 && newFps !== fps.value) { fps.value = newFps; return true; }
-    } else {
-      let newQuality = Math.round(quality.value * cutRatio);
-      if (newQuality === quality.value && quality.value > 1) newQuality -= 1;
-      if (newQuality < 1) newQuality = 1;
-
-      const wDelta  = ratio < 0.92 ? 2 : 1;
-      const newWidth = Math.max(100, width.value - wDelta);
-
-      let changed = false;
-      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
-      if (newWidth   !== width.value)   { width.value   = newWidth;   changed = true; }
-      if (changed) return true;
-
-      // Fallback: jakość i szerokość wyczerpane → FPS
-      let newFps = Math.round(fps.value * cutRatio);
-      if (newFps === fps.value && fps.value > 1) newFps -= 1;
-      if (newFps >= 1 && newFps !== fps.value) { fps.value = newFps; return true; }
-    }
-  } 
-  // FAZA 2: Zgrubne zmiany (gdy jesteśmy daleko od celu)
-  else {
-      // Skalujemy wszystko naraz, ale używamy pierwiastka 4-tego stopnia (0.25).
-      // Wynika to z matematyki: pow(width, 2) * fps * quality = wpływ x^4 na finalny rozmiar.
-      const rawFactor = Math.pow(ratio, 0.25);
-      
-      let factor;
-      if (growing) {
-          factor = 1 + (rawFactor - 1) * 0.80; // lekko tłumione w górę
-      } else {
-          factor = (1 + (rawFactor - 1) * 0.85) * 0.95; // 5% margines w dół
-      }
-
-      let newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
-      let newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value * factor)));
-      let newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
-      
-      let changed = false;
-      if (newWidth !== width.value) { width.value = newWidth; changed = true; }
-      if (newFps !== fps.value) { fps.value = newFps; changed = true; }
-      if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
-      
-      if (changed) return true;
-      
-      // Zabezpieczenie na wypadek dziwnych zaokrągleń
-      if (growing) {
-          if (quality.value < 100) { quality.value += 2; return true; }
-          if (fps.value < 30) { fps.value += 1; return true; }
-          if (width.value < 1280) { width.value += 10; return true; }
-      } else {
-          if (quality.value > 1) { quality.value -= 2; return true; }
-          if (fps.value > 1) { fps.value -= 1; return true; }
-          if (width.value > 100) { width.value -= 10; return true; }
-      }
-  }
-  return false;
+  return changed;
 }
 
 function clearPreview() {
@@ -2389,8 +2348,10 @@ async function convert() {
     // zmniejszamy parametry; jeśli jest wyraźnie MNIEJSZY niż limit, zwiększamy je, żeby
     // zbliżyć się do zadanego rozmiaru (a nie zostawiać niepotrzebny zapas) — ale zawsze
     // z marginesem bezpieczeństwa, żeby nigdy nie przekroczyć limitu.
+    // Liczba prób (7) i tryb ratunkowy poniżej dokładnie odpowiadają pętli
+    // convert_to_target_gif() z Bookmark_lokalnie_.py.
     if (limitSizeEnabled.value) {
-      const MAX_FINAL_ATTEMPTS = 4;
+      const MAX_FINAL_ATTEMPTS = 7;
       let finalAttempt = 0;
       while (resultBlob.value && finalAttempt < MAX_FINAL_ATTEMPTS) {
         const size = resultBlob.value.size;
@@ -2406,6 +2367,31 @@ async function convert() {
           ? `Plik za duży (${formatFileSize(size)}) — zmniejszam parametry i generuję ponownie (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`
           : `Plik mniejszy niż limit (${formatFileSize(size)}) — zwiększam parametry, by zbliżyć się do ${targetSizeMB.value} MB (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`;
         await performEncode(fileData);
+      }
+
+      // TRYB RATUNKOWY: zwykłe dostrajanie utknęło (np. na minimalnej szerokości), a plik
+      // nadal przekracza limit — wymuszamy minimalne, "bezpieczne" parametry, a jeśli to
+      // nadal nie wystarczy, skracamy klip proporcjonalnie do przekroczenia rozmiaru.
+      if (resultBlob.value && resultBlob.value.size > targetBytes) {
+        conversionStage.value = '⚠️ Tryb ratunkowy: wymuszam minimalne parametry (240px, 10 FPS, jakość 15)...';
+        width.value = 240;
+        fps.value = 10;
+        quality.value = 15;
+        await performEncode(fileData);
+
+        if (resultBlob.value && resultBlob.value.size > targetBytes) {
+          const minBytes = resultBlob.value.size;
+          const originalDuration = Math.max(0.1, endTime.value - startTime.value);
+          const bytesPerSec = minBytes / originalDuration;
+          const safeTargetBytes = targetBytes * 0.95;
+          const newDuration = Math.max(1.0, safeTargetBytes / bytesPerSec);
+
+          if (newDuration < originalDuration) {
+            conversionStage.value = `⚠️ Nadal za duży (${formatFileSize(minBytes)}) — skracam klip do ${newDuration.toFixed(1)}s, żeby zmieścić się w limicie...`;
+            endTime.value = startTime.value + newDuration;
+            await performEncode(fileData);
+          }
+        }
       }
     }
   } catch(e) { error.value = `Błąd konwersji: ${e?.message || String(e) || 'nieznany błąd'}`; console.error(e); }
