@@ -142,7 +142,20 @@
       </div>
     </div>
     <div class="param-field">
-      <label>FPS (klatki/s):</label>
+      <div class="label-row">
+        <label>FPS (klatki/s):</label>
+        <input
+          type="number"
+          class="min-limit-input"
+          v-model.number="minFps"
+          min="1"
+          max="30"
+          step="1"
+          placeholder="min"
+          title="Minimalne FPS, poniżej którego skrypt nie zejdzie przy dopasowywaniu do limitu rozmiaru (puste = bez ograniczenia)"
+          :disabled="isConverting || isBatchRunning"
+        />
+      </div>
       <input type="number" v-model.number="fps" min="1" max="30" step="1" :disabled="isConverting" />
       <div class="btn-row">
         <button class="num-btn" @click="adjust('fps', -1)" :disabled="isConverting">−</button>
@@ -152,6 +165,17 @@
     <div class="param-field">
       <div class="label-row">
         <label>Szerokość (px):</label>
+        <input
+          type="number"
+          class="min-limit-input"
+          v-model.number="minWidth"
+          min="100"
+          max="1280"
+          step="10"
+          placeholder="min"
+          title="Minimalna szerokość, poniżej której skrypt nie zejdzie przy dopasowywaniu do limitu rozmiaru (puste = bez ograniczenia)"
+          :disabled="isConverting || isBatchRunning"
+        />
         <label class="checkbox-label">
           <input type="checkbox" v-model="useOriginalWidth" :disabled="isConverting" />
           Oryginalny rozmiar
@@ -728,6 +752,32 @@ const targetSizeMB = ref(isNaN(_savedSize) ? 10 : _savedSize);
 watch(targetSizeMB, (val) => {
   try { localStorage.setItem('targetSizeMB', String(val)); } catch(e) {}
 }, { immediate: true });
+// Minimalne wartości FPS / Szerokości, poniżej których automatyczne dopasowanie
+// do limitu rozmiaru nie może zejść. Puste pole = brak ograniczenia (funkcja wyłączona).
+function loadSavedMin(key) {
+  try {
+    const v = parseInt(localStorage.getItem(key) ?? '', 10);
+    return isNaN(v) ? '' : v;
+  } catch (e) { return ''; }
+}
+const minFps   = ref(loadSavedMin('minFps'));
+const minWidth = ref(loadSavedMin('minWidth'));
+watch(minFps,   (val) => { try { localStorage.setItem('minFps',   String(val ?? '')); } catch (e) {} });
+watch(minWidth, (val) => { try { localStorage.setItem('minWidth', String(val ?? '')); } catch (e) {} });
+const minFpsVal = computed(() => {
+  const v = Number(minFps.value);
+  if (minFps.value === '' || minFps.value === null || !isFinite(v) || v < 1) return null;
+  return Math.min(30, Math.round(v));
+});
+const minWidthVal = computed(() => {
+  const v = Number(minWidth.value);
+  if (minWidth.value === '' || minWidth.value === null || !isFinite(v) || v < 100) return null;
+  return Math.min(1280, Math.round(v));
+});
+// Ustawiane, gdy skrypt musiał skrócić czas — wtedy nie zwiększamy już parametrów "w górę",
+// żeby nie wpaść w pętlę skracanie ↔ zwiększanie jakości.
+let trimmedThisRun = false;
+
 const isConverting    = ref(false);
 const conversionStage = ref('');
 const isFetching      = ref(false);
@@ -1752,6 +1802,21 @@ const CONTAINER_OVERHEAD = { gif: 800, webp: 500, mp4: 5000 };
 // Dostosowuje Szerokość / FPS / Jakość w stronę celu — w OBIE strony.
 function adjustParamsToTarget(actualBytes, targetBytes, growing) {
   const ratio = targetBytes / actualBytes;
+
+  // Dolne granice przy ZMNIEJSZANIU: minima ustawione przez użytkownika (puste = 100 px / 1 FPS).
+  // Jeśli bieżąca wartość jest już poniżej minimum, nie zmniejszamy jej dalej.
+  const wLow = Math.min(width.value, minWidthVal.value ?? 100);
+  const fLow = Math.min(fps.value,   minFpsVal.value   ?? 1);
+
+  // Szerokość i FPS stoją na minimach → jedyną dźwignią zostaje jakość.
+  // Skalujemy ją mocniej niż w fazie zgrubnej (tam rozmiar rozkłada się na 3 parametry).
+  if (!growing && width.value <= wLow && fps.value <= fLow && Math.abs(1 - ratio) >= 0.06) {
+    if (quality.value <= 1) return false; // jakość wyczerpana → wywołujący skróci czas
+    let q = Math.round(quality.value * Math.min(0.97, Math.pow(ratio, 0.6) * 0.97));
+    if (q >= quality.value) q = quality.value - 1;
+    quality.value = Math.max(1, q);
+    return true;
+  }
   
   // FAZA SUPER-PRECYZYJNA (różnica < 6%): tylko jakość ±2–3 punkty
   if (Math.abs(1 - ratio) < 0.06) {
@@ -1794,7 +1859,7 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
       if (newQuality < 1) newQuality = 1;
 
       const wDelta  = ratio < 0.92 ? 2 : 1;
-      const newWidth = Math.max(100, width.value - wDelta);
+      const newWidth = Math.max(wLow, width.value - wDelta);
 
       let changed = false;
       if (newQuality !== quality.value) { quality.value = newQuality; changed = true; }
@@ -1803,7 +1868,8 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
 
       // Fallback: jakość i szerokość wyczerpane → FPS
       let newFps = Math.round(fps.value * cutRatio);
-      if (newFps === fps.value && fps.value > 1) newFps -= 1;
+      if (newFps === fps.value && fps.value > fLow) newFps -= 1;
+      newFps = Math.max(fLow, newFps);
       if (newFps >= 1 && newFps !== fps.value) { fps.value = newFps; return true; }
     }
   } 
@@ -1820,8 +1886,8 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
           factor = (1 + (rawFactor - 1) * 0.85) * 0.95; // 5% margines w dół
       }
 
-      let newWidth   = Math.min(1280, Math.max(100, Math.round((width.value * factor) / 10) * 10));
-      let newFps     = Math.min(30,   Math.max(1,   Math.round(fps.value * factor)));
+      let newWidth   = Math.min(1280, Math.max(growing ? 100 : wLow, Math.round((width.value * factor) / 10) * 10));
+      let newFps     = Math.min(30,   Math.max(growing ? 1   : fLow, Math.round(fps.value * factor)));
       let newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
       
       let changed = false;
@@ -1837,12 +1903,28 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
           if (fps.value < 30) { fps.value += 1; return true; }
           if (width.value < 1280) { width.value += 10; return true; }
       } else {
-          if (quality.value > 1) { quality.value -= 2; return true; }
-          if (fps.value > 1) { fps.value -= 1; return true; }
-          if (width.value > 100) { width.value -= 10; return true; }
+          if (quality.value > 1) { quality.value = Math.max(1, quality.value - 2); return true; }
+          if (fps.value > fLow) { fps.value -= 1; return true; }
+          if (width.value > wLow) { width.value = Math.max(wLow, width.value - 10); return true; }
       }
   }
   return false;
+}
+
+// OSTATNIA dźwignia: gdy FPS, szerokość i jakość są wyczerpane (minima / granice), a plik
+// nadal przekracza limit — skracamy czas (przesuwamy Koniec w stronę Startu).
+// Rozmiar jest w przybliżeniu proporcjonalny do czasu trwania; 3% zapasu na narzut kontenera.
+function trimDurationToTarget(actualBytes, targetBytes) {
+  const MIN_DURATION = 0.5;
+  const duration = endTime.value - startTime.value;
+  if (!(duration > MIN_DURATION) || !(actualBytes > 0)) return false;
+  let newDur = Math.floor(duration * (targetBytes / actualBytes) * 0.97 * 10) / 10;
+  if (newDur >= duration) newDur = duration - 0.1;
+  newDur = Math.max(MIN_DURATION, newDur);
+  if (newDur >= duration) return false;
+  endTime.value = Math.round((startTime.value + newDur) * 100) / 100;
+  trimmedThisRun = true;
+  return true;
 }
 
 function clearPreview() {
@@ -2032,7 +2114,7 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
     return;
   }
   error.value = '';
-  if (attempt === 0) { estimatedSize.value = null; sizeConfidence.value = null; }
+  if (attempt === 0) { estimatedSize.value = null; sizeConfidence.value = null; trimmedThisRun = false; }
   if (isConverting.value) conversionStage.value = `Dopasowywanie parametrów do limitu rozmiaru (próba ${attempt + 1}/8)...`;
   try {
     const fileData = preloadedFileData || await fetchVideo(videoUrl.value);
@@ -2112,9 +2194,11 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
     if (limitSizeEnabled.value && attempt < 8) {
       const targetBytes = targetSizeMB.value * 1024 * 1024;
       const tooBig   = estimatedSize.value > targetBytes * SIZE_BAND_HI;
-      const tooSmall = estimatedSize.value < targetBytes * SIZE_BAND_LO;
+      const tooSmall = !trimmedThisRun && estimatedSize.value < targetBytes * SIZE_BAND_LO;
       if (tooBig || tooSmall) {
-        const changed = adjustParamsToTarget(estimatedSize.value, targetBytes, tooSmall);
+        let changed = adjustParamsToTarget(estimatedSize.value, targetBytes, tooSmall);
+        // Parametry wyczerpane (minima FPS/szerokości + jakość) → skracamy czas.
+        if (!changed && tooBig) changed = trimDurationToTarget(estimatedSize.value, targetBytes);
         // Przekazujemy dalej ten sam fileData, żeby rekurencja nie pobierała wideo ponownie z sieci.
         if (changed) await analyzeAndEstimate(attempt + 1, fileData);
       }
@@ -2354,6 +2438,7 @@ async function performEncode(fileData) {
 async function convert() {
   if (!videoUrl.value.trim()) { error.value = 'Wprowadź link do wideo lub wgraj plik.'; return; }
   error.value = ''; resultUrl.value = null; resultBlob.value = null; isConverting.value = true;
+  trimmedThisRun = false;
   conversionStage.value = '';
 
   try {
@@ -2390,19 +2475,27 @@ async function convert() {
     // zbliżyć się do zadanego rozmiaru (a nie zostawiać niepotrzebny zapas) — ale zawsze
     // z marginesem bezpieczeństwa, żeby nigdy nie przekroczyć limitu.
     if (limitSizeEnabled.value) {
-      const MAX_FINAL_ATTEMPTS = 4;
+      const MAX_FINAL_ATTEMPTS = 6; // zapas na kroki jakości + skrócenie czasu
       let finalAttempt = 0;
       while (resultBlob.value && finalAttempt < MAX_FINAL_ATTEMPTS) {
         const size = resultBlob.value.size;
         const tooBig   = size > targetBytes;
-        const tooSmall = size < targetBytes * SIZE_FINAL_LO;
+        const tooSmall = !trimmedThisRun && size < targetBytes * SIZE_FINAL_LO;
         if (!tooBig && !tooSmall) break; // w paśmie 95–100% celu — gotowe
 
         finalAttempt++;
-        const changed = adjustParamsToTarget(size, targetBytes, tooSmall);
+        let changed = adjustParamsToTarget(size, targetBytes, tooSmall);
+        let trimmedNow = false;
+        if (!changed && tooBig) {
+          // FPS / szerokość / jakość wyczerpane → ostatnia dźwignia: skrócenie czasu.
+          changed = trimDurationToTarget(size, targetBytes);
+          trimmedNow = changed;
+        }
         if (!changed) break; // parametry utknęły na granicy (min. lub maks.) — dalsze próby nic nie dadzą
 
-        conversionStage.value = tooBig
+        conversionStage.value = trimmedNow
+          ? `Plik nadal za duży (${formatFileSize(size)}) przy minimalnych parametrach — skracam czas do ${(endTime.value - startTime.value).toFixed(1)} s (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`
+          : tooBig
           ? `Plik za duży (${formatFileSize(size)}) — zmniejszam parametry i generuję ponownie (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`
           : `Plik mniejszy niż limit (${formatFileSize(size)}) — zwiększam parametry, by zbliżyć się do ${targetSizeMB.value} MB (próba ${finalAttempt}/${MAX_FINAL_ATTEMPTS})...`;
         await performEncode(fileData);
@@ -2693,6 +2786,8 @@ async function processBatchItem(item) {
   const startedAt = Date.now();
   lastFfmpegActivityAt = Date.now();
   let engineMayBeDead = false;
+  // Skrócenie czasu przez limit rozmiaru dotyczy tylko tego pliku — nie przenosimy go na kolejne pozycje.
+  const savedStart = startTime.value, savedEnd = endTime.value;
   try {
     const work = (async () => {
       if (item.kind === 'url') await loadBatchUrlItem(item);
@@ -2710,6 +2805,7 @@ async function processBatchItem(item) {
     engineMayBeDead = /aktywności|bezwzględny limit/i.test(item.errorMsg);
   }
   item.durationMs = Date.now() - startedAt;
+  if (!batchUseFullDuration.value) { startTime.value = savedStart; endTime.value = savedEnd; }
   if (engineMayBeDead) {
     batchStatusMessage.value = 'Silnik FFmpeg nie odpowiadał — restartuję i kontynuuję kolejkę...';
     try { await restartFfmpegEngine(); }
@@ -2885,6 +2981,19 @@ watch(useOriginalWidth, async (enabled) => {
 .theme-toggle-btn:active { transform: scale(0.96); }
 .theme-icon { font-size: 1.15rem; line-height: 1; }
 .theme-label { white-space: nowrap; }
+
+/* ===== MINIMA FPS / SZEROKOŚCI ===== */
+.min-limit-input {
+  width: 3.6rem;
+  padding: 0.15rem 0.3rem;
+  font-size: 0.78rem;
+  text-align: center;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.min-limit-input::placeholder { color: #aaa; }
+.dark-mode .min-limit-input { background-color: #2a2d34; border: 1px solid #3a3d44; color: #e8e8e8; }
 
 /* ===== PRZETWARZANIE WSADOWE ===== */
 .batch-section {
