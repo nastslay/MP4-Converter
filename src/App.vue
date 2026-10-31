@@ -47,6 +47,18 @@
         wszystkie gotowe pliki jednym kliknięciem.
       </p>
 
+      <div class="batch-add-row">
+        <input
+          type="text"
+          class="batch-link-input"
+          v-model="batchLinkInput"
+          placeholder="Wklej link (lub kilka linków) i kliknij Dodaj…"
+          @keyup.enter="addBatchLink"
+        />
+        <button class="fetch-btn" @click="addBatchLink" :disabled="!batchLinkInput.trim()">➕ Dodaj</button>
+      </div>
+      <p v-if="batchAddMessage" class="batch-status-message">{{ batchAddMessage }}</p>
+
       <div class="batch-upload-row">
         <input type="file" ref="jsonFileInput" accept="application/json,.json" style="display:none" @change="handleBookmarksJsonUpload" />
         <button class="upload-btn" @click="$refs.jsonFileInput.click()" :disabled="isBatchRunning || isConverting">
@@ -95,7 +107,7 @@
             </span>
             <span v-if="item.status === 'error'" class="batch-item-error" :title="item.errorMsg">{{ item.errorMsg }}</span>
             <button v-if="item.status === 'done'" class="batch-item-dl" @click="downloadBatchItem(item)" title="Pobierz ten plik">⬇</button>
-            <button class="batch-item-remove" @click="removeBatchItem(item.id)" :disabled="isBatchRunning" title="Usuń z kolejki">✕</button>
+            <button class="batch-item-remove" @click="removeBatchItem(item.id)" :disabled="item.status === 'processing'" title="Usuń z kolejki">✕</button>
           </div>
         </div>
       </div>
@@ -2647,8 +2659,54 @@ function handleBatchFilesUpload(event) {
 }
 
 function removeBatchItem(id) {
-  if (isBatchRunning.value) return;
+  // Można usuwać pozycje także w trakcie przetwarzania — poza tą, która jest właśnie konwertowana.
+  const target = batchItems.value.find(i => i.id === id);
+  if (!target || target.status === 'processing') return;
   batchItems.value = batchItems.value.filter(i => i.id !== id);
+}
+
+// Dodaje wklejony link (lub kilka, oddzielonych spacjami/enterami) do kolejki.
+// Działa też w trakcie przetwarzania — runBatch na bieżąco podejmuje nowe pozycje.
+const batchLinkInput = ref('');
+const batchAddMessage = ref('');
+let batchAddMessageTimer = null;
+
+function setBatchAddMessage(msg) {
+  batchAddMessage.value = msg;
+  clearTimeout(batchAddMessageTimer);
+  if (msg) batchAddMessageTimer = setTimeout(() => { batchAddMessage.value = ''; }, 4000);
+}
+
+function addBatchLink() {
+  const parts = batchLinkInput.value.split(/\s+/).map(s => s.trim()).filter(Boolean);
+  if (!parts.length) return;
+  const seen = new Set(batchItems.value.filter(i => i.kind === 'url').map(i => i.source));
+  const added = [];
+  let invalid = 0, duplicates = 0;
+  for (const link of parts) {
+    if (!/^https?:\/\/\S+$/i.test(link)) { invalid++; continue; }
+    if (seen.has(link)) { duplicates++; continue; }
+    seen.add(link);
+    added.push({
+      id: genBatchId(),
+      kind: 'url',
+      source: link,
+      label: link.replace(/^https?:\/\//i, '').slice(0, 60),
+      status: 'pending',
+      errorMsg: '',
+      resultBlob: null,
+      resultName: '',
+    });
+  }
+  if (added.length) {
+    batchItems.value = [...batchItems.value, ...added];
+    batchLinkInput.value = '';
+  }
+  const notes = [];
+  if (added.length) notes.push(`Dodano do kolejki: ${added.length}`);
+  if (duplicates) notes.push(`pominięto duplikaty: ${duplicates}`);
+  if (invalid) notes.push(`nieprawidłowe linki (muszą zaczynać się od http/https): ${invalid}`);
+  setBatchAddMessage(notes.join(' · '));
 }
 
 function clearBatchQueue() {
@@ -2816,13 +2874,17 @@ async function processBatchItem(item) {
 
 async function runBatch() {
   if (isBatchRunning.value) return;
-  const pending = batchItems.value.filter(i => i.status !== 'done');
-  if (!pending.length) return;
+  const nextItem = (handled) => batchItems.value.find(i => i.status !== 'done' && !handled.has(i.id));
+  const handled = new Set();
+  if (!nextItem(handled)) return;
   isBatchRunning.value = true;
   batchStopRequested.value = false;
   let sinceRestart = 0;
-  for (const item of pending) {
-    if (batchStopRequested.value) break;
+  // Kolejka jest czytana na bieżąco (nie jako migawka), więc linki dodane w trakcie
+  // przetwarzania trafiają do tej samej serii. Każda pozycja jest brana najwyżej raz na uruchomienie.
+  let item;
+  while (!batchStopRequested.value && (item = nextItem(handled))) {
+    handled.add(item.id);
     await processBatchItem(item);
     sinceRestart++;
     if (!batchStopRequested.value && sinceRestart >= BATCH_RESTART_ENGINE_EVERY) {
@@ -3025,6 +3087,23 @@ watch(useOriginalWidth, async (enabled) => {
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
+
+.batch-add-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  max-width: 100%;
+}
+.batch-link-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+.batch-add-row button { flex: 0 0 auto; white-space: nowrap; }
 
 .batch-upload-row,
 .batch-actions {
