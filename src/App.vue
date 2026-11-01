@@ -2451,6 +2451,7 @@ async function convert() {
   if (!videoUrl.value.trim()) { error.value = 'Wprowadź link do wideo lub wgraj plik.'; return; }
   error.value = ''; resultUrl.value = null; resultBlob.value = null; isConverting.value = true;
   trimmedThisRun = false;
+  let crashed = false;
   conversionStage.value = '';
 
   try {
@@ -2513,8 +2514,26 @@ async function convert() {
         await performEncode(fileData);
       }
     }
-  } catch(e) { error.value = `Błąd konwersji: ${e?.message || String(e) || 'nieznany błąd'}`; console.error(e); }
-  finally { isConverting.value = false; conversionStage.value = ''; }
+  } catch(e) {
+    error.value = `Błąd konwersji: ${e?.message || String(e) || 'nieznany błąd'}`;
+    console.error(e);
+    if (isWasmCrashError(e)) {
+      crashed = true;
+      // W trybie wsadowym restart robi processBatchItem (i ponawia pozycję); tu tylko tryb pojedynczy.
+      if (!isBatchRunning.value) {
+        error.value += ' — silnik FFmpeg wyczerpał pamięć i został automatycznie zrestartowany. Spróbuj ponownie (ewentualnie z mniejszą szerokością / niższym FPS / krótszym zakresem).';
+        try { await restartFfmpegEngine(); }
+        catch (re) { console.error('Nie udało się zrestartować FFmpeg:', re); error.value = 'Nie udało się zrestartować silnika FFmpeg. Odśwież stronę.'; }
+      }
+    }
+  }
+  finally {
+    // Pliki tymczasowe (klatki PNG, wejście, paleta) zostają w pamięci silnika, jeśli konwersja
+    // przerwała się błędem — kumulują się i po kilku pozycjach wyczerpują pamięć. Sprzątamy zawsze.
+    // Po awarii silnika pomijamy (instancja i tak zostanie zastąpiona nową).
+    if (!crashed) await cleanupFfmpegFs();
+    isConverting.value = false; conversionStage.value = '';
+  }
 }
 
 const RANDOM_WORDS = [
@@ -2821,6 +2840,28 @@ function raceWithHangWatchdog(promise, { idleLimitMs, hardCapMs }) {
   });
 }
 
+// Awarie samego silnika WASM (nie błędy użytkownika): po takim błędzie instancja jest
+// uszkodzona i KAŻDE kolejne ffmpeg.exec() też się wywala, dopóki jej nie zrestartujemy.
+function isWasmCrashError(e) {
+  const msg = (e?.message || String(e || ''));
+  return /memory access out of bounds|out of memory|Aborted\(|RuntimeError|unreachable|ffmpeg\.terminate|called FFmpeg\.terminate/i.test(msg);
+}
+
+// Usuwa z wirtualnego systemu plików FFmpeg pliki tymczasowe tej aplikacji.
+const FFMPEG_TMP_PATTERN = /^(frame_|rawframe_|conv_input\.|input\.|analyze\.|palette_full|sample_seg|output\.|preview_|meta\.)/;
+async function cleanupFfmpegFs() {
+  if (!ffmpeg) return;
+  try {
+    const entries = await ffmpeg.listDir('/');
+    for (const ent of entries) {
+      if (ent.isDir || !FFMPEG_TMP_PATTERN.test(ent.name)) continue;
+      try { await ffmpeg.deleteFile(ent.name); } catch (e) { /* plik mógł już zniknąć */ }
+    }
+  } catch (e) {
+    console.warn('Nie udało się posprzątać plików tymczasowych FFmpeg:', e);
+  }
+}
+
 // Ubija bieżącą instancję FFmpeg i ładuje świeżą. Używane zarówno po wykryciu
 // zawieszenia silnika, jak i prewencyjnie co kilka plików w długiej serii.
 async function restartFfmpegEngine() {
@@ -2860,12 +2901,20 @@ async function processBatchItem(item) {
   } catch (e) {
     item.status = 'error';
     item.errorMsg = e?.message || String(e);
-    engineMayBeDead = /aktywności|bezwzględny limit/i.test(item.errorMsg);
+    const hung = /aktywności|bezwzględny limit/i.test(item.errorMsg);
+    const crashed = isWasmCrashError(e) || isWasmCrashError(item.errorMsg);
+    engineMayBeDead = hung || crashed;
+    // Awaria pamięci często wynika z kumulacji po poprzednich plikach — na świeżym silniku
+    // ta sama pozycja zwykle przechodzi, więc dajemy jej JEDNĄ dodatkową szansę.
+    if (crashed && !item.retriedAfterCrash) {
+      item.retriedAfterCrash = true;
+      item.status = 'pending';
+    }
   }
   item.durationMs = Date.now() - startedAt;
   if (!batchUseFullDuration.value) { startTime.value = savedStart; endTime.value = savedEnd; }
   if (engineMayBeDead) {
-    batchStatusMessage.value = 'Silnik FFmpeg nie odpowiadał — restartuję i kontynuuję kolejkę...';
+    batchStatusMessage.value = 'Silnik FFmpeg przestał działać (awaria pamięci / brak odpowiedzi) — restartuję i kontynuuję kolejkę...';
     try { await restartFfmpegEngine(); }
     catch (e) { console.error('Nie udało się zrestartować FFmpeg po zawieszeniu:', e); error.value = 'Nie udało się zrestartować silnika FFmpeg. Odśwież stronę.'; }
     finally { batchStatusMessage.value = ''; }
@@ -2886,6 +2935,7 @@ async function runBatch() {
   while (!batchStopRequested.value && (item = nextItem(handled))) {
     handled.add(item.id);
     await processBatchItem(item);
+    if (item.status === 'pending') handled.delete(item.id); // ponowienie po awarii silnika
     sinceRestart++;
     if (!batchStopRequested.value && sinceRestart >= BATCH_RESTART_ENGINE_EVERY) {
       sinceRestart = 0;
