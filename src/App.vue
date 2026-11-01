@@ -28,6 +28,32 @@
     </div>
   </div>
 
+  <!-- ===== HISTORIA LINKÓW (ostatnie 20, zapisywana w przeglądarce) ===== -->
+  <div class="history-section">
+    <button class="crop-toggle-btn" :class="{ active: historyOpen }" @click="historyOpen = !historyOpen">
+      🕘 {{ historyOpen ? 'Ukryj historię linków' : `Historia linków (${linkHistory.length})` }}
+    </button>
+    <div v-if="historyOpen" class="history-panel">
+      <p v-if="!linkHistory.length" class="batch-hint">Brak zapisanych linków. Linki pobierane i dodawane do kolejki zapisują się tu automatycznie (ostatnie {{ LINK_HISTORY_MAX }}).</p>
+      <template v-else>
+        <div class="history-actions">
+          <button class="upload-btn" @click="copyAllHistory">{{ historyCopiedKey === 'all' ? '✅ Skopiowano' : '📋 Kopiuj wszystkie' }}</button>
+          <button class="clear-btn" @click="clearLinkHistory">🗑️ Wyczyść historię</button>
+        </div>
+        <div class="history-list">
+          <div v-for="entry in linkHistory" :key="entry.url" class="history-item">
+            <span class="history-url" :title="entry.url">{{ entry.url }}</span>
+            <span class="history-btns">
+              <button class="history-mini" @click="useHistoryLink(entry.url)" :disabled="isConverting || isBatchRunning" title="Wstaw do pola wideo">⬆</button>
+              <button class="history-mini" @click="queueHistoryLink(entry.url)" title="Dodaj do kolejki wsadowej">➕</button>
+              <button class="history-mini" @click="copyHistoryLink(entry.url)" title="Kopiuj link">{{ historyCopiedKey === entry.url ? '✅' : '📋' }}</button>
+            </span>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
   <!-- ===== PRZETWARZANIE WSADOWE (WIELE PLIKÓW / LINKÓW) ===== -->
   <div class="batch-section">
     <button
@@ -55,7 +81,7 @@
           placeholder="Wklej link (lub kilka linków) i kliknij Dodaj…"
           @keyup.enter="addBatchLink"
         />
-        <button class="fetch-btn" @click="addBatchLink" :disabled="!batchLinkInput.trim()">➕ Dodaj</button>
+        <button class="fetch-btn batch-add-btn" @click="addBatchLink" :disabled="!batchLinkInput.trim()">➕ Dodaj</button>
       </div>
       <p v-if="batchAddMessage" class="batch-status-message">{{ batchAddMessage }}</p>
 
@@ -1719,6 +1745,7 @@ async function handleFileUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
   resetConversionState();
+  recordLink(videoUrl.value);
   isFetching.value = true; error.value = '';
   videoUrl.value = file.name;
   try {
@@ -2452,6 +2479,7 @@ async function convert() {
   error.value = ''; resultUrl.value = null; resultBlob.value = null; isConverting.value = true;
   trimmedThisRun = false;
   let crashed = false;
+  if (!isBatchRunning.value) recordLink(videoUrl.value);
   conversionStage.value = '';
 
   try {
@@ -2684,6 +2712,61 @@ function removeBatchItem(id) {
   batchItems.value = batchItems.value.filter(i => i.id !== id);
 }
 
+// ===== HISTORIA LINKÓW =====
+const LINK_HISTORY_MAX = 20;
+function loadLinkHistory() {
+  try {
+    const arr = JSON.parse(localStorage.getItem('linkHistory') || '[]');
+    return Array.isArray(arr) ? arr.filter(e => e && typeof e.url === 'string').slice(0, LINK_HISTORY_MAX) : [];
+  } catch (e) { return []; }
+}
+const linkHistory = ref(loadLinkHistory());
+const historyOpen = ref(false);
+const historyCopiedKey = ref('');
+let historyCopiedTimer = null;
+
+function persistLinkHistory() {
+  try { localStorage.setItem('linkHistory', JSON.stringify(linkHistory.value)); } catch (e) {}
+}
+// Zapisuje link na początku listy (duplikat jest przesuwany na górę), max LINK_HISTORY_MAX.
+function recordLink(url) {
+  const u = (url || '').trim();
+  if (!/^https?:\/\/\S+$/i.test(u)) return; // tylko linki, nie nazwy plików
+  linkHistory.value = [{ url: u, ts: Date.now() }, ...linkHistory.value.filter(e => e.url !== u)].slice(0, LINK_HISTORY_MAX);
+  persistLinkHistory();
+}
+function clearLinkHistory() {
+  if (!linkHistory.value.length) return;
+  if (!window.confirm('Wyczyścić całą historię linków?')) return;
+  linkHistory.value = [];
+  persistLinkHistory();
+}
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    try { // fallback dla http / starszych przeglądarek mobilnych
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e2) { return false; }
+  }
+}
+async function flashCopied(key, text) {
+  if (!(await copyTextToClipboard(text))) { window.prompt('Skopiuj ręcznie:', text); return; }
+  historyCopiedKey.value = key;
+  clearTimeout(historyCopiedTimer);
+  historyCopiedTimer = setTimeout(() => { historyCopiedKey.value = ''; }, 1800);
+}
+const copyHistoryLink = (url) => flashCopied(url, url);
+const copyAllHistory = () => flashCopied('all', linkHistory.value.map(e => e.url).join('\n'));
+function useHistoryLink(url) { if (!isConverting.value && !isBatchRunning.value) videoUrl.value = url; }
+function queueHistoryLink(url) { batchLinkInput.value = url; addBatchLink(); batchPanelOpen.value = true; }
+
 // Dodaje wklejony link (lub kilka, oddzielonych spacjami/enterami) do kolejki.
 // Działa też w trakcie przetwarzania — runBatch na bieżąco podejmuje nowe pozycje.
 const batchLinkInput = ref('');
@@ -2719,6 +2802,7 @@ function addBatchLink() {
   }
   if (added.length) {
     batchItems.value = [...batchItems.value, ...added];
+    added.forEach(a => recordLink(a.source));
     batchLinkInput.value = '';
   }
   const notes = [];
@@ -3094,6 +3178,20 @@ watch(useOriginalWidth, async (enabled) => {
 .theme-icon { font-size: 1.15rem; line-height: 1; }
 .theme-label { white-space: nowrap; }
 
+
+/* ===== HISTORIA LINKÓW ===== */
+.history-section { margin-bottom: 0.8rem; }
+.history-panel { margin-top: 0.5rem; padding: 0.6rem; border: 1px solid #ddd; border-radius: 8px; }
+.history-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.history-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 260px; overflow-y: auto; }
+.history-item { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.history-url { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; }
+.history-btns { display: flex; gap: 0.25rem; flex: 0 0 auto; }
+.history-mini { width: 2rem; height: 2rem; padding: 0; flex: 0 0 auto; font-size: 0.85rem; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #f5f5f5; }
+.history-mini:disabled { opacity: 0.5; cursor: not-allowed; }
+.dark-mode .history-panel { border-color: #3a3d44; }
+.dark-mode .history-mini { background: #2a2d34; border-color: #3a3d44; color: #e8e8e8; }
+
 /* ===== MINIMA FPS / SZEROKOŚCI ===== */
 .min-limit-input {
   width: 3.6rem;
@@ -3140,12 +3238,15 @@ watch(useOriginalWidth, async (enabled) => {
 
 .batch-add-row {
   display: flex;
+  flex-wrap: nowrap;
   gap: 0.5rem;
-  align-items: center;
-  max-width: 100%;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
 }
-.batch-link-input {
-  flex: 1 1 auto;
+.batch-add-row .batch-link-input {
+  flex: 1 1 0;
+  width: auto;
   min-width: 0;
   padding: 0.5rem;
   border: 1px solid #ddd;
@@ -3153,7 +3254,13 @@ watch(useOriginalWidth, async (enabled) => {
   font-size: 0.9rem;
   box-sizing: border-box;
 }
-.batch-add-row button { flex: 0 0 auto; white-space: nowrap; }
+.batch-add-row .batch-add-btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  padding: 0.5rem 0.9rem;
+  white-space: nowrap;
+}
 
 .batch-upload-row,
 .batch-actions {
@@ -4173,6 +4280,8 @@ watch(useOriginalWidth, async (enabled) => {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
+  .batch-add-row .batch-add-btn { padding: 0.5rem 0.7rem; font-size: 0.85rem; }
+  .batch-add-row .batch-link-input { font-size: 16px; } /* 16px zapobiega zoomowaniu na iOS */
   .meta-grid,
   .result-meta-box .meta-grid {
     grid-template-columns: 1fr;
