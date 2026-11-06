@@ -2957,6 +2957,20 @@ async function restartFfmpegEngine() {
   lastFfmpegActivityAt = Date.now();
 }
 
+// Ustawienia konwersji (FPS / Szerokość / Jakość) wybrane przez użytkownika przed startem serii.
+// Dopasowanie do limitu rozmiaru zmienia te pola "w locie", więc bez przywracania zmiany z jednego
+// pliku przechodziłyby na następne. Każda pozycja startuje z TYCH SAMYCH wartości, co zwykła konwersja.
+let batchBaseParams = null;
+function snapshotBatchParams() {
+  batchBaseParams = { fps: fps.value, width: width.value, quality: quality.value };
+}
+function restoreBatchParams() {
+  if (!batchBaseParams) return;
+  fps.value = batchBaseParams.fps;
+  width.value = batchBaseParams.width;
+  quality.value = batchBaseParams.quality;
+}
+
 async function processBatchItem(item) {
   item.status = 'processing';
   item.errorMsg = '';
@@ -2970,6 +2984,7 @@ async function processBatchItem(item) {
   lastFfmpegActivityAt = Date.now();
   let engineMayBeDead = false;
   // Skrócenie czasu przez limit rozmiaru dotyczy tylko tego pliku — nie przenosimy go na kolejne pozycje.
+  restoreBatchParams(); // każdy plik startuje z ustawień użytkownika, nie z wyniku poprzedniego
   const savedStart = startTime.value, savedEnd = endTime.value;
   try {
     const work = (async () => {
@@ -3012,6 +3027,7 @@ async function runBatch() {
   if (!nextItem(handled)) return;
   isBatchRunning.value = true;
   batchStopRequested.value = false;
+  snapshotBatchParams();
   let sinceRestart = 0;
   // Kolejka jest czytana na bieżąco (nie jako migawka), więc linki dodane w trakcie
   // przetwarzania trafiają do tej samej serii. Każda pozycja jest brana najwyżej raz na uruchomienie.
@@ -3029,6 +3045,8 @@ async function runBatch() {
       finally { batchStatusMessage.value = ''; }
     }
   }
+  restoreBatchParams(); // po serii pola wracają do wartości użytkownika
+  batchBaseParams = null;
   isBatchRunning.value = false;
 }
 
