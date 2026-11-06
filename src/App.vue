@@ -815,6 +815,9 @@ const minWidthVal = computed(() => {
 // Ustawiane, gdy skrypt musiał skrócić czas — wtedy nie zwiększamy już parametrów "w górę",
 // żeby nie wpaść w pętlę skracanie ↔ zwiększanie jakości.
 let trimmedThisRun = false;
+// FPS ustawione przez użytkownika na starcie konwersji = SUFIT przy dopasowywaniu "w górę".
+// Dopasowanie do limitu rozmiaru może wtedy podbijać jakość i szerokość, ale nie zawyża FPS.
+let fpsCeiling = null;
 
 const isConverting    = ref(false);
 const conversionStage = ref('');
@@ -1857,6 +1860,20 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
     return true;
   }
   
+  // Gdy użytkownik ustawił minima: KOLEJNOŚĆ cięcia = najpierw FPS i szerokość (do swoich minimów),
+  // dopiero potem jakość, na końcu czas. Jakość zostaje nietknięta, dopóki jest jeszcze z czego schodzić.
+  if (!growing && (minFpsVal.value !== null || minWidthVal.value !== null) && (width.value > wLow || fps.value > fLow)) {
+    const f = Math.pow(ratio * 0.97, 1 / 3); // rozmiar ~ szerokość² · FPS → każdy czynnik ~ pierwiastek 3. stopnia
+    let nw = Math.max(wLow, Math.floor((width.value * f) / 10) * 10);
+    let nf = Math.max(fLow, Math.floor(fps.value * f));
+    if (nw >= width.value && width.value > wLow) nw = Math.max(wLow, width.value - 10);
+    if (nf >= fps.value && fps.value > fLow) nf = Math.max(fLow, fps.value - 1);
+    let moved = false;
+    if (nw < width.value) { width.value = nw; moved = true; }
+    if (nf < fps.value)   { fps.value = nf;   moved = true; }
+    if (moved) return true;
+  }
+
   // FAZA SUPER-PRECYZYJNA (różnica < 6%): tylko jakość ±2–3 punkty
   if (Math.abs(1 - ratio) < 0.06) {
     const delta = ratio > 1.03 ? 3 : 2;
@@ -1890,8 +1907,8 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
 
       // Fallback: jakość i szerokość wyczerpane → FPS
       let newFps = Math.round(fps.value * fineRatio);
-      if (newFps === fps.value && fps.value < 30) newFps += 1;
-      if (newFps <= 30 && newFps !== fps.value) { fps.value = newFps; return true; }
+      if (newFps === fps.value && fps.value < (fpsCeiling ?? 30)) newFps += 1;
+      if (newFps <= (fpsCeiling ?? 30) && newFps !== fps.value) { fps.value = newFps; return true; }
     } else {
       let newQuality = Math.round(quality.value * cutRatio);
       if (newQuality === quality.value && quality.value > 1) newQuality -= 1;
@@ -1926,7 +1943,7 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
       }
 
       let newWidth   = Math.min(1280, Math.max(growing ? 100 : wLow, Math.round((width.value * factor) / 10) * 10));
-      let newFps     = Math.min(30,   Math.max(growing ? 1   : fLow, Math.round(fps.value * factor)));
+      let newFps     = Math.min(growing ? Math.max(fps.value, fpsCeiling ?? 30) : 30, Math.max(growing ? 1   : fLow, Math.round(fps.value * factor)));
       let newQuality = Math.min(100,  Math.max(1,   Math.round(quality.value * factor)));
       
       let changed = false;
@@ -1939,7 +1956,7 @@ function adjustParamsToTarget(actualBytes, targetBytes, growing) {
       // Zabezpieczenie na wypadek dziwnych zaokrągleń
       if (growing) {
           if (quality.value < 100) { quality.value += 2; return true; }
-          if (fps.value < 30) { fps.value += 1; return true; }
+          if (fps.value < (fpsCeiling ?? 30)) { fps.value += 1; return true; }
           if (width.value < 1280) { width.value += 10; return true; }
       } else {
           if (quality.value > 1) { quality.value = Math.max(1, quality.value - 2); return true; }
@@ -2153,7 +2170,7 @@ async function analyzeAndEstimate(attempt = 0, preloadedFileData = null) {
     return;
   }
   error.value = '';
-  if (attempt === 0) { estimatedSize.value = null; sizeConfidence.value = null; trimmedThisRun = false; }
+  if (attempt === 0) { estimatedSize.value = null; sizeConfidence.value = null; trimmedThisRun = false; if (!isConverting.value) fpsCeiling = fps.value; }
   if (isConverting.value) conversionStage.value = `Dopasowywanie parametrów do limitu rozmiaru (próba ${attempt + 1}/8)...`;
   try {
     const fileData = preloadedFileData || await fetchVideo(videoUrl.value);
@@ -2478,6 +2495,7 @@ async function convert() {
   if (!videoUrl.value.trim()) { error.value = 'Wprowadź link do wideo lub wgraj plik.'; return; }
   error.value = ''; resultUrl.value = null; resultBlob.value = null; isConverting.value = true;
   trimmedThisRun = false;
+  fpsCeiling = fps.value;
   let crashed = false;
   if (!isBatchRunning.value) recordLink(videoUrl.value);
   conversionStage.value = '';
